@@ -14,8 +14,10 @@ const EducationSchema = new mongoose.Schema({
   school: { type: String, default: '' },
   degree: { type: String, default: '' },
   field: { type: String, default: '' },
+  location: { type: String, default: '' },
   startDate: { type: String, default: '' },
   endDate: { type: String, default: '' },
+  current: { type: Boolean, default: false },
   description: { type: String, default: '' }
 }, { _id: false });
 
