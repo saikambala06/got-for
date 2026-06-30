@@ -1,10 +1,60 @@
 const express = require('express');
+const multer = require('multer');
 const Resume = require('../models/Resume');
 const User = require('../models/User');
 const requireAuth = require('../middleware/auth');
+const { parseResumeText, normalizeDocxText } = require('../utils/resumeParser');
 
 const router = express.Router();
 router.use(requireAuth);
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const ok = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ].includes(file.mimetype);
+    cb(ok ? null : new Error('Only PDF or DOCX files are supported'), ok);
+  }
+});
+
+// Upload a resume file and extract structured data from it using free,
+// rule-based text parsing (no paid AI/LLM service involved).
+router.post('/parse', (req, res) => {
+  upload.single('file')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Could not read that file' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'Please choose a PDF or DOCX file' });
+    }
+    try {
+      let text = '';
+      if (req.file.mimetype === 'application/pdf') {
+        const { PDFParse } = require('pdf-parse');
+        const parser = new PDFParse({ data: req.file.buffer });
+        const result = await parser.getText();
+        text = result.text.replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n');
+      } else {
+        const mammoth = require('mammoth');
+        const { value } = await mammoth.extractRawText({ buffer: req.file.buffer });
+        text = normalizeDocxText(value);
+      }
+
+      if (!text || !text.trim()) {
+        return res.status(422).json({ error: "We couldn't read any text from that file. Try Build from Scratch instead." });
+      }
+
+      const parsed = parseResumeText(text);
+      res.json({ parsed });
+    } catch (err2) {
+      console.error(err2);
+      res.status(500).json({ error: 'Could not process that file. Try Build from Scratch instead.' });
+    }
+  });
+});
 
 router.get('/', async (req, res) => {
   try {
@@ -25,8 +75,9 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create a new resume. Used both by "Build from Scratch" (pre-fills personal
-// info from the account profile) and any future "Upload Resume" flow.
+// Create a new resume. Used by "Build from Scratch" (optionally pre-filled
+// from the account profile) and by the "Upload Resume" flow (pre-filled
+// from a parsed PDF/DOCX via POST /parse above).
 router.post('/', async (req, res) => {
   try {
     const { title } = req.body;
@@ -35,7 +86,9 @@ router.post('/', async (req, res) => {
     const count = await Resume.countDocuments({ user: req.userId });
 
     let personal = { name: '', email: '', phone: '', location: '', linkedin: '', portfolio: '' };
-    if (req.body.prefillFromProfile) {
+    if (req.body.personal) {
+      personal = { ...personal, ...req.body.personal };
+    } else if (req.body.prefillFromProfile) {
       const user = await User.findById(req.userId);
       if (user) {
         personal = {
@@ -49,11 +102,19 @@ router.post('/', async (req, res) => {
       }
     }
 
+    const listFields = ['experience', 'education', 'skills', 'projects', 'certifications', 'achievements', 'languages', 'publications'];
+    const extra = {};
+    listFields.forEach((key) => {
+      if (Array.isArray(req.body[key])) extra[key] = req.body[key];
+    });
+
     const resume = await Resume.create({
       user: req.userId,
       title,
       isDefault: count === 0,
-      personal
+      personal,
+      summary: req.body.summary || '',
+      ...extra
     });
     res.status(201).json({ resume });
   } catch (err) {
