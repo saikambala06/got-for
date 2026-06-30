@@ -371,7 +371,7 @@ function renderBuilder() {
     dirty = true; renderExperience();
   });
   document.getElementById('addEducation').addEventListener('click', () => {
-    draft.education.push({ school:'', degree:'', field:'', startDate:'', endDate:'', description:'' });
+    draft.education.push({ school:'', degree:'', field:'', location:'', startDate:'', endDate:'', current:false, description:'' });
     dirty = true; renderEducation();
   });
   document.getElementById('addProject').addEventListener('click', () => {
@@ -486,11 +486,12 @@ function renderExperience() {
     <div class="entry-card">
       <button class="entry-remove" data-remove="experience" data-i="${i}">✕</button>
       <div class="form-grid">
-        <div class="field"><label>Company</label><input data-f="experience.${i}.company" value="${escapeHtml(x.company)}" /></div>
-        <div class="field"><label>Role</label><input data-f="experience.${i}.role" value="${escapeHtml(x.role)}" /></div>
+        <div class="field"><label>Company name</label><input data-f="experience.${i}.company" value="${escapeHtml(x.company)}" /></div>
+        <div class="field"><label>Job title</label><input data-f="experience.${i}.role" value="${escapeHtml(x.role)}" /></div>
         <div class="field"><label>Location</label><input data-f="experience.${i}.location" value="${escapeHtml(x.location)}" /></div>
         <div class="field"><label>Start date</label><input data-f="experience.${i}.startDate" placeholder="Jan 2022" value="${escapeHtml(x.startDate)}" /></div>
         <div class="field"><label>End date</label><input data-f="experience.${i}.endDate" placeholder="Present" value="${escapeHtml(x.endDate)}" /></div>
+        <div class="field" style="display:flex;align-items:center;gap:6px;"><label style="margin:0;"><input type="checkbox" data-f="experience.${i}.current" ${x.current ? 'checked' : ''} /> Current</label></div>
       </div>
       <div class="field" style="margin-top:12px;"><label>Description</label><textarea data-f="experience.${i}.description" style="min-height:70px;">${escapeHtml(x.description)}</textarea></div>
     </div>`).join('');
@@ -506,11 +507,14 @@ function renderEducation() {
       <button class="entry-remove" data-remove="education" data-i="${i}">✕</button>
       <div class="form-grid">
         <div class="field"><label>School</label><input data-f="education.${i}.school" value="${escapeHtml(x.school)}" /></div>
-        <div class="field"><label>Degree</label><input data-f="education.${i}.degree" value="${escapeHtml(x.degree)}" /></div>
+        <div class="field"><label>Degree/Accreditation</label><input data-f="education.${i}.degree" value="${escapeHtml(x.degree)}" /></div>
         <div class="field"><label>Field of study</label><input data-f="education.${i}.field" value="${escapeHtml(x.field)}" /></div>
+        <div class="field"><label>Location</label><input data-f="education.${i}.location" value="${escapeHtml(x.location)}" /></div>
         <div class="field"><label>Start date</label><input data-f="education.${i}.startDate" value="${escapeHtml(x.startDate)}" /></div>
         <div class="field"><label>End date</label><input data-f="education.${i}.endDate" value="${escapeHtml(x.endDate)}" /></div>
+        <div class="field" style="display:flex;align-items:center;gap:6px;"><label style="margin:0;"><input type="checkbox" data-f="education.${i}.current" ${x.current ? 'checked' : ''} /> Current</label></div>
       </div>
+      <div class="field" style="margin-top:12px;"><label>Description</label><textarea data-f="education.${i}.description" style="min-height:60px;">${escapeHtml(x.description)}</textarea></div>
     </div>`).join('');
   wireEntryInputs('education');
   wireEntryRemovals('education', renderEducation);
@@ -570,9 +574,10 @@ function emptyRow(msg) {
 
 function wireEntryInputs(field) {
   document.querySelectorAll(`[data-f^="${field}."]`).forEach((input) => {
-    input.addEventListener('input', () => {
+    const evt = input.type === 'checkbox' ? 'change' : 'input';
+    input.addEventListener(evt, () => {
       const [, idx, key] = input.dataset.f.split('.');
-      draft[field][Number(idx)][key] = input.value;
+      draft[field][Number(idx)][key] = input.type === 'checkbox' ? input.checked : input.value;
       dirty = true;
     });
   });
@@ -642,11 +647,11 @@ function downloadResume() {
     <div class="contact">${[p.email,p.phone,p.location,p.linkedin,p.portfolio].filter(Boolean).map(esc).join(' · ')}</div>
     ${draft.summary ? `<h2>Summary</h2><p>${esc(draft.summary)}</p>` : ''}
     ${draft.experience.length ? `<h2>Experience</h2>` + draft.experience.map(x => `
-      <div class="entry"><div class="row"><span>${esc(x.role)}${x.company ? ' — ' + esc(x.company) : ''}</span><span>${esc(x.startDate)} – ${esc(x.endDate)}</span></div>
+      <div class="entry"><div class="row"><span>${esc(x.role)}${x.company ? ' — ' + esc(x.company) : ''}</span><span>${esc(x.startDate)} – ${esc(x.current ? 'Present' : x.endDate)}</span></div>
       <div class="sub">${esc(x.location)}</div><p>${esc(x.description)}</p></div>`).join('') : ''}
     ${draft.education.length ? `<h2>Education</h2>` + draft.education.map(x => `
-      <div class="entry"><div class="row"><span>${esc(x.degree)}${x.field ? ', ' + esc(x.field) : ''}</span><span>${esc(x.startDate)} – ${esc(x.endDate)}</span></div>
-      <div class="sub">${esc(x.school)}</div></div>`).join('') : ''}
+      <div class="entry"><div class="row"><span>${esc(x.degree)}${x.field ? ', ' + esc(x.field) : ''}</span><span>${esc(x.startDate)} – ${esc(x.current ? 'Present' : x.endDate)}</span></div>
+      <div class="sub">${[x.school, x.location].filter(Boolean).map(esc).join(' · ')}</div>${x.description ? `<p>${esc(x.description)}</p>` : ''}</div>`).join('') : ''}
     ${draft.skills.length ? `<h2>Skills</h2><p>${draft.skills.map(esc).join(', ')}</p>` : ''}
     ${draft.projects.length ? `<h2>Projects</h2>` + draft.projects.map(x => `
       <div class="entry"><div class="row"><span>${esc(x.name)}</span></div><p>${esc(x.description)}</p></div>`).join('') : ''}
