@@ -1,5 +1,6 @@
 const express = require('express');
 const Resume = require('../models/Resume');
+const User = require('../models/User');
 const requireAuth = require('../middleware/auth');
 
 const router = express.Router();
@@ -24,20 +25,35 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Create a new resume. Used both by "Build from Scratch" (pre-fills personal
+// info from the account profile) and any future "Upload Resume" flow.
 router.post('/', async (req, res) => {
   try {
     const { title } = req.body;
-    if (!title) return res.status(400).json({ error: 'Resume title is required' });
+    if (!title) return res.status(400).json({ error: 'Resume name is required' });
 
     const count = await Resume.countDocuments({ user: req.userId });
+
+    let personal = { name: '', email: '', phone: '', location: '', linkedin: '', portfolio: '' };
+    if (req.body.prefillFromProfile) {
+      const user = await User.findById(req.userId);
+      if (user) {
+        personal = {
+          name: user.name || '',
+          email: user.email || '',
+          phone: user.phone || '',
+          location: user.location || '',
+          linkedin: user.linkedin || '',
+          portfolio: user.portfolio || ''
+        };
+      }
+    }
+
     const resume = await Resume.create({
       user: req.userId,
       title,
       isDefault: count === 0,
-      summary: req.body.summary || '',
-      skills: req.body.skills || '',
-      experience: req.body.experience || '',
-      education: req.body.education || ''
+      personal
     });
     res.status(201).json({ resume });
   } catch (err) {
@@ -51,9 +67,20 @@ router.put('/:id', async (req, res) => {
     if (req.body.isDefault === true) {
       await Resume.updateMany({ user: req.userId }, { $set: { isDefault: false } });
     }
+
+    // Whitelist updatable fields so arbitrary keys can't be injected
+    const allowed = [
+      'title', 'isDefault', 'personal', 'summary', 'experience', 'education',
+      'skills', 'projects', 'certifications', 'achievements', 'languages', 'publications'
+    ];
+    const update = {};
+    allowed.forEach((key) => {
+      if (req.body[key] !== undefined) update[key] = req.body[key];
+    });
+
     const resume = await Resume.findOneAndUpdate(
       { _id: req.params.id, user: req.userId },
-      { $set: req.body },
+      { $set: update },
       { new: true, runValidators: true }
     );
     if (!resume) return res.status(404).json({ error: 'Resume not found' });
