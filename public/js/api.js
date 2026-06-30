@@ -22,7 +22,18 @@ const api = {
   get(url) { return this._req('GET', url); },
   post(url, body) { return this._req('POST', url, body || {}); },
   put(url, body) { return this._req('PUT', url, body || {}); },
-  del(url) { return this._req('DELETE', url); }
+  del(url) { return this._req('DELETE', url); },
+  async upload(url, formData) {
+    const res = await fetch(url, { method: 'POST', credentials: 'include', body: formData });
+    let data = {};
+    try { data = await res.json(); } catch (e) { /* no body */ }
+    if (!res.ok) {
+      const err = new Error(data.error || 'Upload failed');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
 };
 
 function showToast(message, type = 'success') {
