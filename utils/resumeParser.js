@@ -108,13 +108,17 @@ function parseResumeText(rawText) {
   const experience = (sections.experience ? splitBlocks(sections.experience) : []).slice(0, 10).map((block) => {
     const header = block[0] || '';
     const rest = block.slice(1).join(' ').trim();
+    // Strip the date range out of the header line itself before splitting,
+    // so a header like "Role at Company, Location  Jan 2022 - Present"
+    // doesn't leave the date text glued onto the location segment.
     const dateInfo = extractDateRange(header + ' ' + rest);
-    const parts = header.split(/ at | @ |,| - |—/i).map((s) => s.trim()).filter(Boolean);
+    const headerNoDate = dateInfo.matchText ? header.replace(dateInfo.matchText, '').trim() : header;
+    const parts = headerNoDate.split(/ at | @ |,| - |—/i).map((s) => s.trim()).filter(Boolean);
     const description = dateInfo.matchText ? rest.replace(dateInfo.matchText, '').trim() : rest;
     return {
       role: parts[0] || header,
       company: parts[1] || '',
-      location: '',
+      location: parts.slice(2).join(', '),
       startDate: dateInfo.startDate,
       endDate: dateInfo.endDate,
       current: /present|current/i.test(dateInfo.endDate),
@@ -124,14 +128,29 @@ function parseResumeText(rawText) {
 
   const education = (sections.education ? splitBlocks(sections.education) : []).slice(0, 6).map((block) => {
     const header = block[0] || '';
-    const rest = block.slice(2).join(' ').trim();
+    const degreeLine = block[1] || '';
+    // A third header line (before the free-text description starts) is
+    // usually the location, e.g. "Wilmington University" / "M.S. in CS" /
+    // "New Castle, DE". Only treat it as location if it doesn't itself
+    // contain the date range (in which case there is no separate location).
     const dateInfo = extractDateRange(block.join(' '));
+    let location = '';
+    let restStart = 2;
+    if (block[2]) {
+      const lineDate = extractDateRange(block[2]);
+      const locText = lineDate.matchText ? block[2].replace(lineDate.matchText, '').trim().replace(/[,.\s-]+$/, '') : block[2];
+      if (locText) location = locText;
+      restStart = 3;
+    }
+    const rest = block.slice(restStart).join(' ').trim();
     return {
       school: header,
-      degree: block[1] || '',
+      degree: degreeLine,
       field: '',
+      location,
       startDate: dateInfo.startDate,
       endDate: dateInfo.endDate,
+      current: /present|current/i.test(dateInfo.endDate),
       description: dateInfo.matchText ? rest.replace(dateInfo.matchText, '').trim() : rest
     };
   });
