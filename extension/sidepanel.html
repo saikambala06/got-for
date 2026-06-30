@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>SK VK</title>
+<style>
+  :root{
+    --bg:#0f1115; --surface:#161922; --surface2:#1d212c; --border:#2a2f3b;
+    --text:#f1f2f4; --muted:#9b9fab; --accent:#4f46e5; --accent2:#22c55e;
+    --chip:#202637; --chip-on:#16331f; --chip-on-text:#34d399;
+  }
+  * { box-sizing:border-box; }
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-size:13px; padding-bottom:24px;
+  }
+  .header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:5;
+  }
+  .brand{ display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px; }
+  .mark{ width:24px; height:24px; border-radius:7px; background:var(--accent); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; }
+  .help{ font-size:11px; color:var(--muted); border:1px solid var(--border); padding:4px 10px; border-radius:7px; cursor:pointer; }
+
+  .section{ padding:14px 16px; border-bottom:1px solid var(--border); }
+  .job-title{ font-size:15px; font-weight:700; line-height:1.35; margin:0 0 6px; }
+  .job-meta{ color:var(--muted); font-size:12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .job-meta b{ color:var(--text); font-weight:600; }
+  .badge{ background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:2px 7px; font-size:11px; }
+
+  .match-card{
+    margin-top:14px; background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:14px; display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  .match-card h4{ margin:0 0 4px; font-size:13px; }
+  .match-card p{ margin:0; color:var(--muted); font-size:11.5px; line-height:1.4; max-width:190px; }
+  .ring{ position:relative; width:46px; height:46px; flex:none; }
+  .ring svg{ transform:rotate(-90deg); }
+  .ring .ring-fill{ transition:stroke-dashoffset .4s ease; }
+  .ring-check{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:16px; color:var(--accent2); }
+
+  h3.label{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 10px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:7px; }
+  .chip{ background:var(--chip); border:1px solid var(--border); border-radius:999px; padding:5px 11px; font-size:12px; color:var(--text); }
+  .chip.on{ background:var(--chip-on); color:var(--chip-on-text); border-color:#1f4a31; }
+
+  ul.bullets{ margin:0; padding-left:18px; line-height:1.7; }
+  ul.bullets li{ margin-bottom:2px; }
+  .more-toggle{ color:var(--accent); font-size:12px; cursor:pointer; margin-top:6px; display:inline-block; }
+
+  .actions-row{ display:flex; gap:10px; align-items:center; margin-top:4px; }
+  .btn{
+    flex:1; padding:9px 10px; border-radius:9px; border:1px solid var(--border); background:var(--surface2);
+    color:var(--text); font-size:12.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .btn:hover{ background:#242a38; }
+  .icon-btn{ flex:none; width:38px; height:38px; border-radius:9px; border:1px solid var(--border); background:var(--surface2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .icon-btn.active{ color:#f87171; border-color:#7f1d1d; background:#2a1518; }
+  .checkline{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--muted); margin-top:10px; }
+  .checkline input{ accent-color:var(--accent2); }
+
+  .btn-primary{ background:var(--accent2); border-color:var(--accent2); color:#06210f; }
+  .btn-primary:hover{ background:#16a34a; }
+  .btn-row2{ display:flex; gap:10px; margin-top:10px; }
+  .btn-reload{ width:100%; margin-top:10px; background:transparent; }
+  .hint{ text-align:center; color:var(--muted); font-size:11px; margin-top:8px; }
+
+  .empty{ text-align:center; padding:40px 20px; color:var(--muted); }
+  .empty .mark{ width:40px; height:40px; font-size:14px; margin:0 auto 14px; }
+  .spinner{ width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--accent2); border-radius:50%; display:inline-block; animation:spin .7s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* Tailor Resume panel */
+  .tailor-panel{ display:none; }
+  .tailor-panel.open{ display:block; }
+  textarea{
+    width:100%; min-height:90px; resize:vertical; background:var(--surface2); border:1px solid var(--border);
+    border-radius:9px; color:var(--text); padding:9px 10px; font-size:12.5px; font-family:inherit; line-height:1.5;
+  }
+  .score-banner{
+    display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:12px 14px; margin:12px 0;
+  }
+  .score-num{ font-size:22px; font-weight:800; color:var(--accent2); }
+  .score-num.low{ color:#f59e0b; }
+  .suggestion-block{ margin-top:14px; }
+  .suggestion-block h4{ font-size:12.5px; margin:0 0 6px; }
+  .summary-box{ background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12.5px; line-height:1.6; }
+  .copy-btn{ margin-top:6px; font-size:11px; color:var(--accent); cursor:pointer; }
+  .tip-list{ margin:0; padding-left:18px; line-height:1.7; font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand"><div class="mark">SK</div> SK<span style="color:var(--accent2)">VK</span></div>
+  <div class="help" id="helpBtn">Help</div>
+</div>
+
+<div id="emptyState" class="empty">
+  <div class="mark">SK</div>
+  <p>Open any job posting page, then click <b>Reload Job Details</b> below — or just reopen this panel — to pull in the role.</p>
+  <button class="btn btn-reload" id="emptyReloadBtn" style="max-width:220px;margin:0 auto;">Reload Job Details</button>
+</div>
+
+<div id="jobView" style="display:none;">
+  <div class="section">
+    <p class="job-title" id="jobTitle"></p>
+    <div class="job-meta">
+      <b id="jobCompany"></b>
+      <span id="metaLoc"></span>
+      <span class="badge" id="metaType" style="display:none;"></span>
+    </div>
+    <div class="job-meta" id="salaryRow" style="margin-top:4px; display:none;"></div>
+
+    <div class="match-card">
+      <div>
+        <h4>Keyword Match <span class="badge" id="aiBadge" style="display:none;">✦ AI</span></h4>
+        <p id="matchDesc">Your resume has <span id="matchFrac">0 of 0</span> keywords that appear in the job description.</p>
+      </div>
+      <div class="ring">
+        <svg width="46" height="46" viewBox="0 0 46 46">
+          <circle cx="23" cy="23" r="19" fill="none" stroke="#2a2f3b" stroke-width="5"/>
+          <circle id="ringFill" class="ring-fill" cx="23" cy="23" r="19" fill="none" stroke="#22c55e" stroke-width="5" stroke-linecap="round" stroke-dasharray="119.4" stroke-dashoffset="119.4"/>
+        </svg>
+        <div class="ring-check" id="ringCheck">✓</div>
+      </div>
+    </div>
+    <div id="aiStatus" style="font-size:11px; color:var(--muted); margin-top:8px; display:none;"></div>
+  </div>
+
+  <div class="section">
+    <h3 class="label">Skills</h3>
+    <div class="chips" id="skillsChips"></div>
+  </div>
+
+  <div class="section" id="highlightsSection" style="display:none;">
+    <h3 class="label">Key Highlights</h3>
+    <ul class="bullets" id="highlightsList"></ul>
+  </div>
+
+  <div class="section" id="qualSection" style="display:none;">
+    <h3 class="label">Qualifications</h3>
+    <ul class="bullets" id="qualList"></ul>
+    <span class="more-toggle" id="qualMoreToggle" style="display:none;"></span>
+  </div>
+
+  <div class="section">
+    <div class="actions-row">
+      <button class="btn" id="enterManuallyBtn">📝 Enter Manually</button>
+      <button class="icon-btn" id="favBtn" title="Save">♡</button>
+      <label class="icon-btn" title="Mark as applied" style="font-size:12px;">
+        <input type="checkbox" id="appliedCheck" style="margin:0;" />
+      </label>
+    </div>
+    <div class="checkline"><span>Mark as applied</span></div>
+
+    <div class="btn-row2">
+      <button class="btn btn-primary" id="tailorBtn" style="flex:2;">✦ Tailor Resume</button>
+      <button class="btn" id="coverLetterBtn" style="flex:1;">Cover Letter</button>
+    </div>
+    <button class="btn btn-reload" id="reloadBtn">⟳ Reload Job Details</button>
+    <div class="hint">You can use this extension on any job page</div>
+  </div>
+
+  <!-- Tailor Resume panel -->
+  <div class="section tailor-panel" id="tailorPanel">
+    <h3 class="label">Tailor Resume — AI Suggestions</h3>
+    <p style="color:var(--muted); font-size:11.5px; margin:0 0 8px;">Paste your resume's summary or a few bullets below (or save it once in Settings) and generate tailored suggestions for this exact posting.</p>
+    <textarea id="resumeInput" placeholder="Paste resume text here..."></textarea>
+    <button class="btn btn-primary" id="generateBtn" style="margin-top:8px;width:100%;">Generate Full AI Suggestions</button>
+
+    <div id="tailorResults" style="display:none;">
+      <div class="score-banner">
+        <div class="score-num" id="scoreNum">0%</div>
+        <div style="font-size:12px;color:var(--muted);">Keyword match between your resume and this job description.</div>
+      </div>
+
+      <div class="suggestion-block">
+        <h4>Keywords to add</h4>
+        <div class="chips" id="missingChips"></div>
+      </div>
+
+      <div class="suggestion-block">
+        <h4>Suggested tailored summary</h4>
+        <div class="summary-box" id="summaryBox"></div>
+        <span class="copy-btn" id="copySummaryBtn">Copy summary</span>
+      </div>
+
+      <div class="suggestion-block">
+        <h4>Bullet rewrite tips</h4>
+        <ul class="tip-list" id="bulletTips"></ul>
+      </div>
+
+      <div class="suggestion-block">
+        <h4>ATS checklist</h4>
+        <ul class="tip-list" id="atsList"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="tailor.js"></script>
+<script src="sidepanel.js"></script>
+</body>
+</html>
