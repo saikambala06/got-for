@@ -49,6 +49,33 @@ function extractDateRange(text) {
   return { startDate: m[1].trim(), endDate: m[2].trim(), matchText: m[0] };
 }
 
+// A line that looks like "Company, City, ST" or "Company — City, ST" rather
+// than a bullet point of accomplishment text — used to recover a
+// company/location line that got separated from the role/date header by a
+// line break (e.g. Role / Dates / Company, Location / bullets ordering).
+function looksLikeCompanyLocationLine(line) {
+  if (!line) return false;
+  const trimmed = line.trim();
+  if (trimmed.length === 0 || trimmed.length > 90) return false;
+  if (/^[•\u2022\-*▪]/.test(trimmed)) return false; // bullet marker
+  if (extractDateRange(trimmed).matchText) return false; // has its own dates
+  // Accomplishment bullets are usually full sentences ending in a period,
+  // or start with a past-tense verb. Company/location lines are short
+  // noun phrases, often containing a comma.
+  if (/[.!?]$/.test(trimmed)) return false;
+  const words = trimmed.split(/\s+/);
+  if (words.length > 8) return false;
+  return true;
+}
+
+// Common state/country location patterns, e.g. "Redmond, WA" or "Mumbai, India".
+const LOCATION_RE = /\b([A-Za-z][A-Za-z.\s]{1,30},\s*(?:[A-Z]{2}|[A-Za-z]{3,20}))\b/;
+
+// Degree titles, used to split a single line like "Master of Science in
+// Information Technology from Wilmington University" into separate
+// degree / school fields instead of dumping the whole line into "school".
+const DEGREE_PREFIX_RE = /^(Bachelor|Master|Associate|Doctor(?:ate)?|Ph\.?D\.?|MBA|EMBA|B\.?S\.?(?:c)?\.?|M\.?S\.?(?:c)?\.?|B\.?A\.?|M\.?A\.?|B\.?Eng\.?|M\.?Eng\.?|B\.?Tech\.?|M\.?Tech\.?)\b/i;
+
 function parseResumeText(rawText) {
   const text = (rawText || '').replace(/\r/g, '');
   const lines = text.split('\n').map((l) => l.trim());
@@ -59,6 +86,22 @@ function parseResumeText(rawText) {
   const linkedinMatch = text.match(/(https?:\/\/)?(www\.)?linkedin\.com\/[^\s,;)]+/i);
   const urlMatches = text.match(/https?:\/\/[^\s,;)]+/g) || [];
   const portfolio = urlMatches.find((u) => !/linkedin\.com/i.test(u)) || '';
+
+  // Location usually sits in the contact line near the top, alongside the
+  // email/phone — e.g. "Jane Doe | Redmond, WA | jane@x.com | (555)...".
+  // Split on common separators and pick the segment that looks like a
+  // "City, ST/Country" pair and isn't the phone/email/link.
+  let location = '';
+  for (const line of nonEmpty.slice(0, 8)) {
+    const segments = line.split(/[|•·]/).map((s) => s.trim()).filter(Boolean);
+    for (const seg of segments) {
+      if (/@/.test(seg) || /https?:\/\//i.test(seg) || /linkedin/i.test(seg)) continue;
+      if (phoneMatch && seg.includes(phoneMatch[0])) continue;
+      const m = seg.match(LOCATION_RE);
+      if (m && m[0].length === seg.length) { location = m[0]; break; }
+    }
+    if (location) break;
+  }
 
   // Heuristic: the resume's name is usually the first short, non-empty line
   // that isn't an email/phone/url and isn't a section header itself.
@@ -115,11 +158,20 @@ function parseResumeText(rawText) {
     // that lives on its own line from leaking into the description.
     let dateLineIdx = block.findIndex((l) => extractDateRange(l).matchText);
     const headerLines = dateLineIdx === -1 ? [block[0] || ''] : block.slice(0, dateLineIdx + 1);
-    const bulletLines = dateLineIdx === -1 ? block.slice(1) : block.slice(dateLineIdx + 1);
+    let bulletLines = dateLineIdx === -1 ? block.slice(1) : block.slice(dateLineIdx + 1);
     const headerJoined = headerLines.join(' - ');
     const dateInfo = extractDateRange(headerJoined);
-    const headerNoDate = dateInfo.matchText ? headerJoined.replace(dateInfo.matchText, '').trim() : headerJoined;
-    const parts = headerNoDate.split(/ at | @ |,| - |—/i).map((s) => s.trim()).filter(Boolean);
+    const headerNoDate = (dateInfo.matchText ? headerJoined.replace(dateInfo.matchText, '').trim() : headerJoined).replace(/[\s,–—-]+$/, '');
+    let parts = headerNoDate.split(/ at | @ |,| - |—/i).map((s) => s.trim()).filter(Boolean);
+    // If the header only yielded a role (no company), the resume likely had
+    // the layout Role / Dates / Company, Location / bullets — i.e. the
+    // company+location line ended up at the front of bulletLines instead of
+    // in the header. Pull it back in if it looks the part.
+    if (parts.length < 2 && bulletLines.length && looksLikeCompanyLocationLine(bulletLines[0])) {
+      const extra = bulletLines[0].split(/,| - |—/i).map((s) => s.trim()).filter(Boolean);
+      parts = parts.concat(extra);
+      bulletLines = bulletLines.slice(1);
+    }
     const description = bulletLines.filter(Boolean).join('\n').trim();
     return {
       role: parts[0] || headerLines[0] || '',
@@ -133,26 +185,49 @@ function parseResumeText(rawText) {
   });
 
   const education = (sections.education ? splitBlocks(sections.education) : []).slice(0, 6).map((block) => {
-    const header = block[0] || '';
-    const degreeLine = block[1] || '';
+    let header = block[0] || '';
+    let degreeLine = block[1] || '';
+    let restStart = 2;
+    // Handle "Master of Science in Information Technology from Wilmington
+    // University" all on one line — split into degree (incl. field) + school
+    // instead of leaving it all in "school" with an empty degree.
+    if (DEGREE_PREFIX_RE.test(header) && !extractDateRange(header).matchText) {
+      const fromMatch = header.match(/^(.*?)\s+from\s+(.+)$/i);
+      if (fromMatch) {
+        degreeLine = fromMatch[1].trim();
+        header = fromMatch[2].trim();
+        restStart = 1;
+      } else {
+        const atMatch = header.match(/^(.*?)\s*[-—,]\s*(.+)$/);
+        if (atMatch && DEGREE_PREFIX_RE.test(atMatch[1])) {
+          degreeLine = atMatch[1].trim();
+          header = atMatch[2].trim();
+          restStart = 1;
+        }
+      }
+    }
     // A third header line (before the free-text description starts) is
     // usually the location, e.g. "Wilmington University" / "M.S. in CS" /
     // "New Castle, DE". Only treat it as location if it doesn't itself
     // contain the date range (in which case there is no separate location).
     const dateInfo = extractDateRange(block.join(' '));
     let location = '';
-    let restStart = 2;
-    if (block[2]) {
-      const lineDate = extractDateRange(block[2]);
-      const locText = lineDate.matchText ? block[2].replace(lineDate.matchText, '').trim().replace(/[,.\s-]+$/, '') : block[2];
+    if (block[restStart]) {
+      const lineDate = extractDateRange(block[restStart]);
+      const locText = lineDate.matchText ? block[restStart].replace(lineDate.matchText, '').trim().replace(/[,.\s-]+$/, '') : block[restStart];
       if (locText) location = locText;
-      restStart = 3;
+      restStart += 1;
     }
     const rest = block.slice(restStart).join(' ').trim();
+    // Pull a field of study out of the degree line when phrased "X in Y"
+    // (e.g. "Master of Science in Information Technology").
+    let field = '';
+    const inMatch = degreeLine.match(/^(.*?)\s+in\s+(.+)$/i);
+    if (inMatch) { field = inMatch[2].trim(); }
     return {
       school: header,
       degree: degreeLine,
-      field: '',
+      field,
       location,
       startDate: dateInfo.startDate,
       endDate: dateInfo.endDate,
@@ -182,7 +257,7 @@ function parseResumeText(rawText) {
       name,
       email: emailMatch ? emailMatch[0] : '',
       phone: phoneMatch ? phoneMatch[0].trim() : '',
-      location: '',
+      location,
       linkedin: linkedinMatch ? linkedinMatch[0] : '',
       portfolio
     },
