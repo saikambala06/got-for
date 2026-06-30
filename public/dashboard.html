@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard — JobTrail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <div id="sidebar-root" data-active="dashboard"></div>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Overview</div>
+        <div class="page-sub">A snapshot of your job search, updated in real time.</div>
+      </div>
+      <select class="field" id="periodSelect" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:13.5px;">
+        <option value="30">Last 30 days</option>
+        <option value="7">Last 7 days</option>
+      </select>
+    </div>
+
+    <div class="grid cards-row" id="statCards">
+      <div class="card stat-card">
+        <div class="stat-label">All time</div>
+        <div class="stat-value" id="statTotal">—</div>
+        <div class="stat-foot">Total applications</div>
+      </div>
+      <div class="card stat-card accent">
+        <div class="stat-label">This month</div>
+        <div class="stat-value" id="statMonthly">—</div>
+        <div class="stat-foot">Applications in the last 30 days</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Last 7 days</div>
+        <div class="stat-value" id="statWeekly">—</div>
+        <div class="stat-foot">Recent momentum</div>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns: 2fr 1fr; align-items:start;">
+      <div class="card section-card">
+        <div class="section-head">
+          <div>
+            <h3>Application trend</h3>
+            <p>Daily applications submitted over the selected period.</p>
+          </div>
+        </div>
+        <canvas id="trendChart" height="110"></canvas>
+      </div>
+
+      <div class="card section-card">
+        <div class="section-head">
+          <div>
+            <h3>Pipeline breakdown</h3>
+            <p>Where things stand right now.</p>
+          </div>
+        </div>
+        <div id="pipelineList" style="display:flex; flex-direction:column; gap:14px;"></div>
+      </div>
+    </div>
+
+    <div class="card section-card" style="margin-top:20px;">
+      <div class="section-head">
+        <div>
+          <h3>Recently added</h3>
+          <p>Your latest tracked applications.</p>
+        </div>
+        <a href="/tracker.html" class="btn btn-ghost btn-sm">View all →</a>
+      </div>
+      <div id="recentList"></div>
+    </div>
+  </main>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+let chart;
+const STATUS_META = {
+  Applied: { color: '#6f8dff' },
+  Interviewing: { color: '#ff9a4d' },
+  Offer: { color: '#36d399' },
+  Rejected: { color: '#ff6b81' },
+  Archived: { color: '#9aa1c3' }
+};
+
+async function loadDashboard() {
+  await requireSession();
+  const period = document.getElementById('periodSelect').value;
+
+  try {
+    const stats = await api.get('/api/jobs/stats');
+    document.getElementById('statTotal').textContent = stats.total;
+    document.getElementById('statMonthly').textContent = stats.monthly;
+    document.getElementById('statWeekly').textContent = stats.last7;
+
+    // Trend chart
+    const trend = period === '7' ? stats.trend.slice(-7) : stats.trend;
+    const labels = trend.map((p) => new Date(p.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+    const data = trend.map((p) => p.count);
+
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    if (chart) chart.destroy();
+    const gradient = ctx.createLinearGradient(0, 0, 0, 220);
+    gradient.addColorStop(0, 'rgba(255,154,77,0.35)');
+    gradient.addColorStop(1, 'rgba(255,154,77,0)');
+
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          borderColor: '#ff9a4d',
+          backgroundColor: gradient,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 2.5,
+          pointBackgroundColor: '#ff9a4d',
+          borderWidth: 2.5
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#6a7196', maxTicksLimit: 8, font: { size: 11 } } },
+          y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6a7196', precision: 0, font: { size: 11 } } }
+        }
+      }
+    });
+
+    // Pipeline breakdown
+    const pipelineEl = document.getElementById('pipelineList');
+    const order = ['Applied', 'Interviewing', 'Offer', 'Rejected', 'Archived'];
+    const max = Math.max(1, ...order.map((s) => stats.counts[s] || 0));
+    pipelineEl.innerHTML = order.map((s) => {
+      const count = stats.counts[s] || 0;
+      const pct = Math.round((count / max) * 100);
+      return `
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+            <span class="pill pill-${s}"><span class="pill-dot"></span>${s}</span>
+            <span style="color:var(--text-dim)">${count}</span>
+          </div>
+          <div style="height:6px;background:var(--surface-2);border-radius:6px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${STATUS_META[s].color};border-radius:6px;"></div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+
+  // Recent jobs
+  try {
+    const { jobs } = await api.get('/api/jobs');
+    const recentEl = document.getElementById('recentList');
+    const recent = jobs.slice(0, 5);
+    if (!recent.length) {
+      recentEl.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">🗂️</div>
+          <h4>No applications yet</h4>
+          <p>Add your first job application to see it show up here.</p>
+          <a href="/tracker.html" class="btn btn-primary btn-sm" style="margin-top:14px;display:inline-flex;">Add application</a>
+        </div>`;
+      return;
+    }
+    recentEl.innerHTML = recent.map((j) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);">
+        <div style="min-width:0">
+          <div style="font-weight:600;font-size:14px;">${escapeHtml(j.title)}</div>
+          <div style="font-size:12.5px;color:var(--text-dim);">${escapeHtml(j.company)}${j.location ? ' · ' + escapeHtml(j.location) : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;flex-shrink:0;">
+          <span class="pill pill-${j.status}"><span class="pill-dot"></span>${j.status}</span>
+          <span style="font-size:12px;color:var(--text-faint);width:70px;text-align:right;">${timeAgo(j.appliedOn)}</span>
+        </div>
+      </div>`).join('');
+  } catch (err) { /* already toasted above if relevant */ }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+document.getElementById('periodSelect').addEventListener('change', loadDashboard);
+loadDashboard();
+</script>
+</body>
+</html>

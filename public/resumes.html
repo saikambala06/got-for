@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Resumes — JobTrail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css" />
+<style>
+  .resume-layout{ display:grid; grid-template-columns: 280px 1fr; gap:18px; align-items:start; }
+  .resume-item{ padding:14px; border-radius:11px; cursor:pointer; border:1px solid transparent; margin-bottom:8px; }
+  .resume-item:hover{ background:var(--surface-2); }
+  .resume-item.active{ background:var(--accent-soft); border-color:rgba(255,154,77,0.3); }
+  .resume-item .rt{ font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px; }
+  .resume-item .rd{ font-size:12px; color:var(--text-faint); margin-top:3px; }
+  .default-badge{ font-size:10px; background:var(--accent); color:#1a1326; padding:2px 7px; border-radius:100px; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="sidebar-root" data-active="resumes"></div>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Resumes</div>
+        <div class="page-sub">Keep tailored versions ready for every role.</div>
+      </div>
+      <button class="btn btn-primary" id="newResumeBtn">+ New resume</button>
+    </div>
+
+    <div class="resume-layout">
+      <div class="card" style="padding:10px;">
+        <div id="resumeList"></div>
+      </div>
+
+      <div class="card section-card" id="resumeDetail">
+        <div class="empty-state">
+          <div class="icon">📄</div>
+          <h4>No resume selected</h4>
+          <p>Choose a resume on the left, or create a new one.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+let resumes = [];
+let selectedId = null;
+let dirty = false;
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function renderList() {
+  const el = document.getElementById('resumeList');
+  if (!resumes.length) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">📄</div><h4>No resumes yet</h4><p>Create your first one to get started.</p></div>`;
+    return;
+  }
+  el.innerHTML = resumes.map((r) => `
+    <div class="resume-item ${r._id === selectedId ? 'active' : ''}" data-id="${r._id}">
+      <div class="rt">${escapeHtml(r.title)} ${r.isDefault ? '<span class="default-badge">DEFAULT</span>' : ''}</div>
+      <div class="rd">Updated ${new Date(r.updatedAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div>
+    </div>`).join('');
+  el.querySelectorAll('.resume-item').forEach((it) => {
+    it.addEventListener('click', () => {
+      if (dirty && !confirm('Discard unsaved changes?')) return;
+      selectedId = it.dataset.id;
+      dirty = false;
+      renderList();
+      renderDetail();
+    });
+  });
+}
+
+function renderDetail() {
+  const panel = document.getElementById('resumeDetail');
+  const r = resumes.find((x) => x._id === selectedId);
+  if (!r) {
+    panel.innerHTML = `<div class="empty-state"><div class="icon">📄</div><h4>No resume selected</h4><p>Choose a resume on the left, or create a new one.</p></div>`;
+    return;
+  }
+  panel.innerHTML = `
+    <div class="section-head">
+      <div style="flex:1;">
+        <div class="field"><input id="rTitle" value="${escapeHtml(r.title)}" style="font-size:18px;font-weight:700;font-family:var(--font-display);border:none;background:transparent;padding-left:0;" /></div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        ${!r.isDefault ? '<button class="btn btn-sm" id="setDefaultBtn">Set as default</button>' : ''}
+        <button class="btn btn-sm btn-danger" id="deleteResumeBtn">Delete</button>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:16px;"><label>Professional summary</label><textarea id="rSummary" placeholder="Write a brief professional summary…">${escapeHtml(r.summary)}</textarea></div>
+    <div class="field" style="margin-bottom:16px;"><label>Skills</label><textarea id="rSkills" placeholder="Python, AWS, Kubernetes, SQL…" style="min-height:60px;">${escapeHtml(r.skills)}</textarea></div>
+    <div class="field" style="margin-bottom:16px;"><label>Experience</label><textarea id="rExperience" placeholder="Company — Role (Dates)&#10;Key achievement…" style="min-height:140px;">${escapeHtml(r.experience)}</textarea></div>
+    <div class="field" style="margin-bottom:8px;"><label>Education</label><textarea id="rEducation" placeholder="Degree, Institution, Year" style="min-height:80px;">${escapeHtml(r.education)}</textarea></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:18px;">
+      <button class="btn btn-primary" id="saveResumeBtn">Save changes</button>
+    </div>
+  `;
+
+  ['rTitle','rSummary','rSkills','rExperience','rEducation'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', () => dirty = true);
+  });
+
+  if (!r.isDefault) {
+    document.getElementById('setDefaultBtn').addEventListener('click', async () => {
+      try {
+        await api.put(`/api/resumes/${r._id}`, { isDefault: true });
+        showToast('Default resume updated');
+        loadResumes();
+      } catch (err) { showToast(err.message, 'error'); }
+    });
+  }
+
+  document.getElementById('deleteResumeBtn').addEventListener('click', async () => {
+    if (!confirm('Delete this resume? This cannot be undone.')) return;
+    try {
+      await api.del(`/api/resumes/${r._id}`);
+      selectedId = null;
+      showToast('Resume deleted');
+      loadResumes();
+    } catch (err) { showToast(err.message, 'error'); }
+  });
+
+  document.getElementById('saveResumeBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('saveResumeBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      await api.put(`/api/resumes/${r._id}`, {
+        title: document.getElementById('rTitle').value.trim() || 'Untitled resume',
+        summary: document.getElementById('rSummary').value,
+        skills: document.getElementById('rSkills').value,
+        experience: document.getElementById('rExperience').value,
+        education: document.getElementById('rEducation').value
+      });
+      dirty = false;
+      showToast('Resume saved');
+      loadResumes();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save changes';
+    }
+  });
+}
+
+async function loadResumes() {
+  try {
+    const data = await api.get('/api/resumes');
+    resumes = data.resumes;
+    if (!resumes.find((r) => r._id === selectedId)) selectedId = resumes[0] ? resumes[0]._id : null;
+    renderList();
+    renderDetail();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+document.getElementById('newResumeBtn').addEventListener('click', async () => {
+  try {
+    const { resume } = await api.post('/api/resumes', { title: `Untitled resume ${resumes.length + 1}` });
+    selectedId = resume._id;
+    showToast('Resume created');
+    loadResumes();
+  } catch (err) { showToast(err.message, 'error'); }
+});
+
+(async function init() {
+  await requireSession();
+  loadResumes();
+})();
+</script>
+</body>
+</html>
