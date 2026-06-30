@@ -82,7 +82,10 @@
         <div class="page-title">Resumes</div>
         <div class="page-sub">Keep tailored versions ready for every role.</div>
       </div>
-      <button class="btn btn-primary" id="newResumeBtn">+ New Resume</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn" id="tailorJobBtn">✦ Tailor for a Job</button>
+        <button class="btn btn-primary" id="newResumeBtn">+ New Resume</button>
+      </div>
     </div>
 
     <div class="resume-layout">
@@ -139,6 +142,67 @@
 
     <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:24px;">
       <button class="btn btn-ghost" id="cancelCreate">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tailor for a Job modal -->
+<div class="modal-backdrop" id="tailorBackdrop">
+  <div class="create-modal" style="max-width:640px;">
+    <h2>Tailor for a Job</h2>
+    <p style="font-size:12.5px;color:var(--text-faint);margin-top:-10px;margin-bottom:18px;">
+      Paste a job description (or send one straight from the SK VK browser extension on any job posting tab) and get AI-tailored suggestions for the resume below.
+    </p>
+
+    <div class="field">
+      <label for="tailorResumeSelect">Resume to tailor</label>
+      <select id="tailorResumeSelect"></select>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="field"><label for="tJobTitle">Job title</label><input id="tJobTitle" placeholder="e.g. DevOps Engineer" /></div>
+      <div class="field"><label for="tCompany">Company</label><input id="tCompany" placeholder="e.g. Acme Inc." /></div>
+    </div>
+
+    <div class="field">
+      <label for="tJobDescription">Job description</label>
+      <textarea id="tJobDescription" style="min-height:130px;" placeholder="Paste the full job description here..."></textarea>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
+      <button class="btn btn-ghost" id="cancelTailor">Cancel</button>
+      <button class="btn btn-primary" id="generateTailorBtn">Generate AI Suggestions</button>
+    </div>
+
+    <div id="tailorResultsWrap" style="display:none; margin-top:22px; border-top:1px solid var(--border); padding-top:18px;">
+      <div style="display:flex; align-items:center; gap:14px; background:var(--surface-2,rgba(255,255,255,.03)); border:1px solid var(--border); border-radius:12px; padding:14px;">
+        <div id="tScore" style="font-size:24px; font-weight:800;">0%</div>
+        <div style="font-size:12.5px; color:var(--text-faint);">
+          Keyword match between this resume and the job description.
+          <span id="tSourceLabel" style="display:block; margin-top:2px; font-size:11px; opacity:.75;"></span>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <h4 style="font-size:13px;margin:0 0 8px;">Keywords to add</h4>
+        <div class="chip-input-row" id="tMissingChips"></div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <h4 style="font-size:13px;margin:0 0 8px;">Suggested tailored summary</h4>
+        <div id="tSummaryBox" style="background:var(--surface-2,rgba(255,255,255,.03)); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.6;"></div>
+        <button class="btn btn-sm" id="applySummaryBtn" style="margin-top:8px;">Use this summary</button>
+      </div>
+
+      <div style="margin-top:16px;" id="tBulletsSection">
+        <h4 style="font-size:13px;margin:0 0 8px;">Bullet rewrite suggestions</h4>
+        <div id="tBulletsList"></div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <h4 style="font-size:13px;margin:0 0 8px;">ATS checklist</h4>
+        <ul id="tAtsList" style="margin:0; padding-left:18px; font-size:13px; line-height:1.7;"></ul>
+      </div>
     </div>
   </div>
 </div>
@@ -799,9 +863,142 @@ async function loadResumes(focusId) {
   }
 }
 
+// ---------- Tailor for a Job ----------
+const tailorBackdrop = document.getElementById('tailorBackdrop');
+const tailorResumeSelect = document.getElementById('tailorResumeSelect');
+
+function populateTailorResumeSelect() {
+  tailorResumeSelect.innerHTML = resumes.length
+    ? resumes.map((r) => `<option value="${r._id}">${escapeHtml(r.title)}</option>`).join('')
+    : '<option value="">No resumes yet — create one first</option>';
+  if (selectedId && resumes.find((r) => r._id === selectedId)) {
+    tailorResumeSelect.value = selectedId;
+  }
+}
+
+function openTailorModal(prefill) {
+  populateTailorResumeSelect();
+  document.getElementById('tJobTitle').value = (prefill && prefill.jobTitle) || '';
+  document.getElementById('tCompany').value = (prefill && prefill.company) || '';
+  document.getElementById('tJobDescription').value = (prefill && prefill.jobDescription) || '';
+  document.getElementById('tailorResultsWrap').style.display = 'none';
+  tailorBackdrop.classList.add('open');
+}
+
+document.getElementById('tailorJobBtn').addEventListener('click', () => openTailorModal());
+document.getElementById('cancelTailor').addEventListener('click', () => tailorBackdrop.classList.remove('open'));
+tailorBackdrop.addEventListener('click', (e) => { if (e.target === tailorBackdrop) tailorBackdrop.classList.remove('open'); });
+
+let lastTailorResult = null;
+
+document.getElementById('generateTailorBtn').addEventListener('click', async () => {
+  const resumeId = tailorResumeSelect.value;
+  const jobTitle = document.getElementById('tJobTitle').value.trim();
+  const company = document.getElementById('tCompany').value.trim();
+  const jobDescription = document.getElementById('tJobDescription').value.trim();
+
+  if (!resumeId) return showToast('Create a resume first', 'error');
+  if (!jobDescription) return showToast('Paste the job description first', 'error');
+
+  const btn = document.getElementById('generateTailorBtn');
+  const original = btn.textContent;
+  btn.textContent = 'Generating…';
+  btn.disabled = true;
+
+  try {
+    const { result } = await api.post(`/api/resumes/${resumeId}/tailor`, { jobTitle, company, jobDescription });
+    lastTailorResult = result;
+    renderTailorResult(result);
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
+
+function renderTailorResult(result) {
+  document.getElementById('tailorResultsWrap').style.display = 'block';
+  document.getElementById('tScore').textContent = `${result.matchScore}%`;
+  document.getElementById('tSourceLabel').textContent =
+    result.source === 'ai' ? 'Generated by Claude' : 'Generated using built-in keyword analysis';
+
+  const missingWrap = document.getElementById('tMissingChips');
+  missingWrap.innerHTML = (result.missingKeywords || []).length
+    ? result.missingKeywords.map((k) => `<span class="chip">${escapeHtml(k)}</span>`).join('')
+    : '<span class="chip">Great coverage — no major gaps found</span>';
+
+  document.getElementById('tSummaryBox').textContent = result.tailoredSummary || '';
+
+  const bulletsWrap = document.getElementById('tBulletsList');
+  const rewrites = result.bulletRewrites || [];
+  bulletsWrap.innerHTML = rewrites.length
+    ? rewrites.map((b, i) => `
+      <div style="border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:8px;">
+        <div style="font-size:12px; color:var(--text-faint); margin-bottom:6px;">${escapeHtml(b.role || '')}${b.role && b.company ? ' · ' : ''}${escapeHtml(b.company || '')}</div>
+        <div style="font-size:12.5px; line-height:1.6;"><b>Suggestion:</b> ${escapeHtml(b.suggestion || '')}</div>
+        <button class="btn btn-sm" data-bullet-idx="${i}" style="margin-top:8px;">Use this rewrite</button>
+      </div>
+    `).join('')
+    : '<p style="font-size:12.5px;color:var(--text-faint);">No experience entries to rewrite yet.</p>';
+
+  bulletsWrap.querySelectorAll('[data-bullet-idx]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const idx = Number(btn.dataset.bulletIdx);
+      const rewrite = rewrites[idx];
+      const resumeId = tailorResumeSelect.value;
+      const target = resumes.find((r) => r._id === resumeId);
+      if (!target) return;
+      const exp = [...(target.experience || [])];
+      const matchIdx = exp.findIndex((e) => e.role === rewrite.role && e.company === rewrite.company);
+      if (matchIdx === -1) return showToast("Couldn't match that role on the resume", 'error');
+      exp[matchIdx] = { ...exp[matchIdx], description: rewrite.suggestion };
+      try {
+        await api.put(`/api/resumes/${resumeId}`, { experience: exp });
+        showToast('Bullet updated');
+        await loadResumes(resumeId);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  });
+
+  document.getElementById('tAtsList').innerHTML = (result.atsChecklist || []).map((t) => `<li>${escapeHtml(t)}</li>`).join('');
+}
+
+document.getElementById('applySummaryBtn').addEventListener('click', async () => {
+  if (!lastTailorResult) return;
+  const resumeId = tailorResumeSelect.value;
+  try {
+    await api.put(`/api/resumes/${resumeId}`, { summary: lastTailorResult.tailoredSummary });
+    showToast('Summary updated');
+    await loadResumes(resumeId);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+// Auto-open Tailor modal when arriving from the SK VK browser extension
+// (Tailor in Portal button), which passes the scraped job via query params.
+function checkExtensionHandoff() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('tailor')) return;
+  let jobDescription = '';
+  try {
+    jobDescription = params.get('jd') ? decodeURIComponent(escape(atob(params.get('jd')))) : '';
+  } catch (e) { jobDescription = ''; }
+  openTailorModal({
+    jobTitle: params.get('title') || '',
+    company: params.get('company') || '',
+    jobDescription
+  });
+  history.replaceState(null, '', window.location.pathname);
+}
+
 (async function init() {
   await requireSession();
-  loadResumes();
+  await loadResumes();
+  checkExtensionHandoff();
 })();
 </script>
 </body>
