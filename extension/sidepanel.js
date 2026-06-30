@@ -194,6 +194,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   $('generateBtn').addEventListener('click', handleGenerate);
 
+  $('tailorInPortalBtn').addEventListener('click', async () => {
+    if (!currentJob) return;
+    const base = await getDashboardUrl();
+    // base64-encode the job description (UTF-8 safe) so it survives as a URL param.
+    const jd = btoa(unescape(encodeURIComponent((currentJob.descriptionText || '').slice(0, 6000))));
+    const params = new URLSearchParams({
+      tailor: '1',
+      title: currentJob.title || '',
+      company: currentJob.company || '',
+      jd
+    });
+    chrome.tabs.create({ url: `${base.replace(/\/$/, '')}/resumes.html?${params.toString()}` });
+  });
+
   $('copySummaryBtn').addEventListener('click', () => {
     navigator.clipboard.writeText($('summaryBox').textContent);
     $('copySummaryBtn').textContent = 'Copied!';
