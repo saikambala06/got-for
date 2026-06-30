@@ -9,8 +9,38 @@
 <link rel="stylesheet" href="/css/app.css" />
 <style>
   .tracker-layout{ display:grid; grid-template-columns: 1.1fr 1fr; gap:18px; align-items:start; }
-  .filter-bar{ display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
-  .filter-bar input{ flex:1; min-width:180px; }
+  .filter-bar{ display:flex; gap:10px; margin-bottom:16px; align-items:flex-start; position:relative; }
+  .search-box{ position:relative; max-width:340px; }
+  .search-box input{ width:100%; padding-right:34px; }
+  .search-box svg{ position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-faint); pointer-events:none; }
+  .search-box input{ padding-left:32px; }
+  .filter-btn{
+    width:38px; height:38px; flex-shrink:0; border-radius:9px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text-dim); display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .filter-btn:hover{ border-color:var(--accent); color:var(--accent-2); }
+  .filter-btn.active{ border-color:var(--accent); color:var(--accent-2); }
+  .install-ext-btn{
+    display:inline-flex; align-items:center; gap:7px; padding:8px 16px; border-radius:9px; border:none;
+    background:#1ea672; color:#fff; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap;
+  }
+  .install-ext-btn:hover{ filter:brightness(1.06); }
+  .filter-popover{
+    position:absolute; top:46px; left:0; z-index:60; background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; padding:18px; width:300px; box-shadow:0 14px 38px rgba(0,0,0,0.35); display:none;
+  }
+  .filter-popover.open{ display:block; }
+  .filter-popover h4{ display:flex; align-items:center; gap:8px; font-size:14px; margin-bottom:14px; }
+  .filter-popover .close-x{ margin-left:auto; cursor:pointer; color:var(--text-faint); background:none; border:none; }
+  .date-presets{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .date-preset{ padding:7px 12px; border-radius:9px; border:1px solid var(--border); font-size:12.5px; color:var(--text-dim); cursor:pointer; background:var(--surface-2); }
+  .date-preset.active{ border-color:var(--accent); color:var(--accent-2); background:var(--accent-soft); }
+  .date-range-row{ display:flex; gap:10px; margin-bottom:14px; }
+  .date-range-row .field{ flex:1; }
+  .date-range-row label{ font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.04em; }
+  .filter-popover-footer{ display:flex; justify-content:space-between; align-items:center; }
+  .filter-popover-footer .link-btn{ background:none; border:none; color:var(--text-dim); font-size:13px; cursor:pointer; }
+  .filter-popover-footer .link-btn:hover{ color:var(--text); }
   .job-row{
     display:flex; align-items:center; justify-content:space-between;
     padding:14px 16px; border-radius:11px; cursor:pointer;
@@ -47,13 +77,45 @@
         <div class="page-title">Job Tracker</div>
         <div class="page-sub">Every application, organized in one place.</div>
       </div>
-      <button class="btn btn-primary" id="openAddModal">+ Add application</button>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button class="install-ext-btn" id="installExtBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Install Extension
+        </button>
+        <button class="btn btn-primary" id="openAddModal">+ Add application</button>
+      </div>
     </div>
 
     <div class="grid cards-row" id="summaryCards" style="grid-template-columns:repeat(5,1fr);"></div>
 
     <div class="filter-bar">
-      <input type="text" id="searchInput" placeholder="Search by title, company, or location…" />
+      <div class="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Search by title, company, or location…" />
+      </div>
+      <button class="filter-btn" id="filterToggleBtn" title="Filter by applied date">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      </button>
+      <div class="filter-popover" id="filterPopover">
+        <h4>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Filter by applied date
+          <button class="close-x" id="closeFilterBtn">✕</button>
+        </h4>
+        <div class="date-presets" id="datePresets">
+          <div class="date-preset" data-preset="7">Last 7 days</div>
+          <div class="date-preset" data-preset="30">Last 30 days</div>
+          <div class="date-preset" data-preset="90">Last 90 days</div>
+        </div>
+        <div class="date-range-row">
+          <div class="field"><label>Start date</label><input type="date" id="filterStart" /></div>
+          <div class="field"><label>End date</label><input type="date" id="filterEnd" /></div>
+        </div>
+        <div class="filter-popover-footer">
+          <button class="link-btn" id="clearFilterBtn">Clear</button>
+          <button class="btn btn-primary btn-sm" id="applyFilterBtn">Apply</button>
+        </div>
+      </div>
     </div>
     <div class="status-tabs" id="statusTabs"></div>
 
@@ -109,6 +171,7 @@
 let allJobs = [];
 let selectedId = null;
 let activeStatus = 'All';
+let dateFilter = { start: '', end: '' };
 const STATUSES = ['All', 'Applied', 'Interviewing', 'Offer', 'Rejected', 'Archived'];
 
 function escapeHtml(s) {
@@ -222,6 +285,8 @@ async function loadJobs() {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (activeStatus !== 'All') params.set('status', activeStatus);
+    if (dateFilter.start) params.set('startDate', dateFilter.start);
+    if (dateFilter.end) params.set('endDate', dateFilter.end);
     const { jobs } = await api.get(`/api/jobs?${params.toString()}`);
     allJobs = jobs;
     if (!jobs.find((j) => j._id === selectedId)) selectedId = null;
@@ -237,6 +302,52 @@ let searchTimer;
 document.getElementById('searchInput').addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(loadJobs, 300);
+});
+
+// Filter-by-date popover
+const filterPopover = document.getElementById('filterPopover');
+const filterToggleBtn = document.getElementById('filterToggleBtn');
+filterToggleBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  filterPopover.classList.toggle('open');
+});
+document.getElementById('closeFilterBtn').addEventListener('click', () => filterPopover.classList.remove('open'));
+document.addEventListener('click', (e) => {
+  if (!filterPopover.contains(e.target) && e.target !== filterToggleBtn && !filterToggleBtn.contains(e.target)) {
+    filterPopover.classList.remove('open');
+  }
+});
+document.querySelectorAll('.date-preset').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.date-preset').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const days = Number(btn.dataset.preset);
+    const end = new Date();
+    const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+    document.getElementById('filterStart').value = start.toISOString().slice(0, 10);
+    document.getElementById('filterEnd').value = end.toISOString().slice(0, 10);
+  });
+});
+document.getElementById('applyFilterBtn').addEventListener('click', () => {
+  dateFilter.start = document.getElementById('filterStart').value;
+  dateFilter.end = document.getElementById('filterEnd').value;
+  filterToggleBtn.classList.toggle('active', !!(dateFilter.start || dateFilter.end));
+  filterPopover.classList.remove('open');
+  loadJobs();
+});
+document.getElementById('clearFilterBtn').addEventListener('click', () => {
+  dateFilter.start = ''; dateFilter.end = '';
+  document.getElementById('filterStart').value = '';
+  document.getElementById('filterEnd').value = '';
+  document.querySelectorAll('.date-preset').forEach((b) => b.classList.remove('active'));
+  filterToggleBtn.classList.remove('active');
+  loadJobs();
+});
+
+// Install Extension — no extension is published yet, so let people know
+// rather than linking to a dead store listing.
+document.getElementById('installExtBtn').addEventListener('click', () => {
+  showToast("The JobTrail browser extension isn't available yet — stay tuned!");
 });
 
 // Modal logic
