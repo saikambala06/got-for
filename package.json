@@ -1,0 +1,11 @@
+{
+  "name": "gen-for-dashboard",
+  "version": "1.0.0",
+  "description": "Completely free job tracker and resume dashboard",
+  "main": "api/index.js",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "mongoose": "^8.3.1"
+  }
+}
