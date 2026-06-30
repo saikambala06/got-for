@@ -4,6 +4,7 @@ const Resume = require('../models/Resume');
 const User = require('../models/User');
 const requireAuth = require('../middleware/auth');
 const { parseResumeText, normalizeDocxText } = require('../utils/resumeParser');
+const { tailorResume } = require('../utils/resumeTailor');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -159,6 +160,29 @@ router.delete('/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Could not delete resume' });
+  }
+});
+
+// AI resume tailoring — takes a job description (and optional title/company,
+// usually pulled straight from the job site tab via the SK VK extension) and
+// returns tailored suggestions for this specific resume. Uses Claude when
+// ANTHROPIC_API_KEY is configured, otherwise a deterministic keyword-gap
+// heuristic so the feature still works without an API key.
+router.post('/:id/tailor', async (req, res) => {
+  try {
+    const { jobTitle, company, jobDescription } = req.body;
+    if (!jobDescription || !jobDescription.trim()) {
+      return res.status(400).json({ error: 'Paste the job description first' });
+    }
+
+    const resume = await Resume.findOne({ _id: req.params.id, user: req.userId });
+    if (!resume) return res.status(404).json({ error: 'Resume not found' });
+
+    const result = await tailorResume({ resume, jobTitle, company, jobDescription });
+    res.json({ result });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not generate suggestions. Please try again.' });
   }
 });
 
