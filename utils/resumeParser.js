@@ -106,23 +106,29 @@ function parseResumeText(rawText) {
   const achievements = sections.achievements ? sections.achievements.filter(Boolean).slice(0, 20) : [];
 
   const experience = (sections.experience ? splitBlocks(sections.experience) : []).slice(0, 10).map((block) => {
-    const header = block[0] || '';
-    const rest = block.slice(1).join(' ').trim();
-    // Strip the date range out of the header line itself before splitting,
-    // so a header like "Role at Company, Location  Jan 2022 - Present"
-    // doesn't leave the date text glued onto the location segment.
-    const dateInfo = extractDateRange(header + ' ' + rest);
-    const headerNoDate = dateInfo.matchText ? header.replace(dateInfo.matchText, '').trim() : header;
+    // Header info (role / company / location / dates) can be crammed onto
+    // one line, or spread across the first 2-3 lines of the block (e.g.
+    // "Role" then "Company, Location   Jan 2022 - Present" then bullets).
+    // Find the first line that actually contains a date range and treat
+    // everything up to and including it as the header; everything after
+    // is the bullet/description content. This stops company/location text
+    // that lives on its own line from leaking into the description.
+    let dateLineIdx = block.findIndex((l) => extractDateRange(l).matchText);
+    const headerLines = dateLineIdx === -1 ? [block[0] || ''] : block.slice(0, dateLineIdx + 1);
+    const bulletLines = dateLineIdx === -1 ? block.slice(1) : block.slice(dateLineIdx + 1);
+    const headerJoined = headerLines.join(' - ');
+    const dateInfo = extractDateRange(headerJoined);
+    const headerNoDate = dateInfo.matchText ? headerJoined.replace(dateInfo.matchText, '').trim() : headerJoined;
     const parts = headerNoDate.split(/ at | @ |,| - |—/i).map((s) => s.trim()).filter(Boolean);
-    const description = dateInfo.matchText ? rest.replace(dateInfo.matchText, '').trim() : rest;
+    const description = bulletLines.filter(Boolean).join('\n').trim();
     return {
-      role: parts[0] || header,
+      role: parts[0] || headerLines[0] || '',
       company: parts[1] || '',
       location: parts.slice(2).join(', '),
       startDate: dateInfo.startDate,
       endDate: dateInfo.endDate,
       current: /present|current/i.test(dateInfo.endDate),
-      description: description.replace(/^[,.\s-]+/, '')
+      description
     };
   });
 
