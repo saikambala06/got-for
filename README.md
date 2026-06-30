@@ -13,9 +13,8 @@ in a secure, httpOnly cookie (not in the browser's storage APIs).
   pipeline breakdown (Applied / Interviewing / Offer / Rejected / Archived)
 - Job Tracker: add, edit, delete, favorite, search, and filter job applications
 - Resumes: create and maintain multiple resume profiles, mark one as default, and
-  upload an existing PDF/DOCX resume to auto-fill the builder (free, rule-based text
-  extraction — no paid AI/LLM service involved, so results should be reviewed and
-  refined by hand)
+  upload an existing PDF/DOCX resume to auto-fill the builder using **Claude AI**
+  (falls back to free rule-based text extraction if `ANTHROPIC_API_KEY` is not set)
 - Account: edit profile details and change password
 - Fully responsive, dark "command center" UI — distinct from typical SaaS dashboards
 - 100% free — there is no billing, no plan limits, no paid tier anywhere in the code
@@ -77,6 +76,9 @@ get started, all data is written straight to your MongoDB database.
 3. In the Vercel project's **Environment Variables** settings, add:
    - `MONGODB_URI` — your MongoDB Atlas connection string
    - `JWT_SECRET` — any long random string (used to sign login sessions)
+   - `ANTHROPIC_API_KEY` — (optional) your Anthropic API key; enables AI-powered resume
+     parsing so all fields are populated accurately when you upload a PDF/DOCX. Without
+     it, a free rule-based parser is used instead (results may need manual corrections).
    - `NODE_ENV` — `production`
 4. Click **Deploy**. Vercel will build the project using `vercel.json`, which routes
    `/api/*` to the Express serverless function and serves everything in `/public`
