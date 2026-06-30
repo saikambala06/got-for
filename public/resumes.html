@@ -50,6 +50,17 @@
   .entry-remove:hover{ color: var(--red); }
   .add-btn{ display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:9px; border:1px dashed var(--border); color:var(--text-dim); background:transparent; font-size:13px; font-weight:600; cursor:pointer; }
   .add-btn:hover{ border-color:var(--accent); color:var(--accent-2); }
+  .bullets-wrap{ margin-top:14px; }
+  .bullet-row{ display:flex; align-items:flex-start; gap:8px; margin-bottom:8px; }
+  .bullet-row.drag-over{ outline:2px dashed var(--accent); border-radius:8px; }
+  .bullet-handle{ cursor:grab; color:var(--text-faint); padding-top:9px; font-size:14px; user-select:none; }
+  .bullet-input{ flex:1; min-height:44px; resize:vertical; background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:9px 10px; font-size:13.5px; font-family:inherit; color:var(--text); }
+  .bullet-controls{ display:flex; flex-direction:column; gap:2px; padding-top:2px; }
+  .bullet-controls button{ background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:11px; padding:2px 4px; line-height:1; }
+  .bullet-controls button:hover{ color:var(--accent-2); }
+  .bullet-controls .bullet-remove:hover{ color:var(--red); }
+  .add-bullet-btn{ display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border-radius:8px; border:none; background:var(--accent-soft); color:var(--accent-2); font-size:13px; font-weight:600; cursor:pointer; margin-top:2px; }
+  .add-bullet-btn:hover{ filter:brightness(1.05); }
   .chip-input-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
   .chip{ display:inline-flex; align-items:center; gap:7px; background:var(--surface-2); border:1px solid var(--border); padding:6px 8px 6px 12px; border-radius:100px; font-size:12.5px; }
   .chip button{ background:none; border:none; color:var(--text-faint); cursor:pointer; line-height:1; }
@@ -482,21 +493,127 @@ function wireChipRemovals(field, renderFn) {
 function renderExperience() {
   const el = document.getElementById('experienceList');
   if (!draft.experience.length) { el.innerHTML = emptyRow('No work experience added yet.'); return; }
-  el.innerHTML = draft.experience.map((x, i) => `
+  el.innerHTML = draft.experience.map((x, i) => {
+    const bullets = getBullets(i);
+    const rows = (bullets.length ? bullets : ['']).map((b, bi) => `
+      <div class="bullet-row" draggable="true" data-exp="${i}" data-bullet="${bi}">
+        <span class="bullet-handle" title="Drag to reorder">&#9676;&#9676;</span>
+        <textarea class="bullet-input" data-exp="${i}" data-bullet="${bi}">${escapeHtml(b)}</textarea>
+        <div class="bullet-controls">
+          <button type="button" class="bullet-up" data-exp="${i}" data-bullet="${bi}" title="Move up">&#9650;</button>
+          <button type="button" class="bullet-down" data-exp="${i}" data-bullet="${bi}" title="Move down">&#9660;</button>
+          <button type="button" class="bullet-remove" data-exp="${i}" data-bullet="${bi}" title="Remove">&#10005;</button>
+        </div>
+      </div>`).join('');
+    return `
     <div class="entry-card">
       <button class="entry-remove" data-remove="experience" data-i="${i}">✕</button>
       <div class="form-grid">
-        <div class="field"><label>Company name</label><input data-f="experience.${i}.company" value="${escapeHtml(x.company)}" /></div>
         <div class="field"><label>Job title</label><input data-f="experience.${i}.role" value="${escapeHtml(x.role)}" /></div>
+        <div class="field"><label>Company name</label><input data-f="experience.${i}.company" value="${escapeHtml(x.company)}" /></div>
         <div class="field"><label>Location</label><input data-f="experience.${i}.location" value="${escapeHtml(x.location)}" /></div>
         <div class="field"><label>Start date</label><input data-f="experience.${i}.startDate" placeholder="Jan 2022" value="${escapeHtml(x.startDate)}" /></div>
         <div class="field"><label>End date</label><input data-f="experience.${i}.endDate" placeholder="Present" value="${escapeHtml(x.endDate)}" /></div>
         <div class="field" style="display:flex;align-items:center;gap:6px;"><label style="margin:0;"><input type="checkbox" data-f="experience.${i}.current" ${x.current ? 'checked' : ''} /> Current</label></div>
       </div>
-      <div class="field" style="margin-top:12px;"><label>Description</label><textarea data-f="experience.${i}.description" style="min-height:70px;">${escapeHtml(x.description)}</textarea></div>
-    </div>`).join('');
+      <div class="bullets-wrap">
+        ${rows}
+        <button type="button" class="add-bullet-btn" data-exp="${i}">+ Add Bullet Point</button>
+      </div>
+    </div>`;
+  }).join('');
   wireEntryInputs('experience');
   wireEntryRemovals('experience', renderExperience);
+  wireBulletControls(renderExperience);
+}
+
+// --- Bullet point helpers (work experience description, stored as a
+// newline-separated string under the hood; edited as one box per line) ---
+function getBullets(i) {
+  return (draft.experience[i].description || '').split('\n').filter((b) => b.trim() !== '');
+}
+function setBullets(i, bullets) {
+  draft.experience[i].description = bullets.join('\n');
+}
+function wireBulletControls(renderFn) {
+  document.querySelectorAll('.bullet-input').forEach((ta) => {
+    ta.addEventListener('input', () => {
+      const i = Number(ta.dataset.exp), bi = Number(ta.dataset.bullet);
+      const bullets = getBullets(i);
+      bullets[bi] = ta.value;
+      setBullets(i, bullets);
+      dirty = true;
+    });
+  });
+  document.querySelectorAll('.add-bullet-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const i = Number(btn.dataset.exp);
+      const bullets = getBullets(i);
+      bullets.push('');
+      setBullets(i, bullets);
+      dirty = true;
+      renderFn();
+    });
+  });
+  document.querySelectorAll('.bullet-remove').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const i = Number(btn.dataset.exp), bi = Number(btn.dataset.bullet);
+      const bullets = getBullets(i);
+      bullets.splice(bi, 1);
+      setBullets(i, bullets);
+      dirty = true;
+      renderFn();
+    });
+  });
+  document.querySelectorAll('.bullet-up').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const i = Number(btn.dataset.exp), bi = Number(btn.dataset.bullet);
+      if (bi === 0) return;
+      const bullets = getBullets(i);
+      [bullets[bi - 1], bullets[bi]] = [bullets[bi], bullets[bi - 1]];
+      setBullets(i, bullets);
+      dirty = true;
+      renderFn();
+    });
+  });
+  document.querySelectorAll('.bullet-down').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const i = Number(btn.dataset.exp), bi = Number(btn.dataset.bullet);
+      const bullets = getBullets(i);
+      if (bi >= bullets.length - 1) return;
+      [bullets[bi + 1], bullets[bi]] = [bullets[bi], bullets[bi + 1]];
+      setBullets(i, bullets);
+      dirty = true;
+      renderFn();
+    });
+  });
+  let dragSrc = null;
+  document.querySelectorAll('.bullet-row').forEach((row) => {
+    row.addEventListener('dragstart', () => {
+      dragSrc = { exp: Number(row.dataset.exp), bullet: Number(row.dataset.bullet) };
+      row.style.opacity = '0.5';
+    });
+    row.addEventListener('dragend', () => { row.style.opacity = ''; });
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (dragSrc && Number(row.dataset.exp) === dragSrc.exp) row.classList.add('drag-over');
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.classList.remove('drag-over');
+      if (!dragSrc) return;
+      const targetExp = Number(row.dataset.exp), targetBullet = Number(row.dataset.bullet);
+      if (dragSrc.exp !== targetExp) { dragSrc = null; return; }
+      const bullets = getBullets(targetExp);
+      const [moved] = bullets.splice(dragSrc.bullet, 1);
+      bullets.splice(targetBullet, 0, moved);
+      setBullets(targetExp, bullets);
+      dirty = true;
+      dragSrc = null;
+      renderFn();
+    });
+  });
 }
 
 function renderEducation() {
@@ -648,7 +765,7 @@ function downloadResume() {
     ${draft.summary ? `<h2>Summary</h2><p>${esc(draft.summary)}</p>` : ''}
     ${draft.experience.length ? `<h2>Experience</h2>` + draft.experience.map(x => `
       <div class="entry"><div class="row"><span>${esc(x.role)}${x.company ? ' — ' + esc(x.company) : ''}</span><span>${esc(x.startDate)} – ${esc(x.current ? 'Present' : x.endDate)}</span></div>
-      <div class="sub">${esc(x.location)}</div><p>${esc(x.description)}</p></div>`).join('') : ''}
+      <div class="sub">${esc(x.location)}</div>${x.description ? `<ul>` + x.description.split('\n').filter(Boolean).map((b) => `<li>${esc(b)}</li>`).join('') + `</ul>` : ''}</div>`).join('') : ''}
     ${draft.education.length ? `<h2>Education</h2>` + draft.education.map(x => `
       <div class="entry"><div class="row"><span>${esc(x.degree)}${x.field ? ', ' + esc(x.field) : ''}</span><span>${esc(x.startDate)} – ${esc(x.current ? 'Present' : x.endDate)}</span></div>
       <div class="sub">${[x.school, x.location].filter(Boolean).map(esc).join(' · ')}</div>${x.description ? `<p>${esc(x.description)}</p>` : ''}</div>`).join('') : ''}
