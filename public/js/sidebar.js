@@ -18,8 +18,8 @@ function renderSidebar(active) {
   return `
     <aside class="sidebar">
       <a href="/dashboard.html" class="brand">
-        <div class="mark">JT</div>
-        <div class="name">Job<span>Trail</span></div>
+        <div class="mark">SK</div>
+        <div class="name">SK<span> VK</span></div>
       </a>
       <nav class="nav">${navHtml}</nav>
       <div class="sidebar-footer">
