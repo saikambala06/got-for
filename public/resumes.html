@@ -236,11 +236,30 @@ async function handleResumeFile(file) {
     formData.append('file', file);
     const { parsed } = await api.upload('/api/resumes/parse', formData);
 
-    const { resume } = await api.post('/api/resumes', { title: name, ...parsed });
-    resumes.unshift(resume);
+    // Populate the builder as an unsaved draft so the user can review
+    // every field before anything is written to the database.
+    const emptyPersonal = { name: '', email: '', phone: '', location: '', linkedin: '', portfolio: '' };
+    draft = {
+      _id: null,   // null = unsaved new resume
+      title: name,
+      isDefault: false,
+      personal:       { ...emptyPersonal, ...(parsed.personal       || {}) },
+      summary:        parsed.summary        || '',
+      experience:     parsed.experience     || [],
+      education:      parsed.education      || [],
+      skills:         parsed.skills         || [],
+      projects:       parsed.projects       || [],
+      certifications: parsed.certifications || [],
+      achievements:   parsed.achievements   || [],
+      languages:      parsed.languages      || [],
+      publications:   parsed.publications   || [],
+    };
+    selectedId = null;
+    dirty = false;
     createBackdrop.classList.remove('open');
-    showToast("We've filled in what we could find — please review and complete the rest");
-    selectStandard(resume._id);
+    renderList();
+    renderBuilder();
+    showToast("We've filled in what we could find — review the fields, then Save");
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
@@ -252,11 +271,43 @@ document.getElementById('scratchOption').addEventListener('click', async () => {
   const name = document.getElementById('newResumeName').value.trim();
   if (!name) { showToast('Please enter a name for your resume', 'error'); return; }
   try {
-    const { resume } = await api.post('/api/resumes', { title: name, prefillFromProfile: true });
-    resumes.unshift(resume);
+    // Fetch profile data to pre-fill personal fields (same as server-side prefillFromProfile)
+    let personal = { name: '', email: '', phone: '', location: '', linkedin: '', portfolio: '' };
+    try {
+      const { user } = await api.get('/api/auth/me');
+      if (user) {
+        personal = {
+          name: user.name || '',
+          email: user.email || '',
+          phone: user.phone || '',
+          location: user.location || '',
+          linkedin: user.linkedin || '',
+          portfolio: user.portfolio || ''
+        };
+      }
+    } catch (e) { /* use empty personal */ }
+
+    draft = {
+      _id: null,
+      title: name,
+      isDefault: false,
+      personal,
+      summary: '',
+      experience: [],
+      education: [],
+      skills: [],
+      projects: [],
+      certifications: [],
+      achievements: [],
+      languages: [],
+      publications: [],
+    };
+    selectedId = null;
+    dirty = false;
     createBackdrop.classList.remove('open');
-    showToast('Resume created');
-    selectStandard(resume._id);
+    renderList();
+    renderBuilder();
+    showToast('Resume created — fill in your details and Save when ready');
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -357,14 +408,14 @@ function renderBuilder() {
 
     <div class="builder-footer">
       <div style="display:flex;gap:10px;">
-        <button class="btn" id="reuploadBtn">⟲ Re-upload</button>
-        <input type="file" id="reuploadInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />
+        ${draft._id ? `<button class="btn" id="reuploadBtn">⟲ Re-upload</button>
+        <input type="file" id="reuploadInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />` : ''}
         <button class="btn" id="downloadBtn">⬇ Download</button>
       </div>
       <div style="display:flex; align-items:center; gap:12px;">
-        ${!draft.isDefault ? '<button class="btn btn-sm" id="setDefaultBtn">Set as default</button>' : ''}
-        <button class="btn btn-sm btn-danger" id="deleteResumeBtn">Delete</button>
-        <button class="btn btn-primary" id="saveBuilderBtn">Save Changes</button>
+        ${draft._id && !draft.isDefault ? '<button class="btn btn-sm" id="setDefaultBtn">Set as default</button>' : ''}
+        ${draft._id ? '<button class="btn btn-sm btn-danger" id="deleteResumeBtn">Delete</button>' : ''}
+        <button class="btn btn-primary" id="saveBuilderBtn">${draft._id ? 'Save Changes' : 'Save Resume'}</button>
       </div>
     </div>
   `;
@@ -405,7 +456,7 @@ function renderBuilder() {
   document.getElementById('addLang').addEventListener('click', () => addChip('languages','langInput', renderLanguages));
   document.getElementById('langInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addChip('languages','langInput', renderLanguages); }});
 
-  if (!draft.isDefault) {
+  if (draft._id && !draft.isDefault) {
     document.getElementById('setDefaultBtn').addEventListener('click', async () => {
       try {
         await api.put(`/api/resumes/${draft._id}`, { isDefault: true });
@@ -414,19 +465,21 @@ function renderBuilder() {
       } catch (err) { showToast(err.message, 'error'); }
     });
   }
-  document.getElementById('deleteResumeBtn').addEventListener('click', async () => {
-    if (!confirm('Delete this resume? This cannot be undone.')) return;
-    try {
-      await api.del(`/api/resumes/${draft._id}`);
-      selectedId = null; draft = null;
-      showToast('Resume deleted');
-      loadResumes();
-    } catch (err) { showToast(err.message, 'error'); }
-  });
-  document.getElementById('reuploadBtn').addEventListener('click', () => {
-    document.getElementById('reuploadInput').click();
-  });
-  document.getElementById('reuploadInput').addEventListener('change', async (e) => {
+  if (draft._id) {
+    document.getElementById('deleteResumeBtn').addEventListener('click', async () => {
+      if (!confirm('Delete this resume? This cannot be undone.')) return;
+      try {
+        await api.del(`/api/resumes/${draft._id}`);
+        selectedId = null; draft = null;
+        showToast('Resume deleted');
+        loadResumes();
+      } catch (err) { showToast(err.message, 'error'); }
+    });
+    document.getElementById('reuploadBtn').addEventListener('click', () => {
+      document.getElementById('reuploadInput').click();
+    });
+  }
+  if (draft._id) document.getElementById('reuploadInput').addEventListener('change', async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!file) return;
@@ -733,7 +786,16 @@ async function saveBuilder() {
       languages: draft.languages,
       publications: draft.publications
     };
-    const { resume } = await api.put(`/api/resumes/${draft._id}`, payload);
+
+    let resume;
+    if (!draft._id) {
+      // Brand-new resume (uploaded or scratch) — create it for the first time
+      ({ resume } = await api.post('/api/resumes', payload));
+      resumes.unshift(resume);
+    } else {
+      // Existing resume — update in place
+      ({ resume } = await api.put(`/api/resumes/${draft._id}`, payload));
+    }
     dirty = false;
     showToast('Resume saved');
     await loadResumes(resume._id);
