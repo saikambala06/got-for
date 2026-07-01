@@ -12,10 +12,11 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
+    const ext = (file.originalname || '').toLowerCase().split('.').pop();
     const ok = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ].includes(file.mimetype);
+    ].includes(file.mimetype) || ['pdf','docx'].includes(ext);
     cb(ok ? null : new Error('Only PDF or DOCX files are supported'), ok);
   }
 });
@@ -33,9 +34,10 @@ router.post('/parse', (req, res) => {
     try {
       let text = '';
       if (req.file.mimetype === 'application/pdf') {
-        const pdfParse = require('pdf-parse');
-        const result = await pdfParse(req.file.buffer);
-        text = (result.text || '').replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n');
+        const { PDFParse } = require('pdf-parse');
+        const parser = new PDFParse({ data: req.file.buffer });
+        const result = await parser.getText();
+        text = result.text.replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n');
       } else {
         const mammoth = require('mammoth');
         const { value } = await mammoth.extractRawText({ buffer: req.file.buffer });
