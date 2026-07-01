@@ -176,9 +176,29 @@ function renderList() {
   });
 }
 
+function normalizeDraft(r) {
+  return {
+    ...r,
+    personal: {
+      name: '', email: '', phone: '', location: '', linkedin: '', portfolio: '',
+      ...(r.personal || {})
+    },
+    summary:        r.summary        || '',
+    experience:     Array.isArray(r.experience)     ? r.experience     : [],
+    education:      Array.isArray(r.education)      ? r.education      : [],
+    skills:         Array.isArray(r.skills)         ? r.skills         : [],
+    projects:       Array.isArray(r.projects)       ? r.projects       : [],
+    certifications: Array.isArray(r.certifications) ? r.certifications : [],
+    achievements:   Array.isArray(r.achievements)   ? r.achievements   : [],
+    languages:      Array.isArray(r.languages)      ? r.languages      : [],
+    publications:   Array.isArray(r.publications)   ? r.publications   : []
+  };
+}
+
 function selectStandard(id) {
   selectedId = id;
-  draft = JSON.parse(JSON.stringify(resumes.find((r) => r._id === id)));
+  const found = resumes.find((r) => r._id === id);
+  draft = normalizeDraft(JSON.parse(JSON.stringify(found)));
   dirty = false;
   renderList();
   renderBuilder();
@@ -237,7 +257,7 @@ async function handleResumeFile(file) {
     const { parsed } = await api.upload('/api/resumes/parse', formData);
 
     const { resume } = await api.post('/api/resumes', { title: name, ...parsed });
-    resumes.unshift(resume);
+    resumes.unshift(normalizeDraft(resume));
     createBackdrop.classList.remove('open');
     showToast("We've filled in what we could find — please review and complete the rest");
     selectStandard(resume._id);
@@ -253,7 +273,7 @@ document.getElementById('scratchOption').addEventListener('click', async () => {
   if (!name) { showToast('Please enter a name for your resume', 'error'); return; }
   try {
     const { resume } = await api.post('/api/resumes', { title: name, prefillFromProfile: true });
-    resumes.unshift(resume);
+    resumes.unshift(normalizeDraft(resume));
     createBackdrop.classList.remove('open');
     showToast('Resume created');
     selectStandard(resume._id);
@@ -439,7 +459,7 @@ function renderBuilder() {
       const formData = new FormData();
       formData.append('file', file);
       const { parsed } = await api.upload('/api/resumes/parse', formData);
-      draft = { ...draft, ...parsed, _id: draft._id, title: draft.title, isDefault: draft.isDefault };
+      draft = normalizeDraft({ ...draft, ...parsed, _id: draft._id, title: draft.title, isDefault: draft.isDefault });
       dirty = true;
       showToast("We've re-filled the fields below — review, then Save Changes");
       renderBuilder();
@@ -785,7 +805,7 @@ function downloadResume() {
 async function loadResumes(focusId) {
   try {
     const data = await api.get('/api/resumes');
-    resumes = data.resumes;
+    resumes = (data.resumes || []).map(normalizeDraft);
     const target = focusId || (resumes.find((r) => r._id === selectedId) ? selectedId : null);
     renderList();
     if (target && resumes.find((r) => r._id === target)) {
