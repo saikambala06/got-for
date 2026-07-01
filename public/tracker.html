@@ -136,27 +136,6 @@
   </main>
 </div>
 
-<div class="modal-backdrop" id="extModalBackdrop">
-  <div class="modal" style="max-width:480px;">
-    <h3>Install the SK VK extension</h3>
-    <p style="color:var(--muted,#9b9fab); font-size:13.5px; line-height:1.55; margin:6px 0 16px;">
-      The extension isn't published on the Chrome Web Store yet, so it installs in "developer mode" —
-      it's the same extension, just a manual one-time setup.
-    </p>
-    <ol style="margin:0 0 18px; padding-left:18px; font-size:13.5px; line-height:1.8;">
-      <li>Your download will start automatically — unzip <b>skvk-extension.zip</b> somewhere you'll remember.</li>
-      <li>Open <code>chrome://extensions</code> in a new tab.</li>
-      <li>Turn on <b>Developer mode</b> (top-right toggle).</li>
-      <li>Click <b>Load unpacked</b> and select the unzipped <code>skvk-extension</code> folder.</li>
-      <li>Pin the SK VK icon, then click it on any job posting page — it opens a side panel with keyword match, skills, qualifications, and one-click resume tailoring.</li>
-    </ol>
-    <div style="display:flex; gap:10px; justify-content:flex-end;">
-      <button type="button" class="btn" id="extModalClose">Close</button>
-      <button type="button" class="btn btn-primary" id="extModalDownload">Download again</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-backdrop" id="modalBackdrop">
   <div class="modal">
     <h3 id="modalTitle">Add application</h3>
@@ -365,28 +344,10 @@ document.getElementById('clearFilterBtn').addEventListener('click', () => {
   loadJobs();
 });
 
-// Install Extension — not on the Chrome Web Store yet, so we download the
-// packaged extension and walk the user through loading it manually.
-function downloadExtensionZip() {
-  const a = document.createElement('a');
-  a.href = '/downloads/skvk-extension.zip';
-  a.download = 'skvk-extension.zip';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-const extModalBackdrop = document.getElementById('extModalBackdrop');
+// Install Extension — no extension is published yet, so let people know
+// rather than linking to a dead store listing.
 document.getElementById('installExtBtn').addEventListener('click', () => {
-  downloadExtensionZip();
-  extModalBackdrop.classList.add('open');
-});
-document.getElementById('extModalClose').addEventListener('click', () => {
-  extModalBackdrop.classList.remove('open');
-});
-document.getElementById('extModalDownload').addEventListener('click', downloadExtensionZip);
-extModalBackdrop.addEventListener('click', (e) => {
-  if (e.target === extModalBackdrop) extModalBackdrop.classList.remove('open');
+  showToast("The SK VK browser extension isn't available yet — stay tuned!");
 });
 
 // Modal logic
