@@ -229,20 +229,17 @@ async function handleResumeFile(file) {
     return;
   }
 
-  dropzoneText.innerHTML = `<span class="loader" style="display:inline-block;vertical-align:middle;margin-right:8px;"></span>Analysing "${escapeHtml(file.name)}" with AI…`;
+  dropzoneText.innerHTML = `<span class="loader" style="display:inline-block;vertical-align:middle;margin-right:8px;"></span>Reading "${escapeHtml(file.name)}"…`;
 
   try {
     const formData = new FormData();
     formData.append('file', file);
-    const { parsed, usedAI } = await api.upload('/api/resumes/parse', formData);
+    const { parsed } = await api.upload('/api/resumes/parse', formData);
 
     const { resume } = await api.post('/api/resumes', { title: name, ...parsed });
     resumes.unshift(resume);
     createBackdrop.classList.remove('open');
-    const msg = usedAI
-      ? "✨ AI parsed your resume — review the fields and save when ready"
-      : "We've filled in what we could find — please review and complete the rest";
-    showToast(msg);
+    showToast("We've filled in what we could find — please review and complete the rest");
     selectStandard(resume._id);
   } catch (err) {
     showToast(err.message, 'error');
@@ -437,17 +434,14 @@ function renderBuilder() {
     if (!okExt) { showToast('Please upload a PDF or DOCX file', 'error'); return; }
     if (file.size > 5 * 1024 * 1024) { showToast('That file is larger than 5MB', 'error'); return; }
     const btn = document.getElementById('reuploadBtn');
-    btn.disabled = true; btn.innerHTML = '<span class="loader" style="display:inline-block;vertical-align:middle;"></span> AI reading…';
+    btn.disabled = true; btn.innerHTML = '<span class="loader" style="display:inline-block;vertical-align:middle;"></span>';
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const { parsed, usedAI } = await api.upload('/api/resumes/parse', formData);
+      const { parsed } = await api.upload('/api/resumes/parse', formData);
       draft = { ...draft, ...parsed, _id: draft._id, title: draft.title, isDefault: draft.isDefault };
       dirty = true;
-      const msg = usedAI
-        ? "✨ AI re-parsed your resume — review the fields, then Save Changes"
-        : "Re-filled the fields below — review, then Save Changes";
-      showToast(msg);
+      showToast("We've re-filled the fields below — review, then Save Changes");
       renderBuilder();
     } catch (err) {
       showToast(err.message, 'error');
