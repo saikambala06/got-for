@@ -33,10 +33,9 @@ router.post('/parse', (req, res) => {
     try {
       let text = '';
       if (req.file.mimetype === 'application/pdf') {
-        const { PDFParse } = require('pdf-parse');
-        const parser = new PDFParse({ data: req.file.buffer });
-        const result = await parser.getText();
-        text = result.text.replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n');
+        const pdfParse = require('pdf-parse');
+        const result = await pdfParse(req.file.buffer);
+        text = (result.text || '').replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n');
       } else {
         const mammoth = require('mammoth');
         const { value } = await mammoth.extractRawText({ buffer: req.file.buffer });
