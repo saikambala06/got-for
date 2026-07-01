@@ -1,16 +1,16 @@
 const express = require('express');
-const multer = require('multer');
-const Resume = require('../models/Resume');
-const User = require('../models/User');
+const multer  = require('multer');
+const Resume  = require('../models/Resume');
+const User    = require('../models/User');
 const requireAuth = require('../middleware/auth');
-const { parseResumeText, parseWithAI, normalizeDocxText } = require('../utils/resumeParser');
+const { parseResumeText, normalizeDocxText, parseResumeWithAI } = require('../utils/resumeParser');
 
 const router = express.Router();
 router.use(requireAuth);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ok = [
       'application/pdf',
@@ -20,62 +20,60 @@ const upload = multer({
   }
 });
 
-// Extract text from the uploaded buffer (PDF or DOCX) and return it.
-async function extractText(file) {
-  if (file.mimetype === 'application/pdf') {
-    const pdfParse = require('pdf-parse');
-    const result = await pdfParse(file.buffer);
-    return (result.text || '').replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n');
-  } else {
-    const mammoth = require('mammoth');
-    const { value } = await mammoth.extractRawText({ buffer: file.buffer });
-    return normalizeDocxText(value);
-  }
-}
-
-// POST /api/resumes/parse — extract structured data from an uploaded PDF/DOCX.
-// Tries AI parsing first, falls back to regex parser if AI is unavailable.
+// POST /api/resumes/parse
+// Extracts structured resume data from an uploaded PDF or DOCX.
+// Uses the Anthropic AI parser when ANTHROPIC_API_KEY is present;
+// falls back to the rule-based regex parser otherwise.
 router.post('/parse', (req, res) => {
   upload.single('file')(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({ error: err.message || 'Could not read that file' });
-    }
-    if (!req.file) {
-      return res.status(400).json({ error: 'Please choose a PDF or DOCX file' });
-    }
+    if (err) return res.status(400).json({ error: err.message || 'Could not read that file' });
+    if (!req.file) return res.status(400).json({ error: 'Please choose a PDF or DOCX file' });
 
-    let text = '';
     try {
-      text = await extractText(req.file);
-    } catch (e) {
-      console.error('Text extraction error:', e);
-      return res.status(500).json({ error: 'Could not extract text from that file. Try Build from Scratch instead.' });
-    }
+      // ── 1. Extract raw text from the uploaded file ──────────────────────────
+      let text = '';
 
-    if (!text || !text.trim()) {
-      return res.status(422).json({ error: "We couldn't read any text from that file. Try Build from Scratch instead." });
-    }
-
-    // Try AI first — falls back to regex if ANTHROPIC_API_KEY is missing or call fails.
-    let parsed;
-    let usedAI = false;
-    try {
-      parsed = await parseWithAI(text);
-      usedAI = true;
-    } catch (aiErr) {
-      console.warn('AI parse failed, using regex fallback:', aiErr.message);
-      try {
-        parsed = parseResumeText(text);
-      } catch (regexErr) {
-        console.error('Regex parse also failed:', regexErr);
-        return res.status(500).json({ error: 'Could not process that file. Try Build from Scratch instead.' });
+      if (req.file.mimetype === 'application/pdf') {
+        // pdf-parse v2: default export is a function that takes a Buffer
+        const pdfParse = require('pdf-parse');
+        const result   = await pdfParse(req.file.buffer);
+        text = (result.text || '').replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n');
+      } else {
+        const mammoth  = require('mammoth');
+        const { value } = await mammoth.extractRawText({ buffer: req.file.buffer });
+        text = normalizeDocxText(value);
       }
-    }
 
-    res.json({ parsed, usedAI });
+      if (!text || !text.trim()) {
+        return res.status(422).json({
+          error: "We couldn't read any text from that file. Try Build from Scratch instead."
+        });
+      }
+
+      // ── 2. Parse the text into structured fields ────────────────────────────
+      let parsed;
+
+      if (process.env.ANTHROPIC_API_KEY) {
+        try {
+          parsed = await parseResumeWithAI(text);
+        } catch (aiErr) {
+          // AI call failed (rate limit, bad key, network, etc.) — degrade gracefully
+          console.warn('[resume/parse] AI parser failed, using regex fallback:', aiErr.message);
+          parsed = parseResumeText(text);
+        }
+      } else {
+        parsed = parseResumeText(text);
+      }
+
+      res.json({ parsed });
+    } catch (err2) {
+      console.error('[resume/parse]', err2);
+      res.status(500).json({ error: 'Could not process that file. Try Build from Scratch instead.' });
+    }
   });
 });
 
+// GET /api/resumes
 router.get('/', async (req, res) => {
   try {
     const resumes = await Resume.find({ user: req.userId }).sort({ updatedAt: -1 });
@@ -85,6 +83,7 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/resumes/:id
 router.get('/:id', async (req, res) => {
   try {
     const resume = await Resume.findOne({ _id: req.params.id, user: req.userId });
@@ -95,7 +94,9 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/resumes — create a new resume (from scratch or from an upload).
+// POST /api/resumes
+// Used by "Build from Scratch" (optionally pre-filled from the account
+// profile) and by the "Upload Resume" flow.
 router.post('/', async (req, res) => {
   try {
     const { title } = req.body;
@@ -110,11 +111,11 @@ router.post('/', async (req, res) => {
       const user = await User.findById(req.userId);
       if (user) {
         personal = {
-          name: user.name || '',
-          email: user.email || '',
-          phone: user.phone || '',
-          location: user.location || '',
-          linkedin: user.linkedin || '',
+          name:      user.name      || '',
+          email:     user.email     || '',
+          phone:     user.phone     || '',
+          location:  user.location  || '',
+          linkedin:  user.linkedin  || '',
           portfolio: user.portfolio || ''
         };
       }
@@ -122,9 +123,7 @@ router.post('/', async (req, res) => {
 
     const listFields = ['experience', 'education', 'skills', 'projects', 'certifications', 'achievements', 'languages', 'publications'];
     const extra = {};
-    listFields.forEach((key) => {
-      if (Array.isArray(req.body[key])) extra[key] = req.body[key];
-    });
+    listFields.forEach((key) => { if (Array.isArray(req.body[key])) extra[key] = req.body[key]; });
 
     const resume = await Resume.create({
       user: req.userId,
@@ -141,6 +140,7 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PUT /api/resumes/:id
 router.put('/:id', async (req, res) => {
   try {
     if (req.body.isDefault === true) {
@@ -152,9 +152,7 @@ router.put('/:id', async (req, res) => {
       'skills', 'projects', 'certifications', 'achievements', 'languages', 'publications'
     ];
     const update = {};
-    allowed.forEach((key) => {
-      if (req.body[key] !== undefined) update[key] = req.body[key];
-    });
+    allowed.forEach((key) => { if (req.body[key] !== undefined) update[key] = req.body[key]; });
 
     const resume = await Resume.findOneAndUpdate(
       { _id: req.params.id, user: req.userId },
@@ -169,6 +167,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/resumes/:id
 router.delete('/:id', async (req, res) => {
   try {
     const resume = await Resume.findOneAndDelete({ _id: req.params.id, user: req.userId });
