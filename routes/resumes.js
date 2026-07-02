@@ -153,6 +153,79 @@ function parseWithRules(rawText) {
   const { parseResumeText } = require('../utils/resumeParser');
   return parseResumeText(rawText);
 }
+// Normalize Claude output into the exact shape the frontend expects.
+// Claude sometimes returns descriptions as arrays, bullet chars, wrong key names, etc.
+function sanitizeParsed(p) {
+  if (!p || typeof p !== 'object') return p;
+
+  function normalizeDesc(val) {
+    if (Array.isArray(val)) val = val.join('\n');
+    if (typeof val !== 'string') return '';
+    return val
+      .split('\n')
+      .map(line => line.replace(/^[\s\u2022\u2023\u25E6\u2043\u2219\-\*\u2013\u25BA\u25B8]+/, '').trimEnd())
+      .filter(line => line.length > 0)
+      .join('\n');
+  }
+
+  function normalizeStrArr(val) {
+    if (!Array.isArray(val)) return [];
+    return val.map(v => {
+      if (typeof v === 'string') return v.trim();
+      if (v && typeof v === 'object') return String(v.name || v.value || v.skill || '').trim();
+      return '';
+    }).filter(Boolean);
+  }
+
+  return {
+    personal: {
+      name:      String((p.personal && p.personal.name)      || '').trim(),
+      email:     String((p.personal && p.personal.email)     || '').trim(),
+      phone:     String((p.personal && p.personal.phone)     || '').trim(),
+      location:  String((p.personal && p.personal.location)  || '').trim(),
+      linkedin:  String((p.personal && p.personal.linkedin)  || '').trim(),
+      portfolio: String((p.personal && p.personal.portfolio) || '').trim()
+    },
+    summary: String(p.summary || '').trim(),
+    experience: (Array.isArray(p.experience) ? p.experience : []).map(x => ({
+      role:        String(x.role        || x.title       || '').trim(),
+      company:     String(x.company     || x.employer    || x.organization || '').trim(),
+      location:    String(x.location    || '').trim(),
+      startDate:   String(x.startDate   || x.start_date  || '').trim(),
+      endDate:     String(x.endDate     || x.end_date    || '').trim(),
+      current:     Boolean(x.current),
+      description: normalizeDesc(x.description || x.responsibilities || x.duties || '')
+    })),
+    education: (Array.isArray(p.education) ? p.education : []).map(x => ({
+      school:      String(x.school      || x.institution || x.university || '').trim(),
+      degree:      String(x.degree      || x.qualification || '').trim(),
+      field:       String(x.field       || x.major || x.fieldOfStudy || '').trim(),
+      location:    String(x.location    || '').trim(),
+      startDate:   String(x.startDate   || x.start_date  || '').trim(),
+      endDate:     String(x.endDate     || x.end_date    || '').trim(),
+      current:     Boolean(x.current),
+      description: normalizeDesc(x.description || '')
+    })),
+    skills:         normalizeStrArr(p.skills),
+    achievements:   normalizeStrArr(p.achievements),
+    languages:      normalizeStrArr(p.languages),
+    projects: (Array.isArray(p.projects) ? p.projects : []).map(x => ({
+      name:        String(x.name        || '').trim(),
+      link:        String(x.link        || x.url || '').trim(),
+      description: normalizeDesc(x.description || '')
+    })),
+    certifications: (Array.isArray(p.certifications) ? p.certifications : []).map(x => ({
+      name:   String(x.name   || x.certification || '').trim(),
+      issuer: String(x.issuer || x.issuedBy      || '').trim(),
+      date:   String(x.date   || x.issued        || '').trim()
+    })),
+    publications: (Array.isArray(p.publications) ? p.publications : []).map(x => ({
+      title: String(x.title || x.name || '').trim(),
+      link:  String(x.link  || x.url  || '').trim(),
+      date:  String(x.date  || '').trim()
+    }))
+  };
+}
 
 // ─── POST /api/resumes/parse ──────────────────────────────────────────────────
 router.post('/parse', (req, res) => {
@@ -190,7 +263,7 @@ router.post('/parse', (req, res) => {
 
       let parsed;
       if (process.env.ANTHROPIC_API_KEY) {
-        parsed = await parseWithClaude(extractedText);
+        parsed = sanitizeParsed(await parseWithClaude(extractedText));
       } else {
         parsed = parseWithRules(extractedText);
       }
