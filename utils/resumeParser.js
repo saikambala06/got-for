@@ -14,7 +14,7 @@ const parseResumeText = (text) => {
     languages: [],
     links: []
   };
-  
+
   // Extract email
   const emailRegex = /[\w.-]+@[\w.-]+\.\w+/g;
   const emails = text.match(emailRegex);
