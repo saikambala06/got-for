@@ -1,16 +1,47 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/index.js", "use": "@vercel/node" },
-    { "src": "public/**", "use": "@vercel/static" }
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
+    }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "api/index.js" },
-    { "src": "/(.*)", "dest": "public/$1" }
-  ],
-  "functions": {
-    "api/index.js": {
-      "maxDuration": 60
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.js"
+    },
+    {
+      "src": "/css/(.*)",
+      "dest": "public/css/$1"
+    },
+    {
+      "src": "/js/(.*)",
+      "dest": "public/js/$1"
+    },
+    {
+      "src": "/dashboard",
+      "dest": "public/dashboard.html"
+    },
+    {
+      "src": "/resumes",
+      "dest": "public/resumes.html"
+    },
+    {
+      "src": "/job-tracker",
+      "dest": "public/job-tracker.html"
+    },
+    {
+      "src": "/account",
+      "dest": "public/account.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "public/index.html"
     }
-  }
+  ]
 }
