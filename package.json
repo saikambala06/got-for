@@ -1,28 +1,24 @@
 {
-  "name": "jobtrail",
+  "name": "sk-vk-job-portal",
   "version": "1.0.0",
-  "description": "JobTrail - free job application tracker dashboard with MongoDB backend",
+  "description": "SK VK Job Portal - Resume Parser & Job Tracker",
   "main": "api/index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "node api/index.js",
+    "dev": "nodemon api/index.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
-    "mammoth": "^1.12.0",
-    "mongoose": "^8.5.0",
-    "multer": "^2.2.0",
-    "pdf-parse": "^2.4.5"
+    "mongoose": "^7.6.3",
+    "multer": "^1.4.5-lts.1",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.6.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "nodemon": "^3.0.1"
   }
 }
