@@ -1,70 +1,88 @@
 const mongoose = require('mongoose');
 
-const ExperienceSchema = new mongoose.Schema({
-  company: { type: String, default: '' },
-  role: { type: String, default: '' },
-  location: { type: String, default: '' },
-  startDate: { type: String, default: '' },
-  endDate: { type: String, default: '' },
-  current: { type: Boolean, default: false },
-  description: { type: String, default: '' }
-}, { _id: false });
-
-const EducationSchema = new mongoose.Schema({
-  school: { type: String, default: '' },
-  degree: { type: String, default: '' },
-  field: { type: String, default: '' },
-  location: { type: String, default: '' },
-  startDate: { type: String, default: '' },
-  endDate: { type: String, default: '' },
-  current: { type: Boolean, default: false },
-  description: { type: String, default: '' }
-}, { _id: false });
-
-const ProjectSchema = new mongoose.Schema({
-  name: { type: String, default: '' },
-  link: { type: String, default: '' },
-  description: { type: String, default: '' }
-}, { _id: false });
-
-const CertificationSchema = new mongoose.Schema({
-  name: { type: String, default: '' },
-  issuer: { type: String, default: '' },
-  date: { type: String, default: '' }
-}, { _id: false });
-
-const PublicationSchema = new mongoose.Schema({
-  title: { type: String, default: '' },
-  link: { type: String, default: '' },
-  date: { type: String, default: '' }
-}, { _id: false });
-
-const ResumeSchema = new mongoose.Schema(
-  {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    title: { type: String, required: true, trim: true },
-    isDefault: { type: Boolean, default: false },
-
-    personal: {
-      name: { type: String, default: '' },
-      email: { type: String, default: '' },
-      phone: { type: String, default: '' },
-      location: { type: String, default: '' },
-      linkedin: { type: String, default: '' },
-      portfolio: { type: String, default: '' }
-    },
-
-    summary: { type: String, default: '' },
-    experience: { type: [ExperienceSchema], default: [] },
-    education: { type: [EducationSchema], default: [] },
-    skills: { type: [String], default: [] },
-    projects: { type: [ProjectSchema], default: [] },
-    certifications: { type: [CertificationSchema], default: [] },
-    achievements: { type: [String], default: [] },
-    languages: { type: [String], default: [] },
-    publications: { type: [PublicationSchema], default: [] }
+const resumeSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
-  { timestamps: true }
-);
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  originalFileName: {
+    type: String,
+    default: ''
+  },
+  fileType: {
+    type: String,
+    enum: ['pdf', 'docx', 'manual'],
+    default: 'manual'
+  },
+  fileData: {
+    type: String,
+    default: ''
+  },
+  parsedData: {
+    fullName: { type: String, default: '' },
+    email: { type: String, default: '' },
+    phone: { type: String, default: '' },
+    location: { type: String, default: '' },
+    summary: { type: String, default: '' },
+    skills: [{ type: String }],
+    experience: [{
+      title: String,
+      company: String,
+      location: String,
+      startDate: String,
+      endDate: String,
+      description: String,
+      current: Boolean
+    }],
+    education: [{
+      degree: String,
+      institution: String,
+      location: String,
+      startDate: String,
+      endDate: String,
+      gpa: String
+    }],
+    certifications: [{ type: String }],
+    languages: [{ type: String }],
+    links: [{
+      label: String,
+      url: String
+    }]
+  },
+  tailoredVersions: [{
+    jobTitle: String,
+    jobDescription: String,
+    tailoredContent: Object,
+    createdAt: { type: Date, default: Date.now }
+  }],
+  isTailored: {
+    type: Boolean,
+    default: false
+  },
+  parentResumeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Resume',
+    default: null
+  },
+  status: {
+    type: String,
+    enum: ['draft', 'complete', 'tailored'],
+    default: 'draft'
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
 
-module.exports = mongoose.models.Resume || mongoose.model('Resume', ResumeSchema);
+module.exports = mongoose.model('Resume', resumeSchema);
