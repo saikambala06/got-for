@@ -1,62 +1,38 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const path = require('path');
-require('dotenv').config();
+const connectDB = require('../utils/db');
 
-const authRoutes = require('./routes/auth');
-const resumeRoutes = require('./routes/resumes');
-const jobRoutes = require('./routes/jobs');
-const dashboardRoutes = require('./routes/dashboard');
+const authRoutes = require('../routes/auth');
+const jobRoutes = require('../routes/jobs');
+const resumeRoutes = require('../routes/resumes');
+const accountRoutes = require('../routes/account');
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json());
+app.use(cookieParser());
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-}).then(() => {
-  console.log('Connected to MongoDB');
-}).catch((err) => {
-  console.error('MongoDB connection error:', err);
+// Ensure DB connection before handling API requests only (skip static files)
+app.use('/api', async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    res.status(500).json({ error: 'Database connection failed. Please try again shortly.' });
+  }
 });
 
-// API Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/resumes', resumeRoutes);
 app.use('/api/jobs', jobRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/resumes', resumeRoutes);
+app.use('/api/account', accountRoutes);
 
-// Serve static pages
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'dashboard.html'));
-});
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
-app.get('/resumes', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'resumes.html'));
-});
-
-app.get('/job-tracker', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'job-tracker.html'));
-});
-
-app.get('/account', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'account.html'));
-});
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Serve static frontend (used for local dev; Vercel serves /public directly)
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 module.exports = app;
