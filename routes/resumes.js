@@ -8,15 +8,24 @@ const { normalizeDocxText } = require('../utils/resumeParser');
 const router = express.Router();
 router.use(requireAuth);
 
+const ACCEPTED_MIMES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  // Android / some browsers send generic types — accept by extension below
+  'application/octet-stream',
+  'application/x-pdf',
+  'binary/octet-stream'
+]);
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
-    const ok = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ].includes(file.mimetype);
-    cb(ok ? null : new Error('Only PDF or DOCX files are supported'), ok);
+    // Accept by MIME type OR by file extension (Android often sends wrong MIME)
+    const byMime = ACCEPTED_MIMES.has(file.mimetype);
+    const byExt  = /\.(pdf|docx)$/i.test(file.originalname || '');
+    if (byMime || byExt) return cb(null, true);
+    cb(new Error('Only PDF or DOCX files are supported'));
   }
 });
 
@@ -154,40 +163,55 @@ router.post('/parse', (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'Please choose a PDF or DOCX file' });
     }
+
+    // Declare text OUTSIDE try so the catch block can use it for fallback
+    let extractedText = '';
+
     try {
-      let text = '';
-      if (req.file.mimetype === 'application/pdf') {
+      // Determine file type by MIME first, then fall back to extension
+      // (Android browsers often send 'application/octet-stream' for PDFs)
+      const isPdf = req.file.mimetype === 'application/pdf'
+        || req.file.mimetype === 'application/x-pdf'
+        || /\.pdf$/i.test(req.file.originalname || '');
+
+      if (isPdf) {
         const pdfParse = require('pdf-parse');
         const result = await pdfParse(req.file.buffer);
-        text = (result.text || '').replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n');
+        extractedText = (result.text || '').replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n');
       } else {
         const mammoth = require('mammoth');
         const { value } = await mammoth.extractRawText({ buffer: req.file.buffer });
-        text = normalizeDocxText(value);
+        extractedText = normalizeDocxText(value);
       }
 
-      if (!text || !text.trim()) {
+      if (!extractedText || !extractedText.trim()) {
         return res.status(422).json({ error: "We couldn't read any text from that file. Try Build from Scratch instead." });
       }
 
       let parsed;
       if (process.env.ANTHROPIC_API_KEY) {
-        parsed = await parseWithClaude(text);
+        parsed = await parseWithClaude(extractedText);
       } else {
-        parsed = parseWithRules(text);
+        parsed = parseWithRules(extractedText);
       }
 
       res.json({ parsed });
     } catch (err2) {
-      console.error('Resume parse error:', err2);
-      // Graceful fallback to rule-based parser on AI failure
-      try {
-        const rawText = err2._rawText;
-        if (rawText) {
-          const parsed = parseWithRules(rawText);
+      console.error('Resume parse error:', err2.message || err2);
+
+      // Always fall back to rule-based parser if we have the text —
+      // this fires when ANTHROPIC_API_KEY is missing, rate-limited, or any
+      // other Claude API failure occurs, so the upload never flat-out fails.
+      if (extractedText && extractedText.trim()) {
+        try {
+          console.log('Falling back to rule-based parser…');
+          const parsed = parseWithRules(extractedText);
           return res.json({ parsed });
+        } catch (fallbackErr) {
+          console.error('Fallback parser also failed:', fallbackErr.message);
         }
-      } catch (_) {}
+      }
+
       res.status(500).json({ error: 'Could not process that file. Try Build from Scratch instead.' });
     }
   });
