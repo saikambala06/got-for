@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Account — SK VK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css" />
+<style>
+  .acc-layout{ display:grid; grid-template-columns: 220px 1fr; gap:18px; align-items:start; }
+  .acc-tab{ padding:11px 14px; border-radius:10px; font-size:14px; font-weight:500; color:var(--text-dim); cursor:pointer; margin-bottom:4px; display:flex; align-items:center; gap:10px; }
+  .acc-tab:hover{ background:var(--surface-2); }
+  .acc-tab.active{ background:var(--accent-soft); color:var(--accent-2); font-weight:600; }
+  .acc-panel{ display:none; }
+  .acc-panel.active{ display:block; }
+  .big-avatar{ width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="sidebar-root" data-active="account"></div>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Account</div>
+        <div class="page-sub">Manage your profile and security.</div>
+      </div>
+    </div>
+
+    <div class="acc-layout">
+      <div class="card" style="padding:10px;">
+        <div class="acc-tab active" data-tab="profile">Profile</div>
+        <div class="acc-tab" data-tab="security">Security</div>
+        <div class="acc-tab" data-tab="plan">Plan</div>
+      </div>
+
+      <div>
+        <div class="card section-card acc-panel active" id="panel-profile">
+          <div class="section-head"><div><h3>Profile details</h3><p>This information stays private to your account.</p></div></div>
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
+            <div class="big-avatar" data-user-avatar>?</div>
+            <div>
+              <div style="font-weight:700;font-size:16px;" data-user-name>—</div>
+              <div style="font-size:13px;color:var(--text-faint);" data-user-email>—</div>
+            </div>
+          </div>
+          <form id="profileForm">
+            <div class="form-grid">
+              <div class="field"><label>Full name</label><input id="pName" required /></div>
+              <div class="field"><label>Email</label><input id="pEmail" disabled style="opacity:.6" /></div>
+              <div class="field"><label>Phone</label><input id="pPhone" placeholder="+1 (555) 000-0000" /></div>
+              <div class="field"><label>Location</label><input id="pLocation" placeholder="City, State" /></div>
+              <div class="field"><label>LinkedIn URL</label><input id="pLinkedin" placeholder="linkedin.com/in/…" /></div>
+              <div class="field"><label>Portfolio / website</label><input id="pPortfolio" placeholder="https://…" /></div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:22px;">
+              <button class="btn btn-primary" type="submit" id="saveProfileBtn">Save changes</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card section-card acc-panel" id="panel-security">
+          <div class="section-head"><div><h3>Change password</h3><p>Use a strong password you don't use elsewhere.</p></div></div>
+          <form id="passwordForm" style="max-width:400px;">
+            <div class="field" style="margin-bottom:16px;"><label>Current password</label><input type="password" id="curPass" required /></div>
+            <div class="field" style="margin-bottom:16px;"><label>New password</label><input type="password" id="newPass" required placeholder="At least 6 characters" /></div>
+            <button class="btn btn-primary" type="submit" id="savePassBtn">Update password</button>
+          </form>
+        </div>
+
+        <div class="card section-card acc-panel" id="panel-plan">
+          <div class="section-head"><div><h3>Your plan</h3><p>SK VK is, and always will be, free.</p></div></div>
+          <div class="plan-card" style="max-width:360px;">
+            <div class="plan-title">Current plan</div>
+            <div class="plan-name">⚡ Free, forever</div>
+            <div class="plan-row"><span>Applications tracked</span><span>Unlimited</span></div>
+            <div class="plan-row"><span>Resumes</span><span>Unlimited</span></div>
+            <div class="plan-row"><span>Cost</span><span>$0 / month</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+document.querySelectorAll('.acc-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.acc-tab').forEach((t) => t.classList.remove('active'));
+    document.querySelectorAll('.acc-panel').forEach((p) => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(`panel-${tab.dataset.tab}`).classList.add('active');
+  });
+});
+
+(async function init() {
+  const user = await requireSession();
+  if (!user) return;
+  document.getElementById('pName').value = user.name || '';
+  document.getElementById('pEmail').value = user.email || '';
+  document.getElementById('pPhone').value = user.phone || '';
+  document.getElementById('pLocation').value = user.location || '';
+  document.getElementById('pLinkedin').value = user.linkedin || '';
+  document.getElementById('pPortfolio').value = user.portfolio || '';
+})();
+
+document.getElementById('profileForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('saveProfileBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api.put('/api/account/profile', {
+      name: document.getElementById('pName').value.trim(),
+      phone: document.getElementById('pPhone').value.trim(),
+      location: document.getElementById('pLocation').value.trim(),
+      linkedin: document.getElementById('pLinkedin').value.trim(),
+      portfolio: document.getElementById('pPortfolio').value.trim()
+    });
+    showToast('Profile updated');
+    document.querySelectorAll('[data-user-name]').forEach((el) => el.textContent = document.getElementById('pName').value.trim());
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save changes';
+  }
+});
+
+document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('savePassBtn');
+  btn.disabled = true; btn.textContent = 'Updating…';
+  try {
+    await api.put('/api/account/password', {
+      currentPassword: document.getElementById('curPass').value,
+      newPassword: document.getElementById('newPass').value
+    });
+    showToast('Password updated');
+    document.getElementById('passwordForm').reset();
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Update password';
+  }
+});
+</script>
+</body>
+</html>
