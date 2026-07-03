@@ -5,8 +5,6 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const connectDB = require('./config/db');
-
 const app = express();
 
 app.use(cors());
@@ -54,17 +52,12 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong' });
 });
 
+const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 3000;
-  connectDB().then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
   });
 }
 
 module.exports = app;
-module.exports.handler = async (req, res) => {
-  await connectDB();
-  return app(req, res);
-};
+module.exports.handler = (req, res) => app(req, res);

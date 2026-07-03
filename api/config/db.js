@@ -1,28 +1,25 @@
-const mongoose = require('mongoose');
+const { createClient } = require('@supabase/supabase-js');
 
-let cached = global.mongoose;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
+if (!supabaseUrl) throw new Error('SUPABASE_URL is not set');
+
+// Use service role if available, otherwise anon key (for dev/Bolt environments)
+const adminKey = supabaseServiceKey || supabaseAnonKey;
+
+const supabaseAdmin = createClient(supabaseUrl, adminKey, {
+  auth: { autoRefreshToken: false, persistSession: false }
+});
+
+// Returns a client scoped to the user's Supabase JWT so RLS applies correctly
+function getUserClient(supabaseToken) {
+  if (!supabaseToken) return supabaseAdmin;
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${supabaseToken}` } },
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
 }
 
-async function connectDB() {
-  if (cached.conn) return cached.conn;
-
-  if (!cached.promise) {
-    const uri = process.env.MONGODB_URI;
-    if (!uri) throw new Error('MONGODB_URI environment variable is not set');
-
-    cached.promise = mongoose.connect(uri, {
-      bufferCommands: false,
-      maxPoolSize: 10,
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-    }).then(mongoose => mongoose);
-  }
-
-  cached.conn = await cached.promise;
-  return cached.conn;
-}
-
-module.exports = connectDB;
+module.exports = { supabaseAdmin, getUserClient };

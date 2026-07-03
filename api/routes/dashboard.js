@@ -1,7 +1,6 @@
 const express = require('express');
-const JobApplication = require('../models/JobApplication');
-const Stats = require('../models/Stats');
 const auth = require('../middleware/auth');
+const { getUserClient } = require('../config/db');
 
 const router = express.Router();
 
@@ -9,21 +8,24 @@ router.get('/stats', auth, async (req, res) => {
   try {
     const { period } = req.query;
     const now = new Date();
+    const db = getUserClient(req.supabaseToken);
 
-    const allTimeCount = await JobApplication.countDocuments({ userId: req.userId });
+    const { count: allTimeCount } = await db
+      .from('job_applications')
+      .select('*', { count: 'exact', head: true });
 
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthlyCount = await JobApplication.countDocuments({
-      userId: req.userId,
-      appliedOn: { $gte: monthStart }
-    });
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const { count: monthlyCount } = await db
+      .from('job_applications')
+      .select('*', { count: 'exact', head: true })
+      .gte('applied_on', monthStart);
 
-    const weekStart = new Date(now);
-    weekStart.setDate(weekStart.getDate() - 7);
-    const weekCount = await JobApplication.countDocuments({
-      userId: req.userId,
-      appliedOn: { $gte: weekStart }
-    });
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const { count: weekCount } = await db
+      .from('job_applications')
+      .select('*', { count: 'exact', head: true })
+      .gte('applied_on', weekAgo.toISOString());
 
     let days = 7;
     if (period === 'weekly') days = 7;
@@ -33,34 +35,36 @@ router.get('/stats', auth, async (req, res) => {
     const trendStart = new Date(now);
     trendStart.setDate(trendStart.getDate() - days);
 
-    const stats = await Stats.find({
-      userId: req.userId,
-      date: { $gte: trendStart }
-    }).sort({ date: 1 });
+    const { data: statsRows } = await db
+      .from('stats')
+      .select('date, jobs_viewed, jobs_applied')
+      .gte('date', trendStart.toISOString().split('T')[0])
+      .order('date', { ascending: true });
 
     let trendData = [];
     if (period === 'yearly') {
       const monthlyAgg = {};
-      stats.forEach(s => {
-        const key = `${s.date.getFullYear()}-${s.date.getMonth()}`;
+      (statsRows || []).forEach(s => {
+        const d = new Date(s.date);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
         if (!monthlyAgg[key]) monthlyAgg[key] = { jobsViewed: 0, jobsApplied: 0, label: '' };
-        monthlyAgg[key].jobsViewed += s.jobsViewed;
-        monthlyAgg[key].jobsApplied += s.jobsApplied;
-        monthlyAgg[key].label = s.date.toLocaleString('default', { month: 'short' });
+        monthlyAgg[key].jobsViewed += s.jobs_viewed;
+        monthlyAgg[key].jobsApplied += s.jobs_applied;
+        monthlyAgg[key].label = d.toLocaleString('default', { month: 'short' });
       });
       trendData = Object.values(monthlyAgg);
     } else {
-      trendData = stats.map(s => ({
-        jobsViewed: s.jobsViewed,
-        jobsApplied: s.jobsApplied,
-        label: s.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      trendData = (statsRows || []).map(s => ({
+        jobsViewed: s.jobs_viewed,
+        jobsApplied: s.jobs_applied,
+        label: new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       }));
     }
 
     res.json({
-      allTimeCount,
-      monthlyCount,
-      weekCount,
+      allTimeCount: allTimeCount || 0,
+      monthlyCount: monthlyCount || 0,
+      weekCount: weekCount || 0,
       trendData
     });
   } catch (err) {
