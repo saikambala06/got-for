@@ -4,7 +4,9 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl) throw new Error('SUPABASE_URL is not set');
+if (!supabaseUrl) {
+  console.error('WARNING: SUPABASE_URL is not set — database calls will fail');
+}
 
 // Use service role if available, otherwise anon key (for dev/Bolt environments)
 const adminKey = supabaseServiceKey || supabaseAnonKey;
