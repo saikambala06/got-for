@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = 'https://got-for.vercel.app/api';
 
 function getToken() {
   return localStorage.getItem('skvk_token');
