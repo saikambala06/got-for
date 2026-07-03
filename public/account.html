@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SK VK - Account</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236C5CE7'/><text x='50' y='68' font-size='52' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'>SK</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <header class="topbar" id="topbar"></header>
+      <div class="page-content">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Account</h1>
+            <p class="page-subtitle">Manage your account settings</p>
+          </div>
+        </div>
+        
+        <div class="account-tabs">
+          <button class="account-tab active" data-tab="profile">Profile</button>
+          <button class="account-tab" data-tab="security">Security</button>
+          <button class="account-tab" data-tab="billing">Billing</button>
+        </div>
+        
+        <div class="account-content">
+          <!-- Profile Tab -->
+          <div class="account-panel active" id="panel-profile">
+            <div class="card">
+              <div class="card-header">
+                <h3>Profile Details</h3>
+              </div>
+              <div class="card-body">
+                <div class="profile-avatar-section">
+                  <div class="profile-avatar" id="profileAvatar">SK</div>
+                  <div>
+                    <h4 id="profileNameDisplay">User Name</h4>
+                    <p id="profileEmailDisplay" class="text-muted">user@email.com</p>
+                  </div>
+                </div>
+                <form id="profileForm" onsubmit="updateProfile(event)">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label>Full Name</label>
+                      <input type="text" id="profileName" required>
+                    </div>
+                    <div class="form-group">
+                      <label>Email Address</label>
+                      <input type="email" id="profileEmail" required>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Connected Account</label>
+                    <input type="text" id="profileConnected" readonly class="form-control-readonly">
+                  </div>
+                  <button type="submit" class="btn-primary" id="updateProfileBtn">
+                    <span class="btn-text">Update Profile</span>
+                    <span class="btn-spinner hidden"></span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Security Tab -->
+          <div class="account-panel" id="panel-security">
+            <div class="card">
+              <div class="card-header">
+                <h3>Change Password</h3>
+              </div>
+              <div class="card-body">
+                <form id="passwordForm" onsubmit="updatePassword(event)">
+                  <div class="form-group">
+                    <label>Current Password</label>
+                    <input type="password" id="currentPassword" required>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label>New Password</label>
+                      <input type="password" id="newPassword" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                      <label>Confirm New Password</label>
+                      <input type="password" id="confirmPassword" required minlength="6">
+                    </div>
+                  </div>
+                  <button type="submit" class="btn-primary" id="updatePasswordBtn">
+                    <span class="btn-text">Update Password</span>
+                    <span class="btn-spinner hidden"></span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Billing Tab -->
+          <div class="account-panel" id="panel-billing">
+            <div class="card">
+              <div class="card-header">
+                <h3>Current Plan</h3>
+              </div>
+              <div class="card-body">
+                <div class="plan-card">
+                  <div class="plan-header">
+                    <h2 id="billingPlanName">Free Plan</h2>
+                    <span class="plan-badge">Current</span>
+                  </div>
+                  <div class="plan-usage-detail">
+                    <div class="plan-usage-item">
+                      <div class="plan-usage-header">
+                        <span>Job Extractions</span>
+                        <span id="billingJobExt">0 / 6</span>
+                      </div>
+                      <div class="progress-bar">
+                        <div class="progress-fill" id="billingJobExtBar" style="width:0%"></div>
+                      </div>
+                    </div>
+                    <div class="plan-usage-item">
+                      <div class="plan-usage-header">
+                        <span>Tailored Resumes</span>
+                        <span id="billingTailored">0 / 3</span>
+                      </div>
+                      <div class="progress-bar">
+                        <div class="progress-fill progress-fill-orange" id="billingTailoredBar" style="width:0%"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="upgrade-plans">
+                  <h3>Available Plans</h3>
+                  <div class="plans-grid">
+                    <div class="plan-option">
+                      <h4>Free Plan</h4>
+                      <p class="plan-price">$0<span>/month</span></p>
+                      <ul class="plan-features">
+                        <li>6 Job Extractions</li>
+                        <li>3 Tailored Resumes</li>
+                        <li>Basic Dashboard</li>
+                      </ul>
+                      <button class="btn-secondary btn-full" disabled>Current Plan</button>
+                    </div>
+                    <div class="plan-option plan-popular">
+                      <span class="popular-badge">Popular</span>
+                      <h4>Pro Plan</h4>
+                      <p class="plan-price">$29<span>/month</span></p>
+                      <ul class="plan-features">
+                        <li>500 Job Extractions</li>
+                        <li>300 Tailored Resumes</li>
+                        <li>Advanced Analytics</li>
+                        <li>Priority Support</li>
+                      </ul>
+                      <button class="btn-primary btn-full" onclick="showToast('Upgrade functionality coming soon!','info')">Upgrade to Pro</button>
+                    </div>
+                    <div class="plan-option">
+                      <h4>Enterprise</h4>
+                      <p class="plan-price">$99<span>/month</span></p>
+                      <ul class="plan-features">
+                        <li>Unlimited Extractions</li>
+                        <li>Unlimited Tailored Resumes</li>
+                        <li>Team Collaboration</li>
+                        <li>API Access</li>
+                      </ul>
+                      <button class="btn-secondary btn-full" onclick="showToast('Contact sales at sales@skvk.com','info')">Contact Sales</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <div id="toastContainer" class="toast-container"></div>
+  <script src="/js/common.js"></script>
+  <script src="/js/account.js"></script>
+</body>
+</html>

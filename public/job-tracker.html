@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SK VK - Job Tracker</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236C5CE7'/><text x='50' y='68' font-size='52' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'>SK</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <header class="topbar" id="topbar"></header>
+      <div class="page-content">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Job Tracker</h1>
+            <p class="page-subtitle">Track all your job applications across portals</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn-primary" onclick="openJobModal()">
+              <span>+</span> Add Application
+            </button>
+          </div>
+        </div>
+        
+        <div class="status-tabs" id="statusTabs">
+          <button class="status-tab active" data-status="All">
+            <span class="status-tab-label">All</span>
+            <span class="status-tab-count" id="countAll">0</span>
+          </button>
+          <button class="status-tab" data-status="Applied">
+            <span class="status-tab-label">Applied</span>
+            <span class="status-tab-count" id="countApplied">0</span>
+          </button>
+          <button class="status-tab" data-status="Interviewing">
+            <span class="status-tab-label">Interviewing</span>
+            <span class="status-tab-count" id="countInterviewing">0</span>
+          </button>
+          <button class="status-tab" data-status="Offers">
+            <span class="status-tab-label">Offers</span>
+            <span class="status-tab-count" id="countOffers">0</span>
+          </button>
+          <button class="status-tab" data-status="Rejected">
+            <span class="status-tab-label">Rejected</span>
+            <span class="status-tab-count" id="countRejected">0</span>
+          </button>
+          <button class="status-tab" data-status="Archived">
+            <span class="status-tab-label">Archived</span>
+            <span class="status-tab-count" id="countArchived">0</span>
+          </button>
+          <button class="status-tab" data-status="Favorites">
+            <span class="status-tab-label">Favorites</span>
+            <span class="status-tab-count" id="countFavorites">0</span>
+          </button>
+        </div>
+        
+        <div class="search-bar">
+          <input type="text" id="jobSearch" placeholder="🔍 Search by job title, company, or location..." class="search-input">
+        </div>
+        
+        <div class="jobs-layout">
+          <div class="job-list-panel">
+            <div class="job-list" id="jobList">
+              <div class="loading-state">Loading jobs...</div>
+            </div>
+          </div>
+          
+          <div class="job-detail-panel">
+            <div class="job-detail" id="jobDetail">
+              <div class="empty-state-full">
+                <div class="empty-icon">📋</div>
+                <p>Select a job to view details</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- Add Job Modal -->
+  <div class="modal-overlay" id="jobModal" style="display:none">
+    <div class="modal modal-large">
+      <div class="modal-header">
+        <h2 id="jobModalTitle">Add Job Application</h2>
+        <button class="modal-close" onclick="closeJobModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="jobForm" onsubmit="saveJob(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Job Title *</label>
+              <input type="text" id="jobTitle" required placeholder="Software Engineer">
+            </div>
+            <div class="form-group">
+              <label>Company</label>
+              <input type="text" id="jobCompany" placeholder="Google">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Location</label>
+              <input type="text" id="jobLocation" placeholder="San Francisco, CA">
+            </div>
+            <div class="form-group">
+              <label>Portal</label>
+              <select id="jobPortal">
+                <option>LinkedIn</option>
+                <option>Indeed</option>
+                <option>Glassdoor</option>
+                <option>Company Website</option>
+                <option>AngelList</option>
+                <option>Hired</option>
+                <option>Referral</option>
+                <option>Direct</option>
+                <option>Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Status</label>
+              <select id="jobStatus">
+                <option>Applied</option>
+                <option>Interviewing</option>
+                <option>Offers</option>
+                <option>Rejected</option>
+                <option>Archived</option>
+                <option>Favorites</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Salary Range</label>
+              <input type="text" id="jobSalary" placeholder="$120k - $150k">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Job URL</label>
+            <input type="url" id="jobUrl" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label>Job Description (Skills will be auto-extracted)</label>
+            <textarea id="jobDescription" rows="6" placeholder="Paste the job description here. Skills and keywords will be automatically extracted."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea id="jobNotes" rows="3" placeholder="Any notes about this application..."></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closeJobModal()">Cancel</button>
+            <button type="submit" class="btn-primary" id="saveJobBtn">
+              <span class="btn-text">Save Application</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  
+  <div id="toastContainer" class="toast-container"></div>
+  <script src="/js/common.js"></script>
+  <script src="/js/jobs.js"></script>
+</body>
+</html>

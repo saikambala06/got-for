@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SK VK - Resumes</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236C5CE7'/><text x='50' y='68' font-size='52' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'>SK</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <header class="topbar" id="topbar"></header>
+      <div class="page-content">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">My Resumes</h1>
+            <p class="page-subtitle">Upload, parse, and tailor your resumes</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn-secondary" onclick="document.getElementById('uploadInput').click()">
+              <span>📤</span> Upload Resume
+            </button>
+            <input type="file" id="uploadInput" accept=".pdf,.docx,.txt" style="display:none" onchange="handleUpload(event)">
+            <button class="btn-primary" onclick="openTailorModal()">
+              <span>🎯</span> Tailor Resume
+            </button>
+          </div>
+        </div>
+        
+        <div class="resumes-layout">
+          <div class="resume-list-panel">
+            <div class="panel-header">
+              <h3>Resumes</h3>
+              <button class="btn-icon" onclick="createNewResume()" title="New Resume">+</button>
+            </div>
+            <div class="resume-list" id="resumeList">
+              <div class="loading-state">Loading resumes...</div>
+            </div>
+          </div>
+          
+          <div class="resume-editor-panel">
+            <div class="panel-header">
+              <h3 id="editorTitle">Select a resume to edit</h3>
+              <div class="panel-actions" id="editorActions" style="display:none">
+                <button class="btn-sm btn-secondary" onclick="downloadResume()">Download</button>
+                <button class="btn-sm btn-primary" onclick="saveResume()">Save Changes</button>
+              </div>
+            </div>
+            <div class="resume-editor" id="resumeEditor">
+              <div class="empty-editor">
+                <div class="empty-icon">📄</div>
+                <p>Select a resume from the left or upload a new one to get started</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- Tailor Modal -->
+  <div class="modal-overlay" id="tailorModal" style="display:none">
+    <div class="modal modal-large">
+      <div class="modal-header">
+        <h2>🎯 Tailor Resume</h2>
+        <button class="modal-close" onclick="closeTailorModal()">×</button>
+      </div>
+      <div class="modal-body" id="tailorModalBody">
+        <div class="tailor-step" id="tailorStep1">
+          <div class="form-group">
+            <label>Select Resume to Tailor</label>
+            <select id="tailorResumeSelect" class="form-control"></select>
+          </div>
+          <div class="form-group">
+            <label>Job Title (Optional)</label>
+            <input type="text" id="tailorJobTitle" placeholder="e.g. Senior Software Engineer">
+          </div>
+          <div class="form-group">
+            <label>Company (Optional)</label>
+            <input type="text" id="tailorCompany" placeholder="e.g. Google">
+          </div>
+          <div class="form-group">
+            <label>Job Description</label>
+            <textarea id="tailorJobDesc" rows="10" placeholder="Paste the full job description here..." class="form-control"></textarea>
+          </div>
+          <button class="btn-primary btn-full" onclick="analyzeTailor()" id="analyzeBtn">
+            <span class="btn-text">Analyze & Tailor</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </div>
+        <div class="tailor-step hidden" id="tailorStep2">
+          <div class="tailor-results" id="tailorResults"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div id="toastContainer" class="toast-container"></div>
+  <script src="/js/common.js"></script>
+  <script src="/js/resumes.js"></script>
+</body>
+</html>
