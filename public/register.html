@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LetMeApply - Login</title>
+  <title>LetMeApply - Sign Up</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,26 +13,30 @@
   <div class="auth-container">
     <div class="auth-card">
       <div class="auth-logo">LetMe<span class="accent">Apply</span></div>
-      <p class="auth-subtitle">Sign in to your account</p>
+      <p class="auth-subtitle">Create your free account</p>
 
       <div class="auth-error" id="error-msg"></div>
 
-      <form id="login-form">
+      <form id="register-form">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" class="form-input" id="name" placeholder="John Doe" required>
+        </div>
         <div class="form-group">
           <label class="form-label">Email</label>
           <input type="email" class="form-input" id="email" placeholder="you@example.com" required>
         </div>
         <div class="form-group">
           <label class="form-label">Password</label>
-          <input type="password" class="form-input" id="password" placeholder="Your password" required>
+          <input type="password" class="form-input" id="password" placeholder="At least 6 characters" required minlength="6">
         </div>
         <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; justify-content: center; margin-top: 8px;">
-          Sign In
+          Create Account
         </button>
       </form>
 
       <div class="auth-link">
-        Don't have an account? <a href="/register">Sign up</a>
+        Already have an account? <a href="/login">Sign in</a>
       </div>
     </div>
   </div>
@@ -43,16 +47,17 @@
       window.location.href = '/dashboard';
     }
 
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const name = document.getElementById('name').value;
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
       const errorEl = document.getElementById('error-msg');
 
       try {
-        const data = await apiCall('/auth/login', {
+        const data = await apiCall('/auth/register', {
           method: 'POST',
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ name, email, password })
         });
 
         if (data) {

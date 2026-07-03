@@ -1,95 +1,123 @@
-# JobTrail
+# LetMeApply - Job Application Tracker
 
-A completely free job-application tracker dashboard — no paywalls, no "upgrade" prompts.
-Built with vanilla HTML/CSS/JavaScript on the frontend and Node.js (Express) + MongoDB
-on the backend. All application data, resumes, and account info live in MongoDB —
-nothing is stored in `localStorage`/`sessionStorage`. The login session itself is kept
-in a secure, httpOnly cookie (not in the browser's storage APIs).
+A full-stack job application tracker built with HTML, CSS, JavaScript, Node.js/Express, and MongoDB. Deployable on Vercel.
 
 ## Features
 
-- Email/password authentication (bcrypt-hashed passwords, JWT in an httpOnly cookie)
-- Dashboard overview: all-time / monthly / 7-day stats, an application trend chart, and a
-  pipeline breakdown (Applied / Interviewing / Offer / Rejected / Archived)
-- Job Tracker: add, edit, delete, favorite, search, and filter job applications
-- Resumes: create and maintain multiple resume profiles, mark one as default, and
-  upload an existing PDF/DOCX resume to auto-fill the builder (free, rule-based text
-  extraction — no paid AI/LLM service involved, so results should be reviewed and
-  refined by hand)
-- Account: edit profile details and change password
-- Fully responsive, dark "command center" UI — distinct from typical SaaS dashboards
-- 100% free — there is no billing, no plan limits, no paid tier anywhere in the code
+- **Authentication** - Register and login with JWT tokens
+- **Dashboard** - View application stats (all-time, monthly, 7-day) with Chart.js trend graph
+- **Resumes** - Create and manage multiple resumes with personal info, summary, and skills
+- **Job Tracker** - Track job applications by status (Applied, Interviewing, Offers, Rejected, Archived, Favorites)
+- **Account** - Manage profile, security (password changes), and billing/usage
 
-## Tech stack
+## Tech Stack
 
-- Frontend: HTML, CSS, vanilla JavaScript, Chart.js (via CDN) for the trend chart
-- Backend: Node.js, Express
-- Database: MongoDB (via Mongoose) — use a free MongoDB Atlas cluster
-- Auth: JWT stored in an httpOnly cookie, passwords hashed with bcrypt
-- Deployment: Vercel (serverless function for the API + static hosting for the frontend)
+- **Frontend**: HTML, CSS, Vanilla JavaScript, Chart.js
+- **Backend**: Node.js, Express.js
+- **Database**: MongoDB (Mongoose ODM)
+- **Auth**: JWT (JSON Web Tokens) + bcryptjs
+- **Deployment**: Vercel (serverless functions)
 
-## Project structure
+## Project Structure
 
 ```
-jobtrail/
+letmeapply-clone/
 ├── api/
-│   └── index.js          # Express app (entry point for Vercel's serverless function)
-├── routes/
-│   ├── auth.js            # register / login / logout / me
-│   ├── jobs.js             # job application CRUD + stats
-│   ├── resumes.js          # resume CRUD
-│   └── account.js          # profile + password updates
-├── models/                 # Mongoose schemas: User, Job, Resume
-├── middleware/auth.js       # JWT cookie auth guard
-├── utils/db.js              # cached Mongo connection helper
-├── public/                  # static frontend (HTML/CSS/JS)
-├── server.js                 # local dev entry point
-├── vercel.json                # Vercel routing config
-└── package.json
+│   ├── config/
+│   │   └── db.js              # MongoDB connection
+│   ├── middleware/
+│   │   └── auth.js            # JWT auth middleware
+│   ├── models/
+│   │   ├── User.js            # User model
+│   │   ├── Resume.js          # Resume model
+│   │   ├── JobApplication.js  # Job application model
+│   │   └── Stats.js           # Daily stats model
+│   ├── routes/
+│   │   ├── auth.js            # Auth routes
+│   │   ├── resumes.js         # Resume CRUD routes
+│   │   ├── jobs.js            # Job CRUD routes
+│   │   ├── dashboard.js       # Dashboard stats routes
+│   │   └── account.js         # Account management routes
+│   └── index.js               # Express app entry point
+├── public/
+│   ├── css/
+│   │   └── style.css          # Shared styles
+│   ├── js/
+│   │   └── common.js          # Shared JS utilities
+│   ├── images/                # Uploaded images
+│   ├── login.html             # Login page
+│   ├── register.html          # Registration page
+│   ├── dashboard.html         # Dashboard page
+│   ├── resumes.html           # Resumes page
+│   ├── job-tracker.html       # Job tracker page
+│   └── account.html           # Account settings page
+├── package.json
+├── vercel.json                # Vercel deployment config
+├── .env.example               # Environment variables template
+└── README.md
 ```
 
-## 1. Set up MongoDB (free)
+## Setup & Installation
 
-1. Create a free cluster at https://www.mongodb.com/cloud/atlas/register (the M0 free tier
-   is enough for this app).
-2. Create a database user and password.
-3. Under Network Access, allow access from anywhere (`0.0.0.0/0`) so Vercel's serverless
-   functions can connect.
-4. Copy your connection string, it looks like:
-   `mongodb+srv://<user>:<password>@cluster0.xxxxx.mongodb.net/jobtrail?retryWrites=true&w=majority`
+### Local Development
 
-## 2. Run locally
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-```bash
-npm install
-cp .env.example .env
-# edit .env and paste your MONGODB_URI + a random JWT_SECRET
-npm run dev
-```
+2. Create a `.env` file (copy from `.env.example`):
+   ```
+   MONGODB_URI=your_mongodb_connection_string
+   JWT_SECRET=your_secret_key
+   PORT=3000
+   ```
 
-Visit `http://localhost:4000`. You'll land on the login page; create a free account to
-get started, all data is written straight to your MongoDB database.
+3. Start the server:
+   ```bash
+   npm run dev
+   ```
 
-## 3. Deploy to Vercel (free)
+4. Open `http://localhost:3000` in your browser
 
-1. Push this project to a GitHub repository.
-2. Go to https://vercel.com, click **New Project**, and import the repository.
-3. In the Vercel project's **Environment Variables** settings, add:
-   - `MONGODB_URI` — your MongoDB Atlas connection string
-   - `JWT_SECRET` — any long random string (used to sign login sessions)
-   - `NODE_ENV` — `production`
-4. Click **Deploy**. Vercel will build the project using `vercel.json`, which routes
-   `/api/*` to the Express serverless function and serves everything in `/public`
-   as static files.
-5. Once deployed, open your Vercel URL — you'll see the JobTrail login page, ready to use.
+### Deploy to Vercel
 
-No further configuration is needed, and there is nothing to pay for: Vercel's free
-(Hobby) tier and MongoDB Atlas's free (M0) tier are both sufficient to run this app.
+1. Push this project to GitHub
+2. Go to [vercel.com](https://vercel.com) and import the repository
+3. Add environment variables in Vercel dashboard:
+   - `MONGODB_URI` - Your MongoDB connection string
+   - `JWT_SECRET` - A secret string for JWT signing
+4. Deploy
 
-## Notes
+## API Endpoints
 
-- Passwords are never stored in plain text (bcrypt with 10 salt rounds).
-- The session cookie is httpOnly and `secure` in production, so it can't be read or
-  tampered with by client-side JavaScript.
-- All CRUD endpoints under `/api/jobs`, `/api/resumes`, and `/api/account` require a
-  valid session and only ever read/write the logged-in user's own data.
+### Auth
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login user
+- `GET /api/auth/me` - Get current user
+
+### Resumes
+- `GET /api/resumes` - List all resumes
+- `POST /api/resumes` - Create resume
+- `PUT /api/resumes/:id` - Update resume
+- `DELETE /api/resumes/:id` - Delete resume
+
+### Jobs
+- `GET /api/jobs` - List jobs (supports `?status=` and `?search=` filters)
+- `POST /api/jobs` - Add job
+- `PUT /api/jobs/:id` - Update job
+- `DELETE /api/jobs/:id` - Delete job
+
+### Dashboard
+- `GET /api/dashboard/stats?period=weekly|monthly|yearly` - Get dashboard stats
+
+### Account
+- `GET /api/account/profile` - Get profile
+- `PUT /api/account/profile` - Update profile
+- `PUT /api/account/security` - Change password
+
+## MongoDB Setup
+
+You can use either:
+- **MongoDB Atlas** (free tier) - Get a connection string from [mongodb.com/atlas](https://www.mongodb.com/atlas)
+- **Local MongoDB** - Use `mongodb://localhost:27017/letmeapply`

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LetMeApply - Job Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public/css/style.css">
+</head>
+<body>
+  <div class="app-layout" id="app">
+    <div id="sidebar-container"></div>
+    <div class="main-content">
+      <div id="topbar-container"></div>
+      <div class="page-content">
+        <h1 class="page-title">Job Tracker</h1>
+        <p class="page-subtitle">Track and manage your job applications</p>
+
+        <div class="status-bar" id="status-bar"></div>
+
+        <div class="tracker-layout">
+          <div class="job-list">
+            <div class="job-list-header">
+              <input type="text" class="search-input" id="search-input" placeholder="Search by title, company, or location...">
+              <button class="btn btn-primary btn-sm" onclick="showAddJobForm()">+ Add Job</button>
+            </div>
+            <div id="job-list-items"></div>
+          </div>
+
+          <div class="job-detail-panel" id="job-detail-panel">
+            <div class="empty-state" style="padding: 60px 20px;">
+              <div class="empty-state-title">No job selected</div>
+              <div class="empty-state-text">Select a job from the list to view details</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="add-job-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); z-index:200; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:12px; padding:28px; width:90%; max-width:480px; max-height:90vh; overflow-y:auto;">
+      <h3 style="font-size:18px; font-weight:700; margin-bottom:20px;">Add New Job</h3>
+      <div class="form-group">
+        <label class="form-label">Company *</label>
+        <input type="text" class="form-input" id="new-company" placeholder="Company name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Job Title *</label>
+        <input type="text" class="form-input" id="new-title" placeholder="Software Engineer">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Location</label>
+        <input type="text" class="form-input" id="new-location" placeholder="Remote / City, State">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Source</label>
+        <input type="text" class="form-input" id="new-source" placeholder="LinkedIn, Indeed, etc.">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-select" id="new-status">
+          <option value="Applied">Applied</option>
+          <option value="Interviewing">Interviewing</option>
+          <option value="Offers">Offers</option>
+          <option value="Rejected">Rejected</option>
+          <option value="Archived">Archived</option>
+          <option value="Favorites">Favorites</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Skills (comma-separated)</label>
+        <input type="text" class="form-input" id="new-skills" placeholder="JavaScript, React, Node.js">
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px;">
+        <button class="btn btn-outline" onclick="closeAddJob()">Cancel</button>
+        <button class="btn btn-primary" onclick="addJob()">Add Job</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/public/js/common.js"></script>
+  <script>
+    if (!checkAuth()) throw new Error('Not authenticated');
+
+    document.getElementById('sidebar-container').innerHTML = getSidebarHTML('job-tracker');
+    document.getElementById('topbar-container').innerHTML = getTopbarHTML();
+    loadPlanInfo();
+
+    let jobs = [];
+    let currentJob = null;
+    let activeStatus = 'all';
+    let activeTab = 'details';
+    let searchQuery = '';
+
+    const statuses = ['Applied', 'Interviewing', 'Offers', 'Rejected', 'Archived', 'Favorites'];
+
+    async function loadJobs() {
+      try {
+        let endpoint = '/jobs';
+        const params = [];
+        if (activeStatus !== 'all') params.push(`status=${activeStatus}`);
+        if (searchQuery) params.push(`search=${encodeURIComponent(searchQuery)}`);
+        if (params.length) endpoint += '?' + params.join('&');
+
+        const data = await apiCall(endpoint);
+        if (data) {
+          jobs = data.jobs;
+          renderJobList();
+          renderStatusBar();
+        }
+      } catch (err) {
+        showToast('Failed to load jobs', 'error');
+      }
+    }
+
+    async function renderStatusBar() {
+      try {
+        const allData = await apiCall('/jobs');
+        if (!allData) return;
+        const allJobs = allData.jobs;
+
+        const counts = {};
+        statuses.forEach(s => { counts[s] = 0; });
+        allJobs.forEach(j => { counts[j.status] = (counts[j.status] || 0) + 1; });
+
+        const bar = document.getElementById('status-bar');
+        let html = `<button class="status-tab ${activeStatus === 'all' ? 'active' : ''}" onclick="setStatus('all')">All <span class="status-count">${allJobs.length}</span></button>`;
+        statuses.forEach(s => {
+          html += `<button class="status-tab ${activeStatus === s ? 'active' : ''}" onclick="setStatus('${s}')">${s} <span class="status-count">${counts[s]}</span></button>`;
+        });
+        bar.innerHTML = html;
+      } catch (err) {
+        // non-critical
+      }
+    }
+
+    function setStatus(status) {
+      activeStatus = status;
+      loadJobs();
+    }
+
+    function renderJobList() {
+      const listEl = document.getElementById('job-list-items');
+      if (jobs.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-title">No jobs found</div>
+            <div class="empty-state-text">Add a job or change filters</div>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = jobs.map(j => `
+        <div class="job-item ${currentJob && currentJob._id === j._id ? 'active' : ''}" onclick="selectJob('${j._id}')">
+          <div class="job-item-title">${j.title}</div>
+          <div class="job-item-company">${j.company}</div>
+          <div class="job-item-meta">
+            <span class="status-badge status-${j.status.toLowerCase()}">${j.status}</span>
+            ${j.location ? `<span>•</span><span>${j.location}</span>` : ''}
+            <span>•</span><span>${formatDate(j.appliedOn)}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function selectJob(id) {
+      currentJob = jobs.find(j => j._id === id);
+      renderJobList();
+      renderDetail();
+    }
+
+    function renderDetail() {
+      const panel = document.getElementById('job-detail-panel');
+      if (!currentJob) {
+        panel.innerHTML = `
+          <div class="empty-state" style="padding: 60px 20px;">
+            <div class="empty-state-title">No job selected</div>
+            <div class="empty-state-text">Select a job from the list to view details</div>
+          </div>
+        `;
+        return;
+      }
+
+      const j = currentJob;
+      panel.innerHTML = `
+        <div class="job-detail-header">
+          <h3 style="font-size:20px; font-weight:700; margin-bottom:4px;">${j.title}</h3>
+          <p style="color:var(--text-secondary); font-size:14px; margin-bottom:12px;">${j.company}</p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select class="form-select" style="width:auto; padding:6px 10px; font-size:13px;" onchange="updateStatus('${j._id}', this.value)">
+              ${statuses.map(s => `<option value="${s}" ${j.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="deleteJob('${j._id}')">Delete</button>
+          </div>
+        </div>
+        <div class="job-detail-tabs">
+          <button class="job-tab ${activeTab === 'details' ? 'active' : ''}" onclick="setTab('details')">Job Details</button>
+          <button class="job-tab ${activeTab === 'resume' ? 'active' : ''}" onclick="setTab('resume')">Resume Used</button>
+        </div>
+        <div class="job-detail-body" id="detail-body"></div>
+      `;
+      renderDetailBody();
+    }
+
+    function renderDetailBody() {
+      const body = document.getElementById('detail-body');
+      const j = currentJob;
+
+      if (activeTab === 'details') {
+        const skillsHTML = (j.skills || []).map(s => `<span class="tag tag-primary">${s}</span>`).join('') || '<span style="color:var(--text-muted); font-size:13px;">No skills listed</span>';
+        body.innerHTML = `
+          <div class="detail-row">
+            <div class="detail-label">Company</div>
+            <div class="detail-value">${j.company}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Job Title</div>
+            <div class="detail-value">${j.title}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Location</div>
+            <div class="detail-value">${j.location || 'Not specified'}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Applied On</div>
+            <div class="detail-value">${formatDate(j.appliedOn)}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Source</div>
+            <div class="detail-value">${j.source || 'Not specified'}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Status</div>
+            <div class="detail-value"><span class="status-badge status-${j.status.toLowerCase()}">${j.status}</span></div>
+          </div>
+          <div style="margin-top:20px;">
+            <div class="detail-label" style="margin-bottom:8px;">Skills</div>
+            <div>${skillsHTML}</div>
+          </div>
+          <div style="margin-top:20px;">
+            <div class="detail-label" style="margin-bottom:8px;">Notes</div>
+            <textarea class="form-textarea" id="job-notes" placeholder="Add notes about this application...">${j.notes || ''}</textarea>
+            <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="saveNotes('${j._id}')">Save Notes</button>
+          </div>
+        `;
+      } else {
+        body.innerHTML = `
+          <div style="text-align:center; padding:40px 20px;">
+            <div style="width:200px; height:260px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:8px; margin:0 auto 20px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px;">
+              Resume Preview
+            </div>
+            <div style="display:flex; gap:8px; justify-content:center;">
+              <button class="btn btn-outline btn-sm" onclick="downloadResumePDF()">Download PDF</button>
+              <button class="btn btn-outline btn-sm" onclick="downloadResumeDOCX()">Download DOCX</button>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function setTab(tab) {
+      activeTab = tab;
+      renderDetail();
+    }
+
+    async function updateStatus(id, status) {
+      try {
+        await apiCall(`/jobs/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ status })
+        });
+        const job = jobs.find(j => j._id === id);
+        if (job) job.status = status;
+        renderJobList();
+        renderStatusBar();
+        showToast('Status updated');
+      } catch (err) {
+        showToast('Failed to update status', 'error');
+      }
+    }
+
+    async function saveNotes(id) {
+      const notes = document.getElementById('job-notes').value;
+      try {
+        await apiCall(`/jobs/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ notes })
+        });
+        const job = jobs.find(j => j._id === id);
+        if (job) job.notes = notes;
+        currentJob.notes = notes;
+        showToast('Notes saved');
+      } catch (err) {
+        showToast('Failed to save notes', 'error');
+      }
+    }
+
+    async function deleteJob(id) {
+      if (!confirm('Delete this job application?')) return;
+      try {
+        await apiCall(`/jobs/${id}`, { method: 'DELETE' });
+        jobs = jobs.filter(j => j._id !== id);
+        currentJob = null;
+        renderJobList();
+        renderDetail();
+        renderStatusBar();
+        showToast('Job deleted');
+      } catch (err) {
+        showToast('Failed to delete job', 'error');
+      }
+    }
+
+    function showAddJobForm() {
+      document.getElementById('add-job-modal').style.display = 'flex';
+    }
+
+    function closeAddJob() {
+      document.getElementById('add-job-modal').style.display = 'none';
+      document.getElementById('new-company').value = '';
+      document.getElementById('new-title').value = '';
+      document.getElementById('new-location').value = '';
+      document.getElementById('new-source').value = '';
+      document.getElementById('new-skills').value = '';
+    }
+
+    async function addJob() {
+      const company = document.getElementById('new-company').value.trim();
+      const title = document.getElementById('new-title').value.trim();
+      if (!company || !title) {
+        showToast('Company and title are required', 'error');
+        return;
+      }
+
+      const job = {
+        company,
+        title,
+        location: document.getElementById('new-location').value.trim(),
+        source: document.getElementById('new-source').value.trim(),
+        status: document.getElementById('new-status').value,
+        skills: document.getElementById('new-skills').value.split(',').map(s => s.trim()).filter(Boolean)
+      };
+
+      try {
+        const data = await apiCall('/jobs', {
+          method: 'POST',
+          body: JSON.stringify(job)
+        });
+        if (data) {
+          closeAddJob();
+          await loadJobs();
+          showToast('Job added');
+        }
+      } catch (err) {
+        showToast('Failed to add job', 'error');
+      }
+    }
+
+    function downloadResumePDF() {
+      showToast('Resume download coming soon');
+    }
+
+    function downloadResumeDOCX() {
+      showToast('Resume download coming soon');
+    }
+
+    let searchTimeout;
+    document.getElementById('search-input').addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      searchQuery = e.target.value;
+      searchTimeout = setTimeout(loadJobs, 300);
+    });
+
+    loadJobs();
+  </script>
+</body>
+</html>

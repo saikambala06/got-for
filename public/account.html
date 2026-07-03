@@ -1,151 +1,224 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Account — SK VK</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/app.css" />
-<style>
-  .acc-layout{ display:grid; grid-template-columns: 220px 1fr; gap:18px; align-items:start; }
-  .acc-tab{ padding:11px 14px; border-radius:10px; font-size:14px; font-weight:500; color:var(--text-dim); cursor:pointer; margin-bottom:4px; display:flex; align-items:center; gap:10px; }
-  .acc-tab:hover{ background:var(--surface-2); }
-  .acc-tab.active{ background:var(--accent-soft); color:var(--accent-2); font-weight:600; }
-  .acc-panel{ display:none; }
-  .acc-panel.active{ display:block; }
-  .big-avatar{ width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LetMeApply - Account</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public/css/style.css">
 </head>
 <body>
-<div class="app">
-  <div id="sidebar-root" data-active="account"></div>
+  <div class="app-layout" id="app">
+    <div id="sidebar-container"></div>
+    <div class="main-content">
+      <div id="topbar-container"></div>
+      <div class="page-content">
+        <h1 class="page-title">Account</h1>
+        <p class="page-subtitle">Manage your account settings</p>
 
-  <main class="main">
-    <div class="topbar">
-      <div>
-        <div class="page-title">Account</div>
-        <div class="page-sub">Manage your profile and security.</div>
+        <div class="account-layout">
+          <div class="account-nav-panel">
+            <button class="account-nav-item active" id="nav-profile" onclick="switchTab('profile')">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Profile
+            </button>
+            <button class="account-nav-item" id="nav-security" onclick="switchTab('security')">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Security
+            </button>
+            <button class="account-nav-item" id="nav-billing" onclick="switchTab('billing')">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              Billing
+            </button>
+          </div>
+
+          <div class="account-content-panel" id="account-content"></div>
+
+          <div class="account-side-panel" id="account-side"></div>
+        </div>
       </div>
     </div>
+  </div>
 
-    <div class="acc-layout">
-      <div class="card" style="padding:10px;">
-        <div class="acc-tab active" data-tab="profile">Profile</div>
-        <div class="acc-tab" data-tab="security">Security</div>
-        <div class="acc-tab" data-tab="plan">Plan</div>
-      </div>
+  <script src="/public/js/common.js"></script>
+  <script>
+    if (!checkAuth()) throw new Error('Not authenticated');
 
-      <div>
-        <div class="card section-card acc-panel active" id="panel-profile">
-          <div class="section-head"><div><h3>Profile details</h3><p>This information stays private to your account.</p></div></div>
-          <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
-            <div class="big-avatar" data-user-avatar>?</div>
+    document.getElementById('sidebar-container').innerHTML = getSidebarHTML('account');
+    document.getElementById('topbar-container').innerHTML = getTopbarHTML();
+    loadPlanInfo();
+
+    let currentUser = null;
+    let activeTab = 'profile';
+
+    async function loadUser() {
+      try {
+        const data = await apiCall('/account/profile');
+        if (data) {
+          currentUser = data.user;
+          renderContent();
+          renderSide();
+        }
+      } catch (err) {
+        showToast('Failed to load profile', 'error');
+      }
+    }
+
+    function switchTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.account-nav-item').forEach(el => el.classList.remove('active'));
+      document.getElementById(`nav-${tab}`).classList.add('active');
+      renderContent();
+    }
+
+    function renderContent() {
+      const content = document.getElementById('account-content');
+
+      if (activeTab === 'profile') {
+        content.innerHTML = `
+          <div class="account-content-header">
+            <h3 style="font-size:18px; font-weight:700;">Profile</h3>
+          </div>
+          <div class="account-content-body">
+            <div class="form-group">
+              <label class="form-label">Full Name</label>
+              <input type="text" class="form-input" id="profile-name" value="${currentUser.name || ''}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" id="profile-email" value="${currentUser.email || ''}" disabled style="opacity:0.6; cursor:not-allowed;">
+              <small style="color:var(--text-muted); font-size:12px; margin-top:4px; display:block;">Email cannot be changed</small>
+            </div>
+            <button class="btn btn-primary" onclick="saveProfile()" style="margin-top:8px;">Save Changes</button>
+          </div>
+        `;
+      } else if (activeTab === 'security') {
+        content.innerHTML = `
+          <div class="account-content-header">
+            <h3 style="font-size:18px; font-weight:700;">Security</h3>
+          </div>
+          <div class="account-content-body">
+            <div class="form-group">
+              <label class="form-label">Current Password</label>
+              <input type="password" class="form-input" id="current-password" placeholder="Enter current password">
+            </div>
+            <div class="form-group">
+              <label class="form-label">New Password</label>
+              <input type="password" class="form-input" id="new-password" placeholder="Enter new password" minlength="6">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Confirm New Password</label>
+              <input type="password" class="form-input" id="confirm-password" placeholder="Re-enter new password" minlength="6">
+            </div>
+            <button class="btn btn-primary" onclick="changePassword()" style="margin-top:8px;">Update Password</button>
+          </div>
+        `;
+      } else if (activeTab === 'billing') {
+        content.innerHTML = `
+          <div class="account-content-header">
+            <h3 style="font-size:18px; font-weight:700;">Billing</h3>
+          </div>
+          <div class="account-content-body">
+            <div style="background:var(--bg-tertiary); border-radius:12px; padding:20px; margin-bottom:20px;">
+              <div style="font-size:15px; font-weight:700; margin-bottom:4px;">Current Plan: ${currentUser.plan === 'pro' ? 'Pro' : 'Free'}</div>
+              <div style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">
+                ${currentUser.plan === 'pro' ? 'You have access to all features.' : 'Upgrade to unlock unlimited job extractions and tailored resumes.'}
+              </div>
+              ${currentUser.plan === 'free' ? '<button class="btn btn-primary" onclick="showToast(\'Upgrade coming soon\')">Upgrade to Pro</button>' : ''}
+            </div>
             <div>
-              <div style="font-weight:700;font-size:16px;" data-user-name>—</div>
-              <div style="font-size:13px;color:var(--text-faint);" data-user-email>—</div>
+              <div style="font-size:15px; font-weight:600; margin-bottom:12px;">Usage</div>
+              <div class="plan-stat" style="margin-bottom:4px;"><span>Job Extractions</span><span>${currentUser.jobExtractions || 0} / ${currentUser.jobExtractionsLimit || 6}</span></div>
+              <div class="plan-bar" style="margin-bottom:16px;"><div class="plan-bar-fill" style="width: ${((currentUser.jobExtractions || 0) / (currentUser.jobExtractionsLimit || 6)) * 100}%"></div></div>
+              <div class="plan-stat" style="margin-bottom:4px;"><span>Tailored Resumes</span><span>${currentUser.tailoredResumes || 0} / ${currentUser.tailoredResumesLimit || 2}</span></div>
+              <div class="plan-bar"><div class="plan-bar-fill" style="width: ${((currentUser.tailoredResumes || 0) / (currentUser.tailoredResumesLimit || 2)) * 100}%"></div></div>
             </div>
           </div>
-          <form id="profileForm">
-            <div class="form-grid">
-              <div class="field"><label>Full name</label><input id="pName" required /></div>
-              <div class="field"><label>Email</label><input id="pEmail" disabled style="opacity:.6" /></div>
-              <div class="field"><label>Phone</label><input id="pPhone" placeholder="+1 (555) 000-0000" /></div>
-              <div class="field"><label>Location</label><input id="pLocation" placeholder="City, State" /></div>
-              <div class="field"><label>LinkedIn URL</label><input id="pLinkedin" placeholder="linkedin.com/in/…" /></div>
-              <div class="field"><label>Portfolio / website</label><input id="pPortfolio" placeholder="https://…" /></div>
-            </div>
-            <div style="display:flex;justify-content:flex-end;margin-top:22px;">
-              <button class="btn btn-primary" type="submit" id="saveProfileBtn">Save changes</button>
-            </div>
-          </form>
-        </div>
+        `;
+      }
+    }
 
-        <div class="card section-card acc-panel" id="panel-security">
-          <div class="section-head"><div><h3>Change password</h3><p>Use a strong password you don't use elsewhere.</p></div></div>
-          <form id="passwordForm" style="max-width:400px;">
-            <div class="field" style="margin-bottom:16px;"><label>Current password</label><input type="password" id="curPass" required /></div>
-            <div class="field" style="margin-bottom:16px;"><label>New password</label><input type="password" id="newPass" required placeholder="At least 6 characters" /></div>
-            <button class="btn btn-primary" type="submit" id="savePassBtn">Update password</button>
-          </form>
-        </div>
-
-        <div class="card section-card acc-panel" id="panel-plan">
-          <div class="section-head"><div><h3>Your plan</h3><p>SK VK is, and always will be, free.</p></div></div>
-          <div class="plan-card" style="max-width:360px;">
-            <div class="plan-title">Current plan</div>
-            <div class="plan-name">⚡ Free, forever</div>
-            <div class="plan-row"><span>Applications tracked</span><span>Unlimited</span></div>
-            <div class="plan-row"><span>Resumes</span><span>Unlimited</span></div>
-            <div class="plan-row"><span>Cost</span><span>$0 / month</span></div>
+    function renderSide() {
+      const side = document.getElementById('account-side');
+      const connected = currentUser.connectedAccounts || [];
+      side.innerHTML = `
+        <div class="avatar">${getInitials(currentUser.name)}</div>
+        <div class="account-name">${currentUser.name}</div>
+        <div class="account-email">${currentUser.email}</div>
+        <div style="font-size:13px; font-weight:600; color:var(--text-secondary); text-align:left; margin-top:20px; margin-bottom:8px;">Connected Accounts</div>
+        ${connected.length > 0 ? connected.map(a => `
+          <div class="connected-account">
+            <div class="connected-icon">${a.provider === 'google' ? 'G' : '?'}</div>
+            <div class="connected-info">
+              <div class="connected-provider">${a.provider}</div>
+              <div class="connected-email">${a.email}</div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </main>
-</div>
+        `).join('') : `
+          <div class="connected-account">
+            <div class="connected-icon">G</div>
+            <div class="connected-info">
+              <div class="connected-provider">Google</div>
+              <div class="connected-email">Not connected</div>
+            </div>
+          </div>
+        `}
+      `;
+    }
 
-<script src="/js/api.js"></script>
-<script src="/js/sidebar.js"></script>
-<script>
-document.querySelectorAll('.acc-tab').forEach((tab) => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.acc-tab').forEach((t) => t.classList.remove('active'));
-    document.querySelectorAll('.acc-panel').forEach((p) => p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById(`panel-${tab.dataset.tab}`).classList.add('active');
-  });
-});
+    async function saveProfile() {
+      const name = document.getElementById('profile-name').value.trim();
+      try {
+        const data = await apiCall('/account/profile', {
+          method: 'PUT',
+          body: JSON.stringify({ name })
+        });
+        if (data) {
+          currentUser = data.user;
+          setUser({ ...getUser(), name: data.user.name });
+          renderSide();
+          showToast('Profile updated');
+        }
+      } catch (err) {
+        showToast('Failed to update profile', 'error');
+      }
+    }
 
-(async function init() {
-  const user = await requireSession();
-  if (!user) return;
-  document.getElementById('pName').value = user.name || '';
-  document.getElementById('pEmail').value = user.email || '';
-  document.getElementById('pPhone').value = user.phone || '';
-  document.getElementById('pLocation').value = user.location || '';
-  document.getElementById('pLinkedin').value = user.linkedin || '';
-  document.getElementById('pPortfolio').value = user.portfolio || '';
-})();
+    async function changePassword() {
+      const currentPassword = document.getElementById('current-password').value;
+      const newPassword = document.getElementById('new-password').value;
+      const confirmPassword = document.getElementById('confirm-password').value;
 
-document.getElementById('profileForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = document.getElementById('saveProfileBtn');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try {
-    await api.put('/api/account/profile', {
-      name: document.getElementById('pName').value.trim(),
-      phone: document.getElementById('pPhone').value.trim(),
-      location: document.getElementById('pLocation').value.trim(),
-      linkedin: document.getElementById('pLinkedin').value.trim(),
-      portfolio: document.getElementById('pPortfolio').value.trim()
-    });
-    showToast('Profile updated');
-    document.querySelectorAll('[data-user-name]').forEach((el) => el.textContent = document.getElementById('pName').value.trim());
-  } catch (err) {
-    showToast(err.message, 'error');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Save changes';
-  }
-});
+      if (!currentPassword || !newPassword) {
+        showToast('Please fill in all fields', 'error');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return;
+      }
+      if (newPassword.length < 6) {
+        showToast('Password must be at least 6 characters', 'error');
+        return;
+      }
 
-document.getElementById('passwordForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = document.getElementById('savePassBtn');
-  btn.disabled = true; btn.textContent = 'Updating…';
-  try {
-    await api.put('/api/account/password', {
-      currentPassword: document.getElementById('curPass').value,
-      newPassword: document.getElementById('newPass').value
-    });
-    showToast('Password updated');
-    document.getElementById('passwordForm').reset();
-  } catch (err) {
-    showToast(err.message, 'error');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Update password';
-  }
-});
-</script>
+      try {
+        await apiCall('/account/security', {
+          method: 'PUT',
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+        document.getElementById('current-password').value = '';
+        document.getElementById('new-password').value = '';
+        document.getElementById('confirm-password').value = '';
+        showToast('Password updated');
+      } catch (err) {
+        showToast(err.message || 'Failed to update password', 'error');
+      }
+    }
+
+    loadUser();
+  </script>
 </body>
 </html>
