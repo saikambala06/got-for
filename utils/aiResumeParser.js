@@ -97,9 +97,15 @@ STRICT EXTRACTION RULES — READ EVERY RULE CAREFULLY:
 
 PERSONAL INFO:
 - name: The person's FULL NAME at the very top — usually the first non-blank line. Extract exactly, including middle names.
+  * Must be a real human name (First Last, or First Middle Last).
+  * NEVER a 1-3 character abbreviation, initials, "Resume", "CV", or a job title.
+  * If the top of the resume shows initials/nickname followed by the full name on the next line, use the FULL NAME.
+  * If no clean full name is found, return "" — do NOT guess.
 - email: Find any text matching word@domain.tld. Copy verbatim.
 - phone: Any phone number. Include country code if shown (+1, +91, etc.).
-- location: City, State/Country. Look near the name/contact section. If just a city, use that.
+- location: City, State/Country. Must be a real geographic place (e.g. "Redmond, WA", "Mumbai, India").
+  * NEVER put a job description sentence, skill, or bullet text into location.
+  * If unsure, return "".
 - linkedin: Any URL or path containing "linkedin.com". Preserve the full URL.
 - portfolio: Any GitHub URL (github.com/...), personal website, or other portfolio link that is NOT LinkedIn.
 
@@ -107,23 +113,37 @@ WORK EXPERIENCE — Most critical section. Each job must be a separate object:
 - role: The EXACT job title as written (e.g. "Senior Software Engineer", "Product Manager II"). Do NOT paraphrase.
 - company: The EXACT company/employer name as written. Do NOT abbreviate.
 - location: City, State where the job was located (if shown). May be "Remote".
+  * Only include if the resume explicitly shows a city/state next to that job.
+  * NEVER copy a bullet point or description sentence into location.
+  * Must be short (< 40 chars), typically "City, ST" or "Remote".
+  * If unsure, return "".
 - startDate: Exact start date as written (e.g. "Jan 2020", "2/2018", "March 2021"). Never infer.
 - endDate: Exact end date as written, OR "Present" if the person currently works there.
 - current: Set to true ONLY when "Present", "Current", "Now", or "Ongoing" is the end date.
-- description: Extract EVERY bullet point, dash, or numbered item listed under this job. 
-  Put EACH bullet on its own line separated by \\n.
-  Include the full text of each bullet — do NOT truncate, summarize, or omit any.
-  Preserve quantitative metrics exactly: "40%", "$2M", "10k users", etc.
-  If bullets span multiple lines visually, merge them into one logical bullet.
+- description: Extract EVERY bullet point, dash, or numbered item listed under this job.
+  * Put EACH bullet on its own line separated by \\n.
+  * Include the full text of each bullet — do NOT truncate, summarize, or omit any.
+  * Preserve quantitative metrics exactly: "40%", "$2M", "10k users", etc.
+  * If bullets span multiple lines visually (soft-wrapped), merge them into ONE logical bullet.
+  * If a line starts with a lowercase word or continues a sentence from the previous line, it belongs to the previous bullet — do NOT create a new one.
 
 EDUCATION:
 - Extract institution name, degree type, field of study, location, start year, end year exactly.
 - field: The major/subject (e.g. "Computer Science", "Business Administration").
 
-SKILLS:
-- Extract EVERY skill mentioned ANYWHERE in the resume as individual array items.
+SKILLS — VERY IMPORTANT:
+- Skills lists are often written as "Category: item1, item2, item3" (e.g. "Cloud Platforms: Azure, AWS, GCP").
+- Extract ONLY the actual items (item1, item2, item3) — NEVER include the category label ("Cloud Platforms", "DevOps Tools", "Databases", "Infrastructure as Code", "Containers & Orchestration", etc.) as a skill.
+- NEVER include a colon character in any skill name.
+- NEVER prefix a skill with a colon (e.g. ":Docker" is WRONG — use "Docker").
+- Each skill should be a clean, standalone technology/tool/competency name.
 - Split comma-separated lists into separate items.
-- Include: languages, frameworks, tools, platforms, methodologies, certifications, soft skills.
+- Include: languages, frameworks, tools, platforms, methodologies, soft skills.
+- Do NOT include duplicates.
+
+CERTIFICATIONS:
+- "name" is the certification title only.
+- "issuer" is the organization (Microsoft, AWS, Google, Databricks, etc.) — extract separately when identifiable.
 
 GENERAL:
 - Preserve all dates exactly as written.
@@ -132,8 +152,110 @@ GENERAL:
 - Do NOT merge different jobs into one object.
 - Do NOT invent or infer information not present in the resume text.`;
 
+// ─── Helpers used by sanitizeParsed ──────────────────────────────────────────
+
+const SKILL_CATEGORY_LABELS = new Set([
+  'cloud platforms', 'devops tools', 'infrastructure as code',
+  'containers & orchestration', 'ci/cd & release management',
+  'scripting & automation', 'monitoring & logging',
+  'security & devsecops', 'databases', 'operating systems',
+  'programming languages', 'frameworks', 'tools', 'technologies',
+  'languages', 'methodologies', 'soft skills', 'other',
+  'version control', 'collaboration', 'cloud', 'devops'
+]);
+
+function cleanSkill(s) {
+  if (!s) return '';
+  let t = String(s).trim();
+  // Strip leading/trailing colons, dashes, bullets, whitespace
+  t = t.replace(/^[:\-•\u2022\s]+/, '').replace(/[:\-\s]+$/, '').trim();
+  if (!t) return '';
+  if (SKILL_CATEGORY_LABELS.has(t.toLowerCase())) return '';
+  if (t.length > 60) return '';
+  // Reject anything containing a colon in the middle (likely a mis-split
+  // "Category: item" leftover)
+  if (t.includes(':')) return '';
+  return t;
+}
+
+function flattenSkills(val) {
+  if (val == null) return [];
+  if (typeof val === 'string') {
+    // Handle "Category: item1, item2, item3" — drop the category prefix
+    const colonIdx = val.indexOf(':');
+    let listPart = val;
+    if (colonIdx > 0 && colonIdx < 40) {
+      const label = val.slice(0, colonIdx).trim().toLowerCase();
+      if (SKILL_CATEGORY_LABELS.has(label) || /^[A-Z][A-Za-z &/]{2,30}$/.test(val.slice(0, colonIdx).trim())) {
+        listPart = val.slice(colonIdx + 1);
+      }
+    }
+    return listPart.split(/[,;|\n]/).map(cleanSkill).filter(Boolean);
+  }
+  if (Array.isArray(val)) return val.flatMap(flattenSkills);
+  if (typeof val === 'object') {
+    // Common shapes: { category, items }, { name: "..." }, { skill: "..." }
+    if (Array.isArray(val.items)) return flattenSkills(val.items);
+    if (Array.isArray(val.skills)) return flattenSkills(val.skills);
+    if (Array.isArray(val.values)) return flattenSkills(val.values);
+    const single = cleanSkill(val.name || val.skill || val.value || val.label || '');
+    return single ? [single] : [];
+  }
+  return [];
+}
+
+function isPlausibleName(n) {
+  if (!n) return false;
+  const t = String(n).trim();
+  if (t.length < 4 || t.length > 60) return false;
+  if (/[@\d]/.test(t)) return false;
+  if (/https?:\/\//i.test(t)) return false;
+  if (/^(resume|cv|curriculum vitae)$/i.test(t)) return false;
+  if (!/^[A-Za-z][A-Za-z .'\-]+$/.test(t)) return false;
+  return t.split(/\s+/).length >= 2;
+}
+
+function cleanName(n) {
+  if (!n) return '';
+  const t = String(n).trim();
+  return isPlausibleName(t) ? t : '';
+}
+
+function isPlausibleLocation(l) {
+  if (!l) return false;
+  const t = String(l).trim();
+  if (t.length < 2 || t.length > 60) return false;
+  if (/[.!?]$/.test(t)) return false;
+  if (/^[a-z]/.test(t)) return false;
+  if (/^(and|or|with|for|to|by|in|on|of|the)\b/i.test(t)) return false;
+  return true;
+}
+
+// Merge soft-wrapped bullet continuations produced by mammoth's line
+// splitting on long paragraphs.
+function mergeWrappedBullets(text) {
+  if (!text) return '';
+  const lines = String(text).split('\n').map((l) => l.replace(/\s+$/, '')).filter((l) => l.length > 0);
+  const out = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const prev = out[out.length - 1];
+    const isBulletStart = /^[•\u2022\-*▪○●]/.test(trimmed);
+    const startsLower = /^[a-z]/.test(trimmed);
+    const startsWithConj = /^(and|or|with|for|to|by|in|on|of|the|a|an|but|which|that|while)\b/i.test(trimmed);
+    const prevIncomplete = prev && /[a-z,]$/.test(prev.trim());
+
+    if (prev && !isBulletStart && (startsLower || startsWithConj || prevIncomplete)) {
+      out[out.length - 1] = prev.replace(/\s+$/, '') + ' ' + trimmed;
+    } else {
+      out.push(line);
+    }
+  }
+  // Strip leading bullet glyphs for consistency
+  return out.map((l) => l.replace(/^[•\u2022\-*▪○●]\s*/, '')).join('\n');
+}
+
 function sanitizeParsed(p) {
-  // str: coerce any value to string, try multiple key aliases
   const str = (...vals) => {
     for (const v of vals) {
       if (typeof v === 'string' && v.trim()) return v.trim();
@@ -141,26 +263,29 @@ function sanitizeParsed(p) {
     }
     return '';
   };
-  const bool = (...vals) => vals.some(v => v === true || v === 'true' || v === 'yes');
+  const bool = (...vals) => vals.some((v) => v === true || v === 'true' || v === 'yes');
   const arr  = (v) => (Array.isArray(v) ? v : []);
 
-  // Normalise bullet descriptions: handle arrays, objects, or strings
   const normDesc = (x) => {
     const raw = x?.description ?? x?.responsibilities ?? x?.achievements ??
                 x?.duties ?? x?.bullets ?? x?.highlights ?? x?.summary ?? '';
-    if (Array.isArray(raw)) return raw.map(String).join('\n');
-    if (typeof raw === 'string') return raw;
-    return '';
+    let text = '';
+    if (Array.isArray(raw)) text = raw.map(String).join('\n');
+    else if (typeof raw === 'string') text = raw;
+    return mergeWrappedBullets(text);
   };
 
-  // personal: try both flat and nested shapes the model might return
   const personal = p?.personal ?? p?.contact ?? p ?? {};
+
   return {
     personal: {
-      name:      str(personal?.name, personal?.fullName, personal?.full_name, p?.name),
+      name:      cleanName(str(personal?.name, personal?.fullName, personal?.full_name, p?.name)),
       email:     str(personal?.email, personal?.emailAddress, personal?.email_address, p?.email),
       phone:     str(personal?.phone, personal?.phoneNumber, personal?.mobile, personal?.telephone, p?.phone),
-      location:  str(personal?.location, personal?.address, personal?.city, personal?.cityState, p?.location),
+      location:  (() => {
+        const l = str(personal?.location, personal?.address, personal?.city, personal?.cityState, p?.location);
+        return isPlausibleLocation(l) ? l : '';
+      })(),
       linkedin:  str(personal?.linkedin, personal?.linkedIn, personal?.linkedinUrl, personal?.linkedin_url, p?.linkedin),
       portfolio: str(personal?.portfolio, personal?.website, personal?.github, personal?.portfolioUrl, personal?.url, p?.portfolio),
     },
@@ -169,10 +294,13 @@ function sanitizeParsed(p) {
       const endRaw = str(x?.endDate, x?.end_date, x?.end, x?.to, x?.endYear);
       const isCurrent = bool(x?.current, x?.isCurrent, x?.is_current) ||
                         /\b(present|current|now|ongoing)\b/i.test(endRaw);
+      let loc = str(x?.location, x?.city, x?.place, x?.jobLocation);
+      // Guard: reject bullet-fragment leakage into location field
+      if (loc && !isPlausibleLocation(loc)) loc = '';
       return {
         role:      str(x?.role, x?.title, x?.jobTitle, x?.job_title, x?.position, x?.designation),
         company:   str(x?.company, x?.employer, x?.organization, x?.companyName, x?.company_name, x?.firm),
-        location:  str(x?.location, x?.city, x?.place, x?.jobLocation),
+        location:  loc,
         startDate: str(x?.startDate, x?.start_date, x?.start, x?.from, x?.startYear),
         endDate:   isCurrent ? 'Present' : endRaw,
         current:   isCurrent,
@@ -183,40 +311,54 @@ function sanitizeParsed(p) {
       school:    str(x?.school, x?.institution, x?.university, x?.college, x?.name),
       degree:    str(x?.degree, x?.qualification, x?.credential, x?.award),
       field:     str(x?.field, x?.major, x?.fieldOfStudy, x?.field_of_study, x?.subject, x?.specialization),
-      location:  str(x?.location, x?.city, x?.place),
+      location:  (() => {
+        const l = str(x?.location, x?.city, x?.place);
+        return isPlausibleLocation(l) ? l : '';
+      })(),
       startDate: str(x?.startDate, x?.start_date, x?.start, x?.from, x?.startYear),
       endDate:   str(x?.endDate, x?.end_date, x?.end, x?.to, x?.endYear, x?.graduationYear),
       current:   bool(x?.current, x?.isCurrent, x?.enrolled),
       description: str(x?.description, x?.notes, x?.activities),
     })),
     skills: (() => {
-      // skills might be array of strings, array of objects, or a single comma-separated string
       const raw = p?.skills ?? p?.technicalSkills ?? p?.technical_skills ?? [];
-      if (typeof raw === 'string') return raw.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
-      return arr(raw).flatMap(s => {
-        if (typeof s === 'string') return s.split(/[,;|]/).map(t => t.trim()).filter(Boolean);
-        if (typeof s === 'object' && s !== null) {
-          return [str(s?.name, s?.skill, s?.value)].filter(Boolean);
-        }
-        return [];
-      });
+      const list = flattenSkills(raw);
+      // Dedupe (case-insensitive), preserve first-seen order
+      const seen = new Set();
+      const deduped = [];
+      for (const s of list) {
+        const k = s.toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        deduped.push(s);
+      }
+      return deduped.slice(0, 80);
     })(),
     projects: arr(p?.projects ?? p?.sideProjects ?? p?.side_projects).map((x) => ({
       name:        str(x?.name, x?.title, x?.projectName),
       link:        str(x?.link, x?.url, x?.github, x?.website),
       description: str(x?.description, x?.summary, x?.details),
     })),
-    certifications: arr(p?.certifications ?? p?.certificates ?? p?.credentials).map((x) => ({
-      name:   str(x?.name, x?.title, x?.certification),
-      issuer: str(x?.issuer, x?.issuedBy, x?.organization, x?.provider, x?.authority),
-      date:   str(x?.date, x?.year, x?.issued, x?.issuedDate),
-    })),
-    achievements: arr(p?.achievements ?? p?.honors ?? p?.awards).map(a => {
+    certifications: arr(p?.certifications ?? p?.certificates ?? p?.credentials).map((x) => {
+      let name   = str(x?.name, x?.title, x?.certification);
+      let issuer = str(x?.issuer, x?.issuedBy, x?.organization, x?.provider, x?.authority);
+      // If issuer missing but name mentions a known issuer, extract it
+      if (!issuer && name) {
+        const m = name.match(/\b(Microsoft|AWS|Amazon|Google|Cisco|Oracle|IBM|Coursera|Udemy|PMI|CompTIA|Databricks|Snowflake|HashiCorp|Red Hat|Kubernetes|Linux Foundation|Salesforce|Adobe)\b/i);
+        if (m) issuer = m[1];
+      }
+      return {
+        name,
+        issuer,
+        date: str(x?.date, x?.year, x?.issued, x?.issuedDate),
+      };
+    }),
+    achievements: arr(p?.achievements ?? p?.honors ?? p?.awards).map((a) => {
       if (typeof a === 'string') return a.trim();
       if (typeof a === 'object' && a !== null) return str(a?.title, a?.name, a?.description);
       return '';
     }).filter(Boolean),
-    languages: arr(p?.languages).map(l => {
+    languages: arr(p?.languages).map((l) => {
       if (typeof l === 'string') return l.trim();
       if (typeof l === 'object' && l !== null) {
         const name  = str(l?.language, l?.name);
@@ -236,26 +378,51 @@ function sanitizeParsed(p) {
 /**
  * Parse a raw resume text into structured fields using xAI Grok.
  * Falls back to the regex parser if the API key is absent or the call fails.
+ * If the AI result has obviously missing critical fields (e.g. name), we
+ * try to backfill from the regex parser rather than shipping empty data.
  */
 async function parseResumeWithAI(rawText) {
+  const regexResult = parseResumeText(rawText);
+
   if (!process.env.XAI_API_KEY) {
     console.warn('[aiResumeParser] XAI_API_KEY not set — using regex fallback');
-    return parseResumeText(rawText);
+    return regexResult;
   }
 
   try {
-    const trimmed = rawText.slice(0, 12000); // generous limit — resumes can be long
+    const trimmed = rawText.slice(0, 12000);
     const json = await callXAI(
       [
         { role: 'system', content: PARSE_SYSTEM_PROMPT },
         { role: 'user', content: `Parse this resume completely and accurately. Return ONLY raw JSON, no markdown:\n\n${trimmed}` }
       ],
-      4000 // enough for dense resumes with many bullet points
+      4000
     );
-    return sanitizeParsed(JSON.parse(json));
+    const aiResult = sanitizeParsed(JSON.parse(json));
+
+    // Backfill from regex parser when AI leaves critical fields blank
+    if (!aiResult.personal.name && regexResult.personal.name) {
+      aiResult.personal.name = regexResult.personal.name;
+    }
+    if (!aiResult.personal.email && regexResult.personal.email) {
+      aiResult.personal.email = regexResult.personal.email;
+    }
+    if (!aiResult.personal.phone && regexResult.personal.phone) {
+      aiResult.personal.phone = regexResult.personal.phone;
+    }
+    if (!aiResult.personal.location && regexResult.personal.location) {
+      aiResult.personal.location = regexResult.personal.location;
+    }
+    if (!aiResult.personal.linkedin && regexResult.personal.linkedin) {
+      aiResult.personal.linkedin = regexResult.personal.linkedin;
+    }
+    if ((!aiResult.skills || aiResult.skills.length === 0) && regexResult.skills.length) {
+      aiResult.skills = regexResult.skills;
+    }
+    return aiResult;
   } catch (err) {
     console.error('[aiResumeParser] AI parse failed, falling back to regex:', err.message);
-    return parseResumeText(rawText);
+    return regexResult;
   }
 }
 
