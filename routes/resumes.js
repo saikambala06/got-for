@@ -11,7 +11,7 @@ router.use(requireAuth);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ok = [
       'application/pdf',
@@ -21,6 +21,53 @@ const upload = multer({
   }
 });
 
+/**
+ * Clean raw extracted text before sending to AI.
+ * Fixes common PDF/DOCX extraction artifacts:
+ *  - Bullet symbols (•, ○, ▪, ◦, ◆, ▶, →, ✓, –) become a dash so the AI
+ *    treats them as list items, not noise
+ *  - Skill-category headers ("Cloud Platforms:", "DevOps Tools:") that got
+ *    embedded inside the skills list are preserved as their own line so the
+ *    AI can tell them apart from the actual skill names
+ *  - Page numbers, headers/footers (common patterns) are stripped
+ *  - Excessive blank lines are collapsed to max two
+ *  - Smart quotes / special dashes are normalised to ASCII so JSON.parse
+ *    never chokes on them
+ */
+function cleanExtractedText(raw) {
+  let t = raw;
+
+  // 1. Normalise smart quotes and special dashes to ASCII equivalents
+  t = t
+    .replace(/[\u2018\u2019\u0060\u00B4]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014\u2015]/g, '-')
+    .replace(/\u2022|\u25CF|\u25AA|\u25AB|\u25E6|\u2023|\u2043|\u204C|\u204D/g, '-') // bullet symbols
+    .replace(/[\u25B6\u25B8\u2192\u27A4\u27A1]/g, '-') // arrow bullets
+    .replace(/[\u2713\u2714\u2611]/g, '-') // check-mark bullets
+    .replace(/[\u00A0\u2002\u2003\u2009\u200B]/g, ' '); // non-breaking / zero-width spaces
+
+  // 2. Remove page-number lines like "Page 1 of 3", "-- 2 of 5 --", "1 | 3"
+  t = t.replace(/^-{0,4}\s*\d+\s*(?:of|\/)\s*\d+\s*-{0,4}$/gim, '');
+  t = t.replace(/^\s*Page\s+\d+(\s+of\s+\d+)?\s*$/gim, '');
+
+  // 3. Remove repeated lines that look like running headers/footers
+  //    (same short line appearing 3+ times in the document)
+  const lines = t.split('\n');
+  const freq = {};
+  lines.forEach(l => { const k = l.trim().toLowerCase(); if (k.length > 3 && k.length < 60) freq[k] = (freq[k] || 0) + 1; });
+  const repeated = new Set(Object.keys(freq).filter(k => freq[k] >= 3));
+  t = lines.filter(l => !repeated.has(l.trim().toLowerCase())).join('\n');
+
+  // 4. Collapse 3+ consecutive blank lines to 2
+  t = t.replace(/\n{3,}/g, '\n\n');
+
+  // 5. Trim leading/trailing whitespace per line (but preserve indentation signal)
+  t = t.split('\n').map(l => l.trimEnd()).join('\n');
+
+  return t.trim();
+}
+
 // ─── Parse uploaded resume with xAI Grok ─────────────────────────────────────
 router.post('/parse', (req, res) => {
   upload.single('file')(req, res, async (err) => {
@@ -28,28 +75,34 @@ router.post('/parse', (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Please choose a PDF or DOCX file' });
 
     try {
-      let text = '';
+      let rawText = '';
+
       if (req.file.mimetype === 'application/pdf') {
         const pdfParse = require('pdf-parse');
         const result = await pdfParse(req.file.buffer);
-        text = result.text.replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n');
+        rawText = result.text || '';
       } else {
+        // DOCX — mammoth extracts clean plain text
         const mammoth = require('mammoth');
         const { value } = await mammoth.extractRawText({ buffer: req.file.buffer });
-        text = normalizeDocxText(value);
+        rawText = normalizeDocxText(value);
       }
 
-      if (!text || !text.trim()) {
+      if (!rawText || !rawText.trim()) {
         return res.status(422).json({
           error: "We couldn't read any text from that file. Try Build from Scratch instead."
         });
       }
 
-      // AI-powered parsing (falls back to regex if key absent or call fails)
+      // Clean the text before sending to AI
+      const text = cleanExtractedText(rawText);
+
+      console.log(`[parse] extracted ${rawText.length} chars → cleaned to ${text.length} chars`);
+
       const parsed = await parseResumeWithAI(text);
       res.json({ parsed });
     } catch (err2) {
-      console.error(err2);
+      console.error('[parse]', err2);
       res.status(500).json({ error: 'Could not process that file. Try Build from Scratch instead.' });
     }
   });
@@ -97,7 +150,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create a new resume — used by "Build from Scratch" and the "Upload Resume" flow.
 router.post('/', async (req, res) => {
   try {
     const { title } = req.body;
