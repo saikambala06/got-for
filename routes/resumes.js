@@ -1,7 +1,7 @@
 const express = require('express');
-const multer = require('multer');
-const Resume = require('../models/Resume');
-const User = require('../models/User');
+const multer  = require('multer');
+const Resume  = require('../models/Resume');
+const User    = require('../models/User');
 const requireAuth = require('../middleware/auth');
 const { parseResumeWithAI, tailorResumeWithAI } = require('../utils/aiResumeParser');
 const { normalizeDocxText } = require('../utils/resumeParser');
@@ -22,107 +22,91 @@ const upload = multer({
 });
 
 /**
- * Clean raw extracted text before sending to AI.
- * Fixes common PDF/DOCX extraction artifacts:
- *  - Bullet symbols (•, ○, ▪, ◦, ◆, ▶, →, ✓, –) become a dash so the AI
- *    treats them as list items, not noise
- *  - Skill-category headers ("Cloud Platforms:", "DevOps Tools:") that got
- *    embedded inside the skills list are preserved as their own line so the
- *    AI can tell them apart from the actual skill names
- *  - Page numbers, headers/footers (common patterns) are stripped
- *  - Excessive blank lines are collapsed to max two
- *  - Smart quotes / special dashes are normalised to ASCII so JSON.parse
- *    never chokes on them
+ * Clean up raw PDF-extracted text before parsing:
+ * - Remove page-number artifacts
+ * - Remove repeated headers/footers (lines that appear 2+ times verbatim)
+ * - Normalise bullet characters
+ * - Collapse excessive blank lines
  */
-function cleanExtractedText(raw) {
-  let t = raw;
+function cleanPdfText(raw) {
+  const lines = raw.replace(/\r/g, '').split('\n');
 
-  // 1. Normalise smart quotes and special dashes to ASCII equivalents
-  t = t
-    .replace(/[\u2018\u2019\u0060\u00B4]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/[\u2013\u2014\u2015]/g, '-')
-    .replace(/\u2022|\u25CF|\u25AA|\u25AB|\u25E6|\u2023|\u2043|\u204C|\u204D/g, '-') // bullet symbols
-    .replace(/[\u25B6\u25B8\u2192\u27A4\u27A1]/g, '-') // arrow bullets
-    .replace(/[\u2713\u2714\u2611]/g, '-') // check-mark bullets
-    .replace(/[\u00A0\u2002\u2003\u2009\u200B]/g, ' '); // non-breaking / zero-width spaces
-
-  // 2. Remove page-number lines like "Page 1 of 3", "-- 2 of 5 --", "1 | 3"
-  t = t.replace(/^-{0,4}\s*\d+\s*(?:of|\/)\s*\d+\s*-{0,4}$/gim, '');
-  t = t.replace(/^\s*Page\s+\d+(\s+of\s+\d+)?\s*$/gim, '');
-
-  // 3. Remove repeated lines that look like running headers/footers
-  //    (same short line appearing 3+ times in the document)
-  const lines = t.split('\n');
+  // Count line frequencies — lines that appear 3+ times are likely headers/footers
   const freq = {};
-  lines.forEach(l => { const k = l.trim().toLowerCase(); if (k.length > 3 && k.length < 60) freq[k] = (freq[k] || 0) + 1; });
-  const repeated = new Set(Object.keys(freq).filter(k => freq[k] >= 3));
-  t = lines.filter(l => !repeated.has(l.trim().toLowerCase())).join('\n');
+  for (const l of lines) {
+    const t = l.trim();
+    if (t) freq[t] = (freq[t] || 0) + 1;
+  }
 
-  // 4. Collapse 3+ consecutive blank lines to 2
-  t = t.replace(/\n{3,}/g, '\n\n');
+  const cleaned = lines
+    .map(l => {
+      const t = l.trim();
+      // Remove page-number lines
+      if (/^--\s*\d+\s*(of\s+\d+)?\s*--$/i.test(t)) return '';
+      if (/^Page\s+\d+(\s+of\s+\d+)?$/i.test(t)) return '';
+      // Remove repeated header/footer lines
+      if (freq[t] >= 3) return '';
+      // Normalise bullets
+      return l.replace(/^[\s]*[\u2022\u25AA\u25CF\u2713\u2714\u25BA\u27A2\u27B3*▪▸]\s*/m, '- ');
+    });
 
-  // 5. Trim leading/trailing whitespace per line (but preserve indentation signal)
-  t = t.split('\n').map(l => l.trimEnd()).join('\n');
-
-  return t.trim();
+  return cleaned.join('\n')
+    .replace(/\n{4,}/g, '\n\n')   // collapse 4+ blank lines to 2
+    .trim();
 }
 
-// ─── Parse uploaded resume with xAI Grok ─────────────────────────────────────
+// ─── Parse uploaded resume ────────────────────────────────────────────────────
+
 router.post('/parse', (req, res) => {
   upload.single('file')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message || 'Could not read that file' });
     if (!req.file) return res.status(400).json({ error: 'Please choose a PDF or DOCX file' });
 
     try {
-      let rawText = '';
+      let text = '';
 
       if (req.file.mimetype === 'application/pdf') {
         const pdfParse = require('pdf-parse');
-        const result = await pdfParse(req.file.buffer);
-        rawText = result.text || '';
+        const result = await pdfParse(req.file.buffer, {
+          // Use raw text extraction without normalization — we clean it ourselves
+          normalizeWhitespace: false
+        });
+        text = cleanPdfText(result.text);
       } else {
-        // DOCX — mammoth extracts clean plain text
         const mammoth = require('mammoth');
         const { value } = await mammoth.extractRawText({ buffer: req.file.buffer });
-        rawText = normalizeDocxText(value);
+        text = normalizeDocxText(value);
       }
 
-      if (!rawText || !rawText.trim()) {
+      if (!text || !text.trim()) {
         return res.status(422).json({
           error: "We couldn't read any text from that file. Try Build from Scratch instead."
         });
       }
 
-      // Clean the text before sending to AI
-      const text = cleanExtractedText(rawText);
-
-      console.log(`[parse] extracted ${rawText.length} chars → cleaned to ${text.length} chars`);
-
       const parsed = await parseResumeWithAI(text);
       res.json({ parsed });
     } catch (err2) {
-      console.error('[parse]', err2);
+      console.error('[/parse]', err2);
       res.status(500).json({ error: 'Could not process that file. Try Build from Scratch instead.' });
     }
   });
 });
 
-// ─── Tailor an existing resume to a job description ───────────────────────────
+// ─── Tailor an existing resume ────────────────────────────────────────────────
+
 router.post('/:id/tailor', async (req, res) => {
   try {
     const resume = await Resume.findOne({ _id: req.params.id, user: req.userId });
     if (!resume) return res.status(404).json({ error: 'Resume not found' });
 
     const { jobTitle = '', jobDescription = '' } = req.body;
-    if (!jobDescription.trim()) {
-      return res.status(400).json({ error: 'Job description is required' });
-    }
+    if (!jobDescription.trim()) return res.status(400).json({ error: 'Job description is required' });
 
     const tailored = await tailorResumeWithAI(resume, jobTitle, jobDescription);
     res.json({ tailored });
   } catch (err) {
-    console.error('[tailor]', err.message);
+    console.error('[/tailor]', err.message);
     if (err.message.includes('XAI_API_KEY')) {
       return res.status(503).json({ error: 'AI features are not enabled on this server.' });
     }
@@ -131,6 +115,7 @@ router.post('/:id/tailor', async (req, res) => {
 });
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
+
 router.get('/', async (req, res) => {
   try {
     const resumes = await Resume.find({ user: req.userId }).sort({ updatedAt: -1 });
@@ -164,22 +149,19 @@ router.post('/', async (req, res) => {
       const user = await User.findById(req.userId);
       if (user) {
         personal = {
-          name: user.name || '',
-          email: user.email || '',
-          phone: user.phone || '',
-          location: user.location || '',
-          linkedin: user.linkedin || '',
+          name:      user.name      || '',
+          email:     user.email     || '',
+          phone:     user.phone     || '',
+          location:  user.location  || '',
+          linkedin:  user.linkedin  || '',
           portfolio: user.portfolio || ''
         };
       }
     }
 
-    const listFields = [
-      'experience', 'education', 'skills', 'projects',
-      'certifications', 'achievements', 'languages', 'publications'
-    ];
+    const listFields = ['experience', 'education', 'skills', 'projects', 'certifications', 'achievements', 'languages', 'publications'];
     const extra = {};
-    listFields.forEach((key) => {
+    listFields.forEach(key => {
       if (Array.isArray(req.body[key])) extra[key] = req.body[key];
     });
 
@@ -209,7 +191,7 @@ router.put('/:id', async (req, res) => {
       'skills', 'projects', 'certifications', 'achievements', 'languages', 'publications'
     ];
     const update = {};
-    allowed.forEach((key) => {
+    allowed.forEach(key => {
       if (req.body[key] !== undefined) update[key] = req.body[key];
     });
 
