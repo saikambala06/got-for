@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
 const ExperienceSchema = new mongoose.Schema({
-  company: { type: String, default: '' },
   role: { type: String, default: '' },
+  company: { type: String, default: '' },
   location: { type: String, default: '' },
   startDate: { type: String, default: '' },
   endDate: { type: String, default: '' },
