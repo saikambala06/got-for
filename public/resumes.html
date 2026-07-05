@@ -424,13 +424,16 @@ function collectStep(step) {
       break;
 
     case 'experience':
-      // Read every visible experience field directly from the DOM
-      document.querySelectorAll('[data-wexp]').forEach(el => {
+      // Read every visible experience field directly from the DOM.
+      // Exclude .wbullet-ta (description textareas) — those are rebuilt below.
+      document.querySelectorAll('[data-wexp]:not(.wbullet-ta)').forEach(el => {
         const i = Number(el.dataset.wexp);
         const k = el.dataset.k;
-        if (!wizardData.experience[i]) return;
+        if (!wizardData.experience[i] || k === 'description') return;
         wizardData.experience[i][k] = el.type === 'checkbox' ? el.checked : el.value;
       });
+      // Rebuild each entry's description by joining all its bullet textareas in order
+      wizardData.experience.forEach((_, idx) => rebuildDescription(idx));
       break;
 
     case 'education':
@@ -1533,9 +1536,9 @@ function renderExperience() {
       <div class="form-grid">
         <div class="field"><label>Job title</label><input data-f="experience.${i}.role" value="${escapeHtml(x.role)}" /></div>
         <div class="field"><label>Company name</label><input data-f="experience.${i}.company" value="${escapeHtml(x.company)}" /></div>
-        <div class="field"><label>Location</label><input data-f="experience.${i}.location" value="${escapeHtml(x.location)}" /></div>
         <div class="field"><label>Start date</label><input data-f="experience.${i}.startDate" placeholder="Jan 2022" value="${escapeHtml(x.startDate)}" /></div>
         <div class="field"><label>End date</label><input data-f="experience.${i}.endDate" placeholder="Present" value="${escapeHtml(x.endDate)}" /></div>
+        <div class="field"><label>Location</label><input data-f="experience.${i}.location" value="${escapeHtml(x.location)}" /></div>
         <div class="field" style="display:flex;align-items:center;gap:6px;"><label style="margin:0;"><input type="checkbox" data-f="experience.${i}.current" ${x.current ? 'checked' : ''} /> Current</label></div>
       </div>
       <div class="bullets-wrap">
