@@ -1264,26 +1264,12 @@ async function handleResumeFile(file) {
     formData.append('file', file);
     const { parsed } = await api.upload('/api/resumes/parse', formData);
 
-    // Directly create the resume with all parsed data — no wizard
-    const payload = {
-      title: name,
-      personal:       parsed.personal       || { name:'', email:'', phone:'', location:'', linkedin:'', portfolio:'' },
-      summary:        parsed.summary        || '',
-      experience:     parsed.experience     || [],
-      education:      parsed.education      || [],
-      skills:         parsed.skills         || [],
-      projects:       parsed.projects       || [],
-      certifications: parsed.certifications || [],
-      achievements:   parsed.achievements   || [],
-      languages:      parsed.languages      || [],
-      publications:   parsed.publications   || [],
-    };
-    const { resume } = await api.post('/api/resumes', payload);
-    resumes.unshift(resume);
     createBackdrop.classList.remove('open');
-    showToast('Resume imported — all fields filled! Review and save.', 'success');
+    showToast('AI extracted your resume data — review each section and create!', 'success');
+
+    // Open wizard in AI review mode (prefilled)
+    startWizard('__ai__' + name, parsed);
     renderList();
-    selectStandard(resume._id);
   } catch (err) {
     showToast(err.message || 'Could not parse that file', 'error');
     showModalOptions();
@@ -1292,20 +1278,12 @@ async function handleResumeFile(file) {
   }
 }
 
-document.getElementById('scratchOption').addEventListener('click', async () => {
+document.getElementById('scratchOption').addEventListener('click', () => {
   const name = document.getElementById('newResumeName').value.trim();
   if (!name) { showToast('Please enter a resume name', 'error'); return; }
   createBackdrop.classList.remove('open');
-  try {
-    const { resume } = await api.post('/api/resumes', { title: name, prefillFromProfile: true });
-    resumes.unshift(resume);
-    showToast('New resume created — fill in your details!');
-    renderList();
-    selectStandard(resume._id);
-  } catch (err) {
-    showToast(err.message || 'Could not create resume', 'error');
-    createBackdrop.classList.add('open');
-  }
+  startWizard(name, null);
+  renderList();
 });
 
 /* ============================================================
@@ -1482,19 +1460,9 @@ function renderBuilder() {
       const formData = new FormData();
       formData.append('file', file);
       const { parsed } = await api.upload('/api/resumes/parse', formData);
-      // Explicitly overwrite every section with parsed data, preserving identity fields
-      draft.personal       = parsed.personal       || draft.personal;
-      draft.summary        = parsed.summary        || draft.summary;
-      draft.experience     = parsed.experience?.length  ? parsed.experience  : draft.experience;
-      draft.education      = parsed.education?.length   ? parsed.education   : draft.education;
-      draft.skills         = parsed.skills?.length      ? parsed.skills      : draft.skills;
-      draft.projects       = parsed.projects?.length    ? parsed.projects    : draft.projects;
-      draft.certifications = parsed.certifications?.length ? parsed.certifications : draft.certifications;
-      draft.achievements   = parsed.achievements?.length   ? parsed.achievements   : draft.achievements;
-      draft.languages      = parsed.languages?.length      ? parsed.languages      : draft.languages;
-      draft.publications   = parsed.publications?.length   ? parsed.publications   : draft.publications;
+      draft = { ...draft, ...parsed, _id: draft._id, title: draft.title, isDefault: draft.isDefault };
       dirty = true;
-      showToast('Resume re-filled from upload — review and Save Changes!', 'success');
+      showToast("AI re-filled all fields — review and Save Changes");
       renderBuilder();
     } catch (err) {
       showToast(err.message, 'error');
