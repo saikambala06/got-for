@@ -36,17 +36,30 @@ async function callXAI(messages, maxTokens = 3000) {
 
 // ─── Resume parsing ───────────────────────────────────────────────────────────
 
-const PARSE_SYSTEM_PROMPT = `You are a precise resume parser. Extract every piece of structured information from the resume text below and return ONLY a valid JSON object. No markdown, no explanation, no code fences — raw JSON only.
+const PARSE_SYSTEM_PROMPT = `You are an expert resume data extractor. Your task is to parse the provided resume text with MAXIMUM ACCURACY and return ONLY a valid JSON object — no markdown fences, no explanation, no commentary, no trailing text.
+
+CRITICAL RULES:
+1. Extract EVERY piece of information, even if partially mentioned
+2. For "personal.name": look for the person's full name at the top of the resume — it's usually the largest/first text
+3. For "personal.email": find any email address (look for @ symbol)
+4. For "personal.phone": extract any phone number including country codes
+5. For "personal.location": city, state, country — look near name/contact info
+6. For "personal.linkedin": look for linkedin.com URLs or "LinkedIn:" labels — include full URL
+7. For "personal.portfolio": look for github.com, personal websites, "Portfolio:", "Website:" labels
+8. For "experience.description": extract ALL bullet points/achievements, each on its own line separated by \n — do NOT truncate
+9. For "skills": extract EVERY skill mentioned anywhere in the resume as individual array items
+10. For dates: preserve exactly as written (e.g., "Jan 2022", "2020–2023", "Present")
+11. If a field is not found, use "" for strings and [] for arrays — NEVER omit a field
 
 Schema:
 {
   "personal": {
-    "name": "Full name",
+    "name": "Full name — usually the very first line of the resume",
     "email": "email address",
-    "phone": "phone number",
-    "location": "City, State or Country",
+    "phone": "phone number with country code if present",
+    "location": "City, State/Province, Country",
     "linkedin": "full LinkedIn URL or empty string",
-    "portfolio": "portfolio or website URL or empty string"
+    "portfolio": "portfolio, GitHub, or website URL or empty string"
   },
   "summary": "Professional summary paragraph, or empty string",
   "experience": [
@@ -80,12 +93,19 @@ Schema:
   "publications": [{ "title": "Paper title", "link": "URL or empty", "date": "Year or empty" }]
 }
 
-Rules:
-- Preserve dates exactly as written in the resume
-- Set current: true only when the job/education says "Present" or "Current"
-- Put each work-experience bullet on its own line (\\n-separated) inside "description"
-- Extract ALL skills as individual strings
-- Use "" for missing text fields, [] for missing list fields`;
+STRICT EXTRACTION RULES:
+- personal.name: The person's FULL NAME. It appears at the very top, often alone on its own line, before contact info. Extract it exactly.
+- personal.email: Any text matching email pattern (word@domain.tld). Extract verbatim.
+- personal.phone: Any phone number. Include +country code if present. Preserve original formatting.
+- personal.location: City + State/Country. Look near the name/email section.
+- personal.linkedin: Any URL containing "linkedin.com". If only "linkedin.com/in/handle" shown, use that.
+- personal.portfolio: GitHub URL, personal domain, or any other portfolio link that is NOT LinkedIn.
+- experience[].description: Extract EVERY bullet point, dash, or numbered achievement. Each on its own line (\\n). Never truncate. Never summarize.
+- experience[].current: Set true ONLY when "Present", "Current", "Now", or "Ongoing" appears as the end date.
+- skills: Extract each skill as its own array item — split comma-separated lists. Include programming languages, frameworks, tools, platforms, soft skills, and domain knowledge.
+- achievements: Lines starting with "•", "-", or numbered that are standalone awards, honors, or accomplishments NOT tied to a job.
+- Preserve all dates exactly as written (e.g. "Dec 2019", "2018–2022", "Q3 2021").
+- Use "" for any missing text field. Use [] for any missing array field. NEVER skip a field.`;
 
 function sanitizeParsed(p) {
   const s = (v) => (typeof v === 'string' ? v : '');
@@ -152,13 +172,13 @@ async function parseResumeWithAI(rawText) {
   }
 
   try {
-    const trimmed = rawText.slice(0, 8000); // keep well within Grok's context
+    const trimmed = rawText.slice(0, 12000); // generous limit — resumes can be long
     const json = await callXAI(
       [
         { role: 'system', content: PARSE_SYSTEM_PROMPT },
-        { role: 'user', content: `Parse this resume:\n\n${trimmed}` }
+        { role: 'user', content: `Parse this resume completely and accurately. Return ONLY raw JSON, no markdown:\n\n${trimmed}` }
       ],
-      3000
+      4000 // enough for dense resumes with many bullet points
     );
     return sanitizeParsed(JSON.parse(json));
   } catch (err) {
