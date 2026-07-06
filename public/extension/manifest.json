@@ -2,49 +2,38 @@
   "manifest_version": 3,
   "name": "JobTrail Assistant",
   "version": "1.0.0",
-  "description": "AI-powered resume tailoring — opens beside any job application to match your resume instantly.",
-  "permissions": ["sidePanel", "activeTab", "storage", "scripting", "tabs"],
-  "host_permissions": ["<all_urls>"],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "side_panel": {
-    "default_path": "sidepanel.html"
-  },
-  "action": {
-    "default_title": "Open JobTrail Assistant",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    }
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://www.linkedin.com/jobs/*",
-        "https://linkedin.com/jobs/*",
-        "https://www.indeed.com/*",
-        "https://indeed.com/*",
-        "https://*.greenhouse.io/*",
-        "https://*.lever.co/*",
-        "https://*.workday.com/*",
-        "https://*.smartrecruiters.com/*",
-        "https://*.ashbyhq.com/*",
-        "https://*.myworkdayjobs.com/*",
-        "https://*.icims.com/*",
-        "https://*.taleo.net/*",
-        "https://*.jobvite.com/*",
-        "https://*.rippling.com/*",
-        "https://*.breezy.hr/*"
-      ],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
-  ],
+  "description": "Parses the job posting you're viewing, scores it against your resume, and tailors your resume or drafts a cover letter in one click.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "JobTrail Assistant"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage", "scripting", "activeTab"],
+  "host_permissions": ["http://localhost:4000/*", "https://*/*", "http://*/*"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "exclude_matches": ["*://*.google.com/search*"],
+      "js": [
+        "content/skills-data.js",
+        "content/job-parser.js",
+        "content/panel-ui.js",
+        "content/content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
 }
