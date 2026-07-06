@@ -148,3 +148,18 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+
+// ── AI Job Detail Extraction ──────────────────────────────────────────────────
+// POST /api/jobs/extract  — extract salary, highlights, experience from raw description
+router.post('/extract', async (req, res) => {
+  try {
+    const { description, title } = req.body;
+    if (!description) return res.status(400).json({ error: 'description is required' });
+    const { extractJobDetails } = require('../utils/aiJobExtractor');
+    const result = await extractJobDetails(description, title || '');
+    res.json(result);
+  } catch (err) {
+    console.error('[/api/jobs/extract]', err);
+    res.status(500).json({ error: err.message || 'Extraction failed' });
+  }
+});
