@@ -6,10 +6,7 @@ const { parseResumeText } = require('./resumeParser');
 
 // ─── Shared xAI caller ───────────────────────────────────────────────────────
 
-async function callXAI(messages, maxTokens = 8000) {
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) throw new Error('XAI_API_KEY not configured');
-
+async function callXAIOnce(apiKey, model, messages, maxTokens) {
   const response = await fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -17,7 +14,7 @@ async function callXAI(messages, maxTokens = 8000) {
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'grok-3',        // grok-3 for highest accuracy; falls back to grok-3-mini if unavailable
+      model,
       max_tokens: maxTokens,
       temperature: 0,         // deterministic extraction
       messages
@@ -25,28 +22,35 @@ async function callXAI(messages, maxTokens = 8000) {
   });
 
   if (!response.ok) {
-    // Try grok-3-mini if grok-3 fails
-    if (response.status === 400 || response.status === 404) {
-      const retry = await fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: 'grok-3-mini', max_tokens: maxTokens, temperature: 0, messages })
-      });
-      if (!retry.ok) {
-        const body = await retry.text().catch(() => '');
-        throw new Error(`xAI API ${retry.status}: ${body.slice(0, 200)}`);
-      }
-      const data = await retry.json();
-      const text = data.choices?.[0]?.message?.content || '';
-      return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    }
     const body = await response.text().catch(() => '');
-    throw new Error(`xAI API ${response.status}: ${body.slice(0, 200)}`);
+    const err = new Error(`xAI API ${response.status}: ${body.slice(0, 200)}`);
+    err.status = response.status;
+    throw err;
   }
 
   const data = await response.json();
   const text = data.choices?.[0]?.message?.content || '';
   return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+}
+
+async function callXAI(messages, maxTokens = 8000) {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) throw new Error('XAI_API_KEY not configured');
+
+  // grok-3-mini is the model this app is provisioned/documented for. Try it first.
+  // If it's ever unavailable for the configured key, fall back to grok-3 rather
+  // than hard-failing every AI feature (parsing, tailoring, cover letters).
+  try {
+    return await callXAIOnce(apiKey, 'grok-3-mini', messages, maxTokens);
+  } catch (err) {
+    const retryableStatus = [400, 401, 403, 404, 422].includes(err.status);
+    if (!retryableStatus) throw err;
+    try {
+      return await callXAIOnce(apiKey, 'grok-3', messages, maxTokens);
+    } catch (err2) {
+      throw err; // surface the original error — it's for the model we actually expect to work
+    }
+  }
 }
 
 // ─── Resume text pre-processing ───────────────────────────────────────────────
