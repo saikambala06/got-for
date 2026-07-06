@@ -46,6 +46,10 @@ router.post('/register', async (req, res) => {
     const token = signToken(user._id);
     res.cookie('jt_token', token, COOKIE_OPTS);
     res.status(201).json({
+      // Also returned in the body (not just the cookie) so the browser
+      // extension — which can't read httpOnly cookies — can store it and
+      // send it back as an Authorization: Bearer header.
+      token,
       user: { id: user._id, name: user.name, email: user.email, avatarColor: user.avatarColor }
     });
   } catch (err) {
@@ -74,6 +78,7 @@ router.post('/login', async (req, res) => {
     const token = signToken(user._id);
     res.cookie('jt_token', token, COOKIE_OPTS);
     res.json({
+      token,
       user: { id: user._id, name: user.name, email: user.email, avatarColor: user.avatarColor }
     });
   } catch (err) {

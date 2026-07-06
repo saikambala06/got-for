@@ -1,263 +1,490 @@
-'use strict';
+/**
+ * AI-powered resume parser using xAI (Grok).
+ * Falls back to the rule-based regex parser if XAI_API_KEY is missing or the call fails.
+ */
 const { parseResumeText } = require('./resumeParser');
 
-// ─── xAI caller with JSON mode enforced ──────────────────────────────────────
-async function callGrok(messages, maxTokens = 6000) {
-  const key = process.env.XAI_API_KEY;
-  if (!key) throw new Error('XAI_API_KEY not set');
+// ─── Shared xAI caller ───────────────────────────────────────────────────────
 
-  const res = await fetch('https://api.x.ai/v1/chat/completions', {
+async function callXAI(messages, maxTokens = 8000) {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) throw new Error('XAI_API_KEY not configured');
+
+  const response = await fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
     body: JSON.stringify({
-      model: 'grok-3-mini',
+      model: 'grok-3',        // grok-3 for highest accuracy; falls back to grok-3-mini if unavailable
       max_tokens: maxTokens,
-      temperature: 0,
-      response_format: { type: 'json_object' }, // forces pure JSON — no markdown, no preamble
-      messages,
-    }),
+      temperature: 0,         // deterministic extraction
+      messages
+    })
   });
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`xAI ${res.status}: ${txt.slice(0, 200)}`);
+  if (!response.ok) {
+    // Try grok-3-mini if grok-3 fails
+    if (response.status === 400 || response.status === 404) {
+      const retry = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: 'grok-3-mini', max_tokens: maxTokens, temperature: 0, messages })
+      });
+      if (!retry.ok) {
+        const body = await retry.text().catch(() => '');
+        throw new Error(`xAI API ${retry.status}: ${body.slice(0, 200)}`);
+      }
+      const data = await retry.json();
+      const text = data.choices?.[0]?.message?.content || '';
+      return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    }
+    const body = await response.text().catch(() => '');
+    throw new Error(`xAI API ${response.status}: ${body.slice(0, 200)}`);
   }
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || '{}';
+
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content || '';
+  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 }
 
-// ─── Prompt ───────────────────────────────────────────────────────────────────
-const SYSTEM = `You extract resume data and return it as JSON.
+// ─── Resume text pre-processing ───────────────────────────────────────────────
 
-Return this exact JSON structure (no extra keys, no markdown):
+/**
+ * Clean up raw PDF/DOCX extracted text before sending to the AI.
+ * Removes page headers/footers, collapses excessive whitespace, normalises bullets.
+ */
+function preprocessResumeText(raw) {
+  return raw
+    // Remove page-number artifacts like "-- 1 of 3 --" or "Page 1"
+    .replace(/--\s*\d+\s*of\s*\d+\s*--/gi, '\n')
+    .replace(/\bPage\s+\d+\s*(of\s+\d+)?\b/gi, '')
+    // Normalise various bullet characters to a simple dash
+    .replace(/^[\u2022\u25AA\u25CF\u2713\u2714\u25BA\u27A2\u27B3*▪▸]\s*/gm, '- ')
+    // Collapse 3+ blank lines to 2
+    .replace(/\n{3,}/g, '\n\n')
+    // Remove trailing spaces on each line
+    .replace(/[ \t]+$/gm, '')
+    .trim();
+}
+
+// ─── System prompt ────────────────────────────────────────────────────────────
+
+const PARSE_SYSTEM_PROMPT = `You are a precision resume data extraction engine. Your ONLY job is to read the resume text and output a single valid JSON object — nothing else. No markdown fences, no commentary, no explanation before or after. Just raw JSON.
+
+=== CRITICAL OUTPUT RULES ===
+1. Output ONLY the JSON object. First character must be "{", last must be "}".
+2. Every field in the schema MUST appear, even if empty ("" or []).
+3. NEVER truncate, summarise, or omit any bullet point from work experience.
+4. NEVER invent or infer any data not explicitly in the resume text.
+
+=== FIELD EXTRACTION RULES ===
+
+PERSONAL INFO (look in the first 10 lines of the resume):
+- name: The person's FULL name — the very first prominent text, usually all-caps or largest font. Extract exactly.
+- email: Any address matching pattern user@domain.tld
+- phone: Full phone number including country code (+1, +91, etc.) if shown
+- location: City, State/Country. Look near the name/contact section.
+- linkedin: Full LinkedIn URL or path (linkedin.com/in/...). Include https:// if present.
+- portfolio: Any GitHub, personal website, or portfolio URL that is NOT LinkedIn.
+
+SUMMARY:
+- The professional summary / objective / profile paragraph, as one continuous string.
+
+WORK EXPERIENCE — Highest priority. Each job = one object in the array:
+- role: EXACT job title as written (e.g. "Senior Azure DevOps Engineer"). Do not rephrase.
+- company: EXACT employer name as written (e.g. "Microsoft"). Do not abbreviate.
+- location: City, State where the job was located. "Remote" if remote.
+- startDate: Exact start date as written (e.g. "Dec 2019", "Feb 2018"). Never infer.
+- endDate: Exact end date as written, OR "Present" if person currently works there.
+- current: true if endDate is "Present" / "Current" / "Now" / "Ongoing", else false.
+- description: ALL bullet points for this job, each on its own line, joined by \\n.
+  RULES FOR BULLETS:
+  • Every line starting with "-", "•", a number, or a past-tense action verb is a bullet.
+  • Preserve the COMPLETE text of every bullet — do NOT cut it short.
+  • Preserve all numbers, percentages, dollar amounts exactly (e.g. "40%", "$2M", "15+").
+  • Each logical bullet must be on its own line (\\n separated).
+  • If a bullet wraps visually, merge continuation lines into the same bullet.
+  • Include EVERY bullet — even the last few that might appear near the end of the text.
+
+EDUCATION — Each institution = one object:
+- school: Institution name exactly as written.
+- degree: Degree type exactly (e.g. "Bachelor of Science", "Master of Science").
+- field: Field of study / major (e.g. "Information Technology", "Computer Science").
+- location: City, State if shown.
+- startDate: Start year or "Month Year" as written.
+- endDate: End/graduation year or "Month Year" as written.
+- current: true only if still enrolled.
+- description: Any GPA, honours, or additional notes (usually "").
+
+SKILLS:
+- Extract EVERY skill mentioned anywhere in the resume as individual strings.
+- Split comma/semicolon/pipe separated lists into individual items.
+- Include: languages, frameworks, tools, platforms, methodologies, cloud services, databases.
+- Do NOT include full sentences — only the skill name/acronym.
+
+PROJECTS, CERTIFICATIONS, ACHIEVEMENTS, LANGUAGES, PUBLICATIONS:
+- Extract exactly as shown. Use [] if none exist.
+
+=== JSON SCHEMA ===
 {
   "personal": {
-    "name": "candidate full name",
-    "email": "email@example.com",
-    "phone": "+1 234 567 8900",
-    "location": "City, State",
-    "linkedin": "linkedin.com/in/username",
+    "name": "",
+    "email": "",
+    "phone": "",
+    "location": "",
+    "linkedin": "",
     "portfolio": ""
   },
-  "summary": "professional summary text",
+  "summary": "",
   "experience": [
     {
-      "role": "Job Title",
-      "company": "Company Name",
-      "location": "City, State",
-      "startDate": "Mon YYYY",
-      "endDate": "Mon YYYY or Present",
+      "role": "",
+      "company": "",
+      "location": "",
+      "startDate": "",
+      "endDate": "",
       "current": false,
-      "description": "bullet 1\\nbullet 2\\nbullet 3"
+      "description": "bullet1\\nbullet2\\nbullet3"
     }
   ],
   "education": [
     {
-      "school": "University Name",
-      "degree": "Degree Type",
-      "field": "Field of Study",
+      "school": "",
+      "degree": "",
+      "field": "",
       "location": "",
       "startDate": "",
-      "endDate": "YYYY",
+      "endDate": "",
       "current": false,
       "description": ""
     }
   ],
-  "skills": ["Skill 1", "Skill 2"],
-  "projects": [{ "name": "", "link": "", "description": "" }],
+  "skills": [],
+  "projects": [],
   "certifications": [{ "name": "", "issuer": "", "date": "" }],
   "achievements": [],
   "languages": [],
   "publications": []
-}
+}`;
 
-RULES — follow exactly:
-1. personal.name  = candidate's own full name (first line of resume)
-2. personal.location = candidate's home city/state from contact section
-3. experience[].role = job title ONLY — never a company name
-4. experience[].company = employer name ONLY — never a job title  
-5. experience[].location = city/state of THAT job — never a bullet point fragment
-6. experience[].description = join every bullet point with \\n — include ALL bullets, do not truncate
-7. experience[].current = true only when endDate is "Present"
-8. skills = individual skill strings ONLY — no category headers like "Cloud Platforms" or "DevOps Tools"
-9. skills = strip any leading colon, bullet, or dash from each skill name
-10. If a field has no data use "" for strings, [] for arrays, false for booleans
-11. Do NOT invent data — only extract what is in the resume text`;
+// ─── Sanitisation ─────────────────────────────────────────────────────────────
 
-// ─── Sanitise output ──────────────────────────────────────────────────────────
-function sanitize(p) {
-  const s = (...v) => { for (const x of v) { if (typeof x === 'string' && x.trim()) return x.trim(); if (typeof x === 'number') return String(x); } return ''; };
-  const b = (...v) => v.some(x => x === true || x === 'true' || x === 'yes');
-  const a = v => Array.isArray(v) ? v : [];
-
-  // Normalise description array-or-string
-  const desc = x => {
-    const raw = x?.description ?? x?.responsibilities ?? x?.bullets ?? x?.duties ?? '';
-    if (Array.isArray(raw)) return raw.filter(Boolean).map(String).join('\n');
-    return typeof raw === 'string' ? raw.trim() : '';
+function sanitizeParsed(p) {
+  const str = (...vals) => {
+    for (const v of vals) {
+      if (typeof v === 'string' && v.trim()) return v.trim();
+      if (typeof v === 'number') return String(v);
+    }
+    return '';
   };
+  const bool = (...vals) => vals.some(v => v === true || v === 'true' || v === 'yes');
+  const arr = (v) => (Array.isArray(v) ? v : []);
 
-  // Clean a single skill — strip colon/bullet prefixes and skip category headers
-  const CATEGORY = /^(cloud platforms?|devops tools?|infrastructure as code|containers?|orchestration|ci\/?cd|scripting|automation|monitoring|logging|security|devsecops?|programming|frameworks?|databases?|tools?|soft skills?|technical skills?|core competencies|key skills?|certifications?)$/i;
-  const cleanSkill = raw => {
-    if (!raw) return '';
-    let sk = String(raw).trim().replace(/^[\s:•\-–▪◦○→✓]+/, '').replace(/:+$/, '').trim();
-    if (!sk || sk.length > 60 || CATEGORY.test(sk)) return '';
-    return sk;
+  // Normalise bullet descriptions — handle arrays or strings
+  const normDesc = (x) => {
+    const raw =
+      x?.description ?? x?.responsibilities ?? x?.achievements ??
+      x?.duties ?? x?.bullets ?? x?.highlights ?? x?.summary ?? '';
+    if (Array.isArray(raw)) {
+      // Each element is one bullet
+      return raw.map(s => String(s).trim()).filter(Boolean).join('\n');
+    }
+    if (typeof raw === 'string') {
+      // Sometimes the model puts " | " or "; " between bullets instead of \n
+      // Normalise those too
+      return raw
+        .split(/\n/)
+        .map(line => line.trim())
+        .filter(Boolean)
+        .join('\n');
+    }
+    return '';
   };
 
   const personal = p?.personal ?? p?.contact ?? p ?? {};
-  const expSrc = a(p?.experience ?? p?.workExperience ?? p?.work_experience ?? p?.jobs ?? p?.employment ?? []);
-  const eduSrc = a(p?.education ?? p?.educationHistory ?? p?.academics ?? []);
-  const skillSrc = p?.skills ?? p?.technicalSkills ?? p?.technical_skills ?? [];
-  const certSrc = a(p?.certifications ?? p?.certificates ?? p?.credentials ?? []);
-  const projSrc = a(p?.projects ?? p?.sideProjects ?? []);
-
-  // Skill normalisation: handle string, array-of-strings, or array-of-{category,items} objects
-  let skills = [];
-  if (typeof skillSrc === 'string') {
-    skills = skillSrc.split(/[,;\n|•]/).map(cleanSkill).filter(Boolean);
-  } else {
-    skills = a(skillSrc).flatMap(sk => {
-      if (typeof sk === 'string') return sk.split(/[,;|•]/).map(cleanSkill).filter(Boolean);
-      if (sk && typeof sk === 'object') {
-        // { category: "...", items: [...] }  or  { category, skills: [...] }
-        const items = a(sk.items ?? sk.skills ?? sk.list ?? []);
-        if (items.length) return items.flatMap(i => typeof i === 'string' ? i.split(/[,;]/).map(cleanSkill).filter(Boolean) : [cleanSkill(s(i?.name, i?.skill))].filter(Boolean));
-        return [cleanSkill(s(sk.name, sk.skill, sk.value))].filter(Boolean);
-      }
-      return [];
-    });
-  }
-
-  // Experience: resolve aliases + sanity-swap role↔company if obviously swapped
-  const COMPANY_RE = /\b(Inc\.?|LLC|LLP|Corp\.?|Ltd\.?|Limited|Group|Holdings|Solutions|Services|Technologies|Systems|Consulting|Associates|Partners|Hospital|Bank|University|College|School|Institute|Health|Insurance|Financial|Capital|Digital|Global|International)\b/i;
-  const TITLE_RE   = /\b(Engineer|Developer|Manager|Director|Analyst|Designer|Consultant|Architect|Lead|Senior|Junior|Head|Officer|Specialist|Coordinator|Executive|President|VP|Administrator|Intern|Principal|Scientist|Technician|Programmer|Supervisor|Representative|Recruiter|Strategist|Researcher|Advisor)\b/i;
-
-  const experience = expSrc.map(x => {
-    const endRaw = s(x?.endDate, x?.end_date, x?.end, x?.to, x?.endYear);
-    const isCurrent = b(x?.current, x?.isCurrent, x?.present) || /\b(present|current|now)\b/i.test(endRaw);
-
-    let role    = s(x?.role, x?.title, x?.jobTitle, x?.job_title, x?.position, x?.designation, x?.jobRole);
-    let company = s(x?.company, x?.employer, x?.organization, x?.organisation, x?.companyName, x?.firm, x?.employerName);
-    let location = s(x?.location, x?.jobLocation, x?.city, x?.place, x?.workCity);
-    const startDate = s(x?.startDate, x?.start_date, x?.start, x?.from, x?.startYear);
-
-    // Swap if AI clearly mixed them up
-    if (role && company) {
-      if (COMPANY_RE.test(role) && !TITLE_RE.test(role) && TITLE_RE.test(company) && !COMPANY_RE.test(company)) {
-        [role, company] = [company, role];
-      }
-    }
-    // If location got a bullet fragment (ends with period and >30 chars, likely not a city)
-    if (location && (location.length > 40 || /\.\s*$/.test(location)) && !/(,\s*[A-Z]{2}|remote)/i.test(location)) {
-      location = '';
-    }
-
-    return {
-      role, company, location, startDate,
-      endDate: isCurrent ? 'Present' : endRaw,
-      current: isCurrent,
-      description: desc(x),
-    };
-  });
 
   return {
     personal: {
-      name:      s(personal?.name, personal?.fullName, p?.name),
-      email:     s(personal?.email, personal?.emailAddress, p?.email),
-      phone:     s(personal?.phone, personal?.phoneNumber, personal?.mobile, p?.phone),
-      location:  s(personal?.location, personal?.address, personal?.city, p?.location),
-      linkedin:  s(personal?.linkedin, personal?.linkedIn, personal?.linkedinUrl, p?.linkedin),
-      portfolio: s(personal?.portfolio, personal?.website, personal?.github, p?.portfolio),
+      name:      str(personal?.name, personal?.fullName, personal?.full_name, p?.name),
+      email:     str(personal?.email, personal?.emailAddress, p?.email),
+      phone:     str(personal?.phone, personal?.phoneNumber, personal?.mobile, p?.phone),
+      location:  str(personal?.location, personal?.address, personal?.city, p?.location),
+      linkedin:  str(personal?.linkedin, personal?.linkedIn, personal?.linkedinUrl, p?.linkedin),
+      portfolio: str(personal?.portfolio, personal?.website, personal?.github, p?.portfolio),
     },
-    summary: s(p?.summary, p?.objective, p?.profile, p?.professionalSummary),
-    experience,
-    education: eduSrc.map(x => ({
-      school:    s(x?.school, x?.institution, x?.university, x?.college, x?.name),
-      degree:    s(x?.degree, x?.qualification, x?.credential, x?.diploma),
-      field:     s(x?.field, x?.major, x?.fieldOfStudy, x?.subject, x?.specialization),
-      location:  s(x?.location, x?.city, x?.campus),
-      startDate: s(x?.startDate, x?.start_date, x?.start, x?.startYear),
-      endDate:   s(x?.endDate, x?.end_date, x?.graduationYear, x?.endYear),
-      current:   b(x?.current, x?.isCurrent, x?.enrolled),
-      description: s(x?.description, x?.notes, x?.gpa),
+    summary: str(p?.summary, p?.objective, p?.profile, p?.professionalSummary),
+    experience: arr(p?.experience ?? p?.workExperience ?? p?.work_experience ?? p?.jobs).map((x) => {
+      const endRaw = str(x?.endDate, x?.end_date, x?.end, x?.to);
+      const isCurrent =
+        bool(x?.current, x?.isCurrent, x?.is_current) ||
+        /\b(present|current|now|ongoing)\b/i.test(endRaw);
+      return {
+        role:      str(x?.role, x?.title, x?.jobTitle, x?.position, x?.designation),
+        company:   str(x?.company, x?.employer, x?.organization, x?.companyName, x?.firm),
+        location:  str(x?.location, x?.city, x?.place, x?.jobLocation),
+        startDate: str(x?.startDate, x?.start_date, x?.start, x?.from),
+        endDate:   isCurrent ? 'Present' : endRaw,
+        current:   isCurrent,
+        description: normDesc(x),
+      };
+    }),
+    education: arr(p?.education ?? p?.educationHistory).map((x) => ({
+      school:    str(x?.school, x?.institution, x?.university, x?.college, x?.name),
+      degree:    str(x?.degree, x?.qualification, x?.credential, x?.award),
+      field:     str(x?.field, x?.major, x?.fieldOfStudy, x?.field_of_study, x?.subject),
+      location:  str(x?.location, x?.city, x?.place),
+      startDate: str(x?.startDate, x?.start_date, x?.start, x?.from),
+      endDate:   str(x?.endDate, x?.end_date, x?.end, x?.to, x?.graduationYear),
+      current:   bool(x?.current, x?.isCurrent, x?.enrolled),
+      description: str(x?.description, x?.notes, x?.activities),
     })),
-    skills,
-    certifications: certSrc.map(x => ({
-      name:   s(x?.name, x?.title, x?.certification),
-      issuer: s(x?.issuer, x?.issuedBy, x?.organization, x?.provider, x?.by),
-      date:   s(x?.date, x?.year, x?.issued),
+    skills: (() => {
+      const raw = p?.skills ?? p?.technicalSkills ?? p?.technical_skills ?? [];
+      if (typeof raw === 'string') return raw.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
+      return arr(raw).flatMap(s => {
+        if (typeof s === 'string') return s.split(/[,;|]/).map(t => t.trim()).filter(Boolean);
+        if (typeof s === 'object' && s !== null) return [str(s?.name, s?.skill, s?.value)].filter(Boolean);
+        return [];
+      });
+    })(),
+    projects: arr(p?.projects ?? p?.sideProjects).map((x) => ({
+      name:        str(x?.name, x?.title, x?.projectName),
+      link:        str(x?.link, x?.url, x?.github, x?.website),
+      description: str(x?.description, x?.summary, x?.details),
     })),
-    projects: projSrc.map(x => ({
-      name:        s(x?.name, x?.title, x?.projectName),
-      link:        s(x?.link, x?.url, x?.github, x?.website),
-      description: s(x?.description, x?.summary, x?.details),
+    certifications: arr(p?.certifications ?? p?.certificates ?? p?.credentials).map((x) => ({
+      name:   str(x?.name, x?.title, x?.certification),
+      issuer: str(x?.issuer, x?.issuedBy, x?.organization, x?.provider),
+      date:   str(x?.date, x?.year, x?.issued),
     })),
-    achievements: a(p?.achievements ?? p?.awards ?? p?.honors).map(x => typeof x === 'string' ? x.trim() : s(x?.title, x?.name)).filter(Boolean),
-    languages:    a(p?.languages).map(x => typeof x === 'string' ? x.trim() : (() => { const n = s(x?.language, x?.name); const l = s(x?.level, x?.proficiency); return l ? `${n} (${l})` : n; })()).filter(Boolean),
-    publications: a(p?.publications ?? p?.papers).map(x => ({ title: s(x?.title, x?.name), link: s(x?.link, x?.url), date: s(x?.date, x?.year) })),
+    achievements: arr(p?.achievements ?? p?.honors ?? p?.awards).map(a => {
+      if (typeof a === 'string') return a.trim();
+      if (typeof a === 'object' && a !== null) return str(a?.title, a?.name, a?.description);
+      return '';
+    }).filter(Boolean),
+    languages: arr(p?.languages).map(l => {
+      if (typeof l === 'string') return l.trim();
+      if (typeof l === 'object' && l !== null) {
+        const name  = str(l?.language, l?.name);
+        const level = str(l?.level, l?.proficiency, l?.fluency);
+        return level ? `${name} (${level})` : name;
+      }
+      return '';
+    }).filter(Boolean),
+    publications: arr(p?.publications).map((x) => ({
+      title: str(x?.title, x?.name),
+      link:  str(x?.link, x?.url),
+      date:  str(x?.date, x?.year),
+    })),
   };
 }
 
-// ─── Main: parse resume text with AI ─────────────────────────────────────────
+// ─── JSON extraction helper ───────────────────────────────────────────────────
+
+/**
+ * Try very hard to extract a valid JSON object from the model's raw output.
+ * Handles: leading/trailing text, markdown fences, partial responses.
+ */
+function extractJSON(raw) {
+  // Strip markdown fences
+  let s = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
+  // Find the first '{' and last '}'
+  const start = s.indexOf('{');
+  const end   = s.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error('No JSON object found in model response');
+  }
+  s = s.slice(start, end + 1);
+
+  try {
+    return JSON.parse(s);
+  } catch (e) {
+    // Attempt to auto-close truncated JSON (happens when max_tokens is hit)
+    // Count open braces/brackets and close them
+    let fixed = s;
+    let openBraces   = (s.match(/\{/g) || []).length - (s.match(/\}/g) || []).length;
+    let openBrackets = (s.match(/\[/g) || []).length - (s.match(/\]/g) || []).length;
+    // Remove trailing incomplete token (e.g. partial string)
+    fixed = fixed.replace(/,\s*$/, '');
+    while (openBrackets-- > 0) fixed += ']';
+    while (openBraces--   > 0) fixed += '}';
+    try {
+      return JSON.parse(fixed);
+    } catch {
+      throw new Error(`JSON parse failed: ${e.message}`);
+    }
+  }
+}
+
+// ─── Main parse function ──────────────────────────────────────────────────────
+
+/**
+ * Parse a raw resume text into structured fields using xAI Grok.
+ * Falls back to the regex parser if the API key is absent or the call fails.
+ */
 async function parseResumeWithAI(rawText) {
   if (!process.env.XAI_API_KEY) {
-    console.warn('[parser] No XAI_API_KEY — using regex fallback');
+    console.warn('[aiResumeParser] XAI_API_KEY not set — using regex fallback');
     return parseResumeText(rawText);
   }
 
-  // Limit text to 18k chars (enough for a 3-page resume)
-  const text = rawText.slice(0, 18000);
-
   try {
-    const jsonStr = await callGrok([
-      { role: 'system', content: SYSTEM },
-      { role: 'user',   content: `Extract all data from this resume:\n\n${text}` },
-    ], 6000);
+    const cleaned = preprocessResumeText(rawText);
+    // Use up to 24000 chars — enough for a 3-page resume with all bullets
+    const trimmed = cleaned.slice(0, 24000);
 
-    const parsed = JSON.parse(jsonStr);
-    const result = sanitize(parsed);
+    const rawJson = await callXAI(
+      [
+        { role: 'system', content: PARSE_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            'Parse the following resume. Extract EVERY bullet point — do not skip any.',
+            'Return ONLY raw JSON. Start your response with "{" immediately.',
+            '',
+            '=== RESUME TEXT START ===',
+            trimmed,
+            '=== RESUME TEXT END ==='
+          ].join('\n')
+        }
+      ],
+      8000   // generous — handles resumes with 30+ bullets per job
+    );
 
-    // Safety: if AI returned 0 experience entries, use regex as backup
-    if (result.experience.length === 0 && /experience|employment/i.test(rawText)) {
-      const fallback = parseResumeText(rawText);
-      if (fallback.experience?.length) result.experience = fallback.experience;
+    const parsed = extractJSON(rawJson);
+    const result = sanitizeParsed(parsed);
+
+    // Sanity-check: if the AI somehow extracted nothing useful, fall back
+    const hasData =
+      result.personal.name ||
+      result.experience.length > 0 ||
+      result.summary;
+
+    if (!hasData) {
+      console.warn('[aiResumeParser] AI returned empty result — falling back to regex');
+      return parseResumeText(rawText);
     }
 
     return result;
   } catch (err) {
-    console.error('[parser] AI failed, falling back to regex:', err.message);
+    console.error('[aiResumeParser] AI parse failed, falling back to regex:', err.message);
     return parseResumeText(rawText);
   }
 }
 
-// ─── Tailor ───────────────────────────────────────────────────────────────────
-async function tailorResumeWithAI(resume, jobTitle, jobDescription) {
-  if (!process.env.XAI_API_KEY) throw new Error('XAI_API_KEY not configured');
+// ─── Resume tailoring ─────────────────────────────────────────────────────────
 
-  const snap = JSON.stringify({
-    summary: resume.summary,
-    skills:  resume.skills,
-    experience: resume.experience.map((e, i) => ({ index: i, role: e.role, company: e.company, description: e.description })),
-  }, null, 2);
+const TAILOR_SYSTEM_PROMPT = `You are an expert resume writer and career coach. Tailor the provided resume content to better match the job description by:
+- Rewriting the professional summary to reflect the target role
+- Reordering and refining the skills list to prioritise the most relevant ones first
+- Folding in any items listed under "Candidate-confirmed additional skills" — the candidate has explicitly confirmed they have these, so include them in the skills list (do not treat them as unverified)
+- Sharpening experience bullet points to highlight achievements that align with the job requirements, using keywords from the job posting where authentic
+- Never inventing facts, employers, dates, or achievements — only rephrase, reorder, and incorporate what already exists or what the candidate has explicitly confirmed
 
-  const TAILOR_SYS = `You are a resume writer. Tailor the resume to match the job description.
-Return only this JSON:
+Return ONLY valid JSON, no markdown, no explanation:
 {
-  "summary": "new tailored summary",
-  "skills": ["skill1","skill2"],
-  "experience": [{"index": 0, "description": "rewritten bullets\\nseparated by newline"}],
-  "suggestions": "brief explanation"
+  "summary": "New 2–3 sentence tailored professional summary",
+  "skills": ["skill1", "skill2", ...reordered/refined list, including confirmed additions],
+  "experience": [
+    {
+      "index": 0,
+      "description": "Rewritten bullet points (\\n-separated)"
+    }
+  ],
+  "suggestions": "1–2 sentence explanation of the key changes made"
+}`;
+
+async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills = []) {
+  if (!process.env.XAI_API_KEY) {
+    throw new Error('AI tailoring requires XAI_API_KEY to be configured');
+  }
+
+  const snapshot = JSON.stringify(
+    {
+      summary: resume.summary,
+      skills: resume.skills,
+      experience: resume.experience.map((e, i) => ({
+        index: i,
+        role: e.role,
+        company: e.company,
+        description: e.description
+      }))
+    },
+    null,
+    2
+  );
+
+  const confirmedExtras = Array.isArray(emphasizeSkills)
+    ? emphasizeSkills.filter(Boolean).map(String).slice(0, 30)
+    : [];
+  const extrasBlock = confirmedExtras.length
+    ? `\n\nCandidate-confirmed additional skills (from the job posting's requirements, which the candidate has checked off as skills they genuinely have):\n${confirmedExtras.join(', ')}`
+    : '';
+
+  const json = await callXAI(
+    [
+      { role: 'system', content: TAILOR_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: `Job Title: ${jobTitle || 'Not specified'}\n\nJob Description:\n${jobDescription.slice(0, 4000)}\n\nCurrent Resume:\n${snapshot}${extrasBlock}`
+      }
+    ],
+    3000
+  );
+
+  return extractJSON(json);
 }
-Rules: never invent facts, only rewrite what exists, use job keywords authentically.`;
 
-  const jsonStr = await callGrok([
-    { role: 'system', content: TAILOR_SYS },
-    { role: 'user',   content: `Job: ${jobTitle}\n\nDescription:\n${jobDescription.slice(0, 3000)}\n\nResume:\n${snap}` },
-  ], 3000);
+// ─── Cover letter generation ────────────────────────────────────────────────
 
-  return JSON.parse(jsonStr);
+const COVER_LETTER_SYSTEM_PROMPT = `You are an expert career coach writing a concise, authentic cover letter.
+Rules:
+- 3–4 short paragraphs, no more than 280 words total
+- Use only facts present in the resume snapshot provided — never invent employers, titles, dates, or achievements
+- Open by naming the role and company and a genuine hook tied to the candidate's background
+- Middle paragraph(s): connect 2–3 concrete resume achievements/skills to the job's stated requirements
+- Close with a confident, brief call to action
+- Plain text only — no markdown, no placeholders like "[Your Name]" (use the candidate's real name/details from the resume snapshot; omit a line if the info truly isn't available)
+- Do not fabricate a signature block address; a simple sign-off with the candidate's name is enough`;
+
+async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescription) {
+  if (!process.env.XAI_API_KEY) {
+    throw new Error('AI cover letter generation requires XAI_API_KEY to be configured');
+  }
+
+  const snapshot = JSON.stringify(
+    {
+      name: resume.personal?.name,
+      email: resume.personal?.email,
+      phone: resume.personal?.phone,
+      summary: resume.summary,
+      skills: resume.skills,
+      experience: resume.experience.map((e) => ({
+        role: e.role,
+        company: e.company,
+        description: e.description
+      })),
+      education: resume.education.map((ed) => ({ school: ed.school, degree: ed.degree, field: ed.field }))
+    },
+    null,
+    2
+  );
+
+  const text = await callXAI(
+    [
+      { role: 'system', content: COVER_LETTER_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: `Job Title: ${jobTitle || 'Not specified'}\nCompany: ${company || 'Not specified'}\n\nJob Description:\n${(jobDescription || '').slice(0, 3000)}\n\nCandidate Resume Snapshot:\n${snapshot}`
+      }
+    ],
+    1200
+  );
+
+  return text.trim();
 }
 
-module.exports = { parseResumeWithAI, tailorResumeWithAI };
+module.exports = { parseResumeWithAI, tailorResumeWithAI, generateCoverLetterWithAI };

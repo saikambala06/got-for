@@ -3,7 +3,7 @@ const multer  = require('multer');
 const Resume  = require('../models/Resume');
 const User    = require('../models/User');
 const requireAuth = require('../middleware/auth');
-const { parseResumeWithAI, tailorResumeWithAI } = require('../utils/aiResumeParser');
+const { parseResumeWithAI, tailorResumeWithAI, generateCoverLetterWithAI } = require('../utils/aiResumeParser');
 const { normalizeDocxText } = require('../utils/resumeParser');
 
 const router = express.Router();
@@ -100,10 +100,10 @@ router.post('/:id/tailor', async (req, res) => {
     const resume = await Resume.findOne({ _id: req.params.id, user: req.userId });
     if (!resume) return res.status(404).json({ error: 'Resume not found' });
 
-    const { jobTitle = '', jobDescription = '' } = req.body;
+    const { jobTitle = '', jobDescription = '', emphasizeSkills = [] } = req.body;
     if (!jobDescription.trim()) return res.status(400).json({ error: 'Job description is required' });
 
-    const tailored = await tailorResumeWithAI(resume, jobTitle, jobDescription);
+    const tailored = await tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills);
     res.json({ tailored });
   } catch (err) {
     console.error('[/tailor]', err.message);
@@ -111,6 +111,27 @@ router.post('/:id/tailor', async (req, res) => {
       return res.status(503).json({ error: 'AI features are not enabled on this server.' });
     }
     res.status(500).json({ error: 'AI tailoring failed — please try again.' });
+  }
+});
+
+// ─── Generate a cover letter for a job ────────────────────────────────────────
+
+router.post('/:id/cover-letter', async (req, res) => {
+  try {
+    const resume = await Resume.findOne({ _id: req.params.id, user: req.userId });
+    if (!resume) return res.status(404).json({ error: 'Resume not found' });
+
+    const { jobTitle = '', company = '', jobDescription = '' } = req.body;
+    if (!jobDescription.trim()) return res.status(400).json({ error: 'Job description is required' });
+
+    const coverLetter = await generateCoverLetterWithAI(resume, jobTitle, company, jobDescription);
+    res.json({ coverLetter });
+  } catch (err) {
+    console.error('[/cover-letter]', err.message);
+    if (err.message.includes('XAI_API_KEY')) {
+      return res.status(503).json({ error: 'AI features are not enabled on this server.' });
+    }
+    res.status(500).json({ error: 'Cover letter generation failed — please try again.' });
   }
 });
 
