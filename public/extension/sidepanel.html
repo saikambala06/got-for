@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JobTrail Assistant</title>
+<style>
+  :root {
+    --bg:       #070912;
+    --surface:  #0d0f1a;
+    --surface2: #13162a;
+    --border:   #1e2340;
+    --accent:   #ff9a4d;
+    --accent2:  #ffb980;
+    --text:     #e8eaf6;
+    --dim:      #8b91b8;
+    --faint:    #4a5080;
+    --green:    #1ea672;
+    --red:      #e05252;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; }
+
+  /* ── AUTH SCREEN ── */
+  #authScreen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; padding: 24px; }
+  .logo { font-size: 22px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+  .logo span { color: var(--text); }
+  .auth-card { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .auth-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; color: var(--text); }
+  .field-row { margin-bottom: 11px; }
+  .field-row label { display: block; font-size: 11px; color: var(--dim); margin-bottom: 4px; }
+  .field-row input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; }
+  .field-row input:focus { border-color: var(--accent); }
+  .btn-full { width: 100%; padding: 10px; border-radius: 10px; border: none; background: var(--accent); color: #1a1326; font-weight: 700; font-size: 13px; cursor: pointer; }
+  .btn-full:hover { background: var(--accent2); }
+  .auth-err { color: var(--red); font-size: 12px; text-align: center; min-height: 16px; }
+
+  /* ── MAIN SCREEN ── */
+  #mainScreen { display: none; flex-direction: column; height: 100%; overflow: hidden; }
+
+  /* Header */
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 14px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .header .logo-sm { font-size: 14px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+  .header .logo-sm span { color: var(--text); }
+  .header .job-summary { flex: 1; min-width: 0; }
+  .header .job-title { font-size: 12px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header .job-company { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header .logout-btn { background: none; border: none; color: var(--faint); cursor: pointer; padding: 4px; flex-shrink: 0; font-size: 18px; line-height: 1; }
+  .header .logout-btn:hover { color: var(--dim); }
+
+  /* No job state */
+  .no-job { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; color: var(--dim); }
+  .no-job svg { opacity: 0.4; }
+  .no-job p { font-size: 13px; line-height: 1.6; }
+  .no-job .sites { font-size: 11px; color: var(--faint); }
+
+  /* Tabs */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  .tab-btn { flex: 1; padding: 10px 4px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--dim); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+
+  /* Panels */
+  .panels { flex: 1; overflow-y: auto; }
+  .panel { display: none; padding: 14px; }
+  .panel.active { display: block; }
+
+  /* Info rows */
+  .info-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { font-size: 11px; color: var(--dim); min-width: 68px; flex-shrink: 0; padding-top: 1px; }
+  .info-val { font-size: 12.5px; color: var(--text); font-weight: 500; line-height: 1.4; }
+  .tag { display: inline-block; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font-size: 11px; color: var(--dim); margin: 2px 3px 2px 0; }
+  .tag.match { background: rgba(30, 166, 114, 0.12); border-color: rgba(30, 166, 114, 0.3); color: var(--green); }
+  .tag.accent { background: rgba(255, 154, 77, 0.1); border-color: rgba(255, 154, 77, 0.25); color: var(--accent); }
+
+  /* Skills panel */
+  .skills-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .skills-header h4 { font-size: 12px; color: var(--dim); font-weight: 600; }
+  .match-score { font-size: 18px; font-weight: 800; color: var(--green); }
+  .match-label { font-size: 10px; color: var(--dim); }
+  .skills-section { margin-bottom: 14px; }
+  .skills-section h5 { font-size: 11px; color: var(--faint); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 100px; font-size: 11.5px; font-weight: 500; cursor: default; }
+  .chip.match { background: rgba(30,166,114,0.15); border: 1px solid rgba(30,166,114,0.35); color: #34d399; }
+  .chip.missing { background: rgba(255,154,77,0.1); border: 1px solid rgba(255,154,77,0.25); color: var(--accent); }
+  .chip.neutral { background: var(--surface2); border: 1px solid var(--border); color: var(--dim); }
+
+  /* Description panel */
+  .desc-text { font-size: 12.5px; color: var(--dim); line-height: 1.7; white-space: pre-wrap; }
+
+  /* Tailor panel */
+  .tailor-section { margin-bottom: 14px; }
+  .tailor-section label { display: block; font-size: 11px; color: var(--dim); margin-bottom: 5px; }
+  .tailor-section select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 12px; outline: none; }
+  .tailor-section select:focus { border-color: var(--accent); }
+  .btn-tailor { width: 100%; padding: 11px; border-radius: 10px; border: none; background: linear-gradient(135deg, var(--accent), #ff6b35); color: #1a1326; font-weight: 800; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; }
+  .btn-tailor:hover { filter: brightness(1.1); }
+  .btn-tailor:disabled { opacity: 0.5; cursor: not-allowed; }
+  .tailor-result { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 12px; }
+  .tailor-result h4 { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .tailor-result .result-section { margin-bottom: 10px; }
+  .tailor-result .result-label { font-size: 10.5px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 4px; }
+  .tailor-result .result-text { font-size: 12px; color: var(--dim); line-height: 1.6; }
+  .tailor-result .result-text.green { color: #34d399; font-weight: 600; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(26,19,38,0.4); border-top-color: #1a1326; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .save-btn { display: block; width: 100%; margin-top: 8px; padding: 8px; border-radius: 8px; border: 1px solid var(--green); background: rgba(30,166,114,0.12); color: var(--green); font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; }
+  .save-btn:hover { background: rgba(30,166,114,0.2); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Loading overlay */
+  .loading { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--dim); gap: 10px; font-size: 13px; }
+  .loading .spin { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 16px; font-size: 12px; color: var(--text); opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 999; white-space: nowrap; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ── AUTH ─────────────────────────────────────────── -->
+<div id="authScreen">
+  <div class="logo">Job<span>Trail</span></div>
+  <div style="text-align:center; color:var(--dim); font-size:12px; line-height:1.6;">
+    AI-powered resume tailoring<br>for every job application
+  </div>
+  <div class="auth-card">
+    <h3>Sign in to your account</h3>
+    <div class="field-row">
+      <label>API URL</label>
+      <input type="url" id="apiUrl" value="https://got-for.vercel.app" />
+    </div>
+    <div class="field-row">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="you@example.com" />
+    </div>
+    <div class="field-row">
+      <label>Password</label>
+      <input type="password" id="loginPass" placeholder="••••••••" />
+    </div>
+    <div class="auth-err" id="authErr"></div>
+    <button class="btn-full" id="loginBtn">Sign In</button>
+  </div>
+</div>
+
+<!-- ── MAIN ─────────────────────────────────────────── -->
+<div id="mainScreen">
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-sm">Job<span>Trail</span></div>
+    <div class="job-summary">
+      <div class="job-title" id="hdrTitle">Open a job listing to begin</div>
+      <div class="job-company" id="hdrCompany"></div>
+    </div>
+    <button class="logout-btn" id="logoutBtn" title="Sign out">✕</button>
+  </div>
+
+  <!-- No job detected state -->
+  <div id="noJobState" style="display:flex; flex-direction:column; flex:1;">
+    <div class="no-job">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+        <line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>
+      </svg>
+      <p>Navigate to a job listing to automatically extract the job details, required skills, and tailor your resume.</p>
+      <div class="sites">Works with LinkedIn · Indeed · Greenhouse · Lever · Workday and more</div>
+    </div>
+  </div>
+
+  <!-- Job detected state -->
+  <div id="jobState" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="overview">Overview</button>
+      <button class="tab-btn" data-tab="skills">Skills</button>
+      <button class="tab-btn" data-tab="description">Description</button>
+      <button class="tab-btn" data-tab="tailor">✨ Tailor</button>
+    </div>
+
+    <!-- Panels -->
+    <div class="panels">
+      <!-- Overview -->
+      <div class="panel active" id="panel-overview">
+        <div class="info-row">
+          <div class="info-label">Job Title</div>
+          <div class="info-val" id="infoTitle"></div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">Company</div>
+          <div class="info-val" id="infoCompany"></div>
+        </div>
+        <div class="info-row" id="rowLocation" style="display:none">
+          <div class="info-label">Location</div>
+          <div class="info-val" id="infoLocation"></div>
+        </div>
+        <div class="info-row" id="rowJobType" style="display:none">
+          <div class="info-label">Job Type</div>
+          <div class="info-val" id="infoJobType"></div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">Source</div>
+          <div class="info-val" id="infoSource"></div>
+        </div>
+        <div class="info-row" style="border-bottom:none; padding-top:12px;">
+          <div class="info-label" style="padding-top:2px;">Skills Found</div>
+          <div id="infoSkillsPreview"></div>
+        </div>
+      </div>
+
+      <!-- Skills -->
+      <div class="panel" id="panel-skills">
+        <div class="skills-header">
+          <div>
+            <h4>Skill Match Analysis</h4>
+            <div style="font-size:11px; color:var(--faint); margin-top:2px;" id="skillsResumeName">Select a resume in Tailor tab</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="match-score" id="matchScore">—</div>
+            <div class="match-label">match</div>
+          </div>
+        </div>
+        <div class="skills-section">
+          <h5>✅ You have these</h5>
+          <div class="chip-row" id="matchedSkills"></div>
+        </div>
+        <div class="skills-section">
+          <h5>⚡ Job requires</h5>
+          <div class="chip-row" id="missingSkills"></div>
+        </div>
+        <div class="skills-section">
+          <h5>📋 All required skills</h5>
+          <div class="chip-row" id="allJobSkills"></div>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="panel" id="panel-description">
+        <div class="desc-text" id="descText">No description found.</div>
+      </div>
+
+      <!-- Tailor -->
+      <div class="panel" id="panel-tailor">
+        <div class="tailor-section">
+          <label>Select Resume to Tailor</label>
+          <select id="resumeSelect">
+            <option value="">Loading resumes…</option>
+          </select>
+        </div>
+        <button class="btn-tailor" id="tailorBtn" disabled>
+          <span>✨ Tailor Resume to This Job</span>
+        </button>
+        <div id="tailorResult" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="sidepanel.js"></script>
+</body>
+</html>

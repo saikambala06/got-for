@@ -344,10 +344,35 @@ document.getElementById('clearFilterBtn').addEventListener('click', () => {
   loadJobs();
 });
 
-// Install Extension — no extension is published yet, so let people know
-// rather than linking to a dead store listing.
+// Install Extension
 document.getElementById('installExtBtn').addEventListener('click', () => {
-  showToast("The SK VK browser extension isn't available yet — stay tuned!");
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(7,9,18,0.85);display:flex;align-items:center;justify-content:center;z-index:999;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;max-width:420px;width:100%;position:relative;">
+      <button onclick="this.closest('div[style]').remove()" style="position:absolute;top:14px;right:16px;background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;">x</button>
+      <div style="font-size:16px;font-weight:800;color:var(--accent);margin-bottom:4px;">JobTrail Browser Extension</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:20px;">AI resume tailoring beside every job application</div>
+      <a href="/extension.zip" download="jobtrail-extension.zip"
+         style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px;border-radius:10px;border:none;background:var(--accent);color:#1a1326;font-weight:800;font-size:13px;text-decoration:none;margin-bottom:20px;">
+        Download Extension (.zip)
+      </a>
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px;">Install steps (Chrome and Edge):</div>
+      <ol style="font-size:12px;color:var(--text-dim);line-height:1.9;padding-left:18px;margin-bottom:14px;">
+        <li>Download the ZIP and <b style="color:var(--text)">unzip</b> it to a folder</li>
+        <li>Open <b style="color:var(--text)">chrome://extensions</b> (or edge://extensions)</li>
+        <li>Enable <b style="color:var(--text)">Developer mode</b> (top-right toggle)</li>
+        <li>Click <b style="color:var(--text)">Load unpacked</b> and select the unzipped folder</li>
+        <li>Pin <b style="color:var(--text)">JobTrail Assistant</b> icon to your toolbar</li>
+        <li>Go to any LinkedIn/Indeed/Greenhouse job and click the icon</li>
+        <li>Sign in with your JobTrail email and password</li>
+      </ol>
+      <div style="font-size:11px;color:var(--text-faint);background:var(--surface-2);border-radius:8px;padding:9px 12px;">
+        Works on Chrome, Edge, Brave and any Chromium browser.
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
 });
 
 // Modal logic
