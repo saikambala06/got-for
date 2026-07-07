@@ -147,21 +147,32 @@
         emphasizeSkills: Array.from(state.extraSkillsChecked)
       });
       panel.resetButton('jt-tailor');
-      panel.renderTailorResult(result);
-      panel.panel.querySelector('#jt-save-tailor')?.addEventListener('click', () => saveTailored(result));
+      const sourceResume = state.resumes.find((r) => r._id === state.selectedResumeId);
+      panel.renderTailorResult(result, sourceResume);
+      panel.panel.querySelector('#jt-save-tailor')?.addEventListener('click', () => saveTailored(result, sourceResume));
     } catch (err) {
       panel.resetButton('jt-tailor');
       alert(`Tailoring failed: ${err.message}`);
     }
   }
 
-  async function saveTailored(result) {
+  async function saveTailored(result, sourceResume) {
     const btn = panel.panel.querySelector('#jt-save-tailor');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     try {
+      // Merge the AI's rewritten experience bullets back into the full
+      // experience array (by index) so nothing on the resume gets dropped —
+      // previously only summary/skills were saved and all tailored
+      // experience bullets were silently discarded.
+      const baseExperience = (sourceResume?.experience || []).map((e) => ({ ...e }));
+      const tailoredByIndex = new Map((result.experience || []).map((e) => [e.index, e.description]));
+      const mergedExperience = baseExperience.map((e, i) =>
+        tailoredByIndex.has(i) ? { ...e, description: tailoredByIndex.get(i) } : e
+      );
+
       await send('resumes:save', {
         resumeId: state.selectedResumeId,
-        patch: { summary: result.summary, skills: result.skills }
+        patch: { summary: result.summary, skills: result.skills, experience: mergedExperience }
       });
       if (btn) { btn.textContent = 'Saved ✓'; }
     } catch (err) {
