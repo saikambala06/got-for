@@ -3,54 +3,75 @@
  * Falls back to the rule-based regex parser if XAI_API_KEY is missing or the call fails.
  */
 const { parseResumeText } = require('./resumeParser');
+const { cleanSkill } = require('./skillUtils');
 
 // ─── Shared xAI caller ───────────────────────────────────────────────────────
+//
+// NOTE ON MODEL NAME: this previously called 'grok-3' with a 'grok-3-mini'
+// retry. Both of those model slugs are now deprecated/retired by xAI (grok-3
+// era models have been retired in favour of grok-4.3, xAI's current
+// general-purpose flagship). Calls to a retired/unknown model slug fail
+// outright — with no regex fallback for /tailor and /cover-letter — which is
+// exactly the "failed" behaviour those two features were showing. The model
+// can be overridden via XAI_MODEL without a code change if xAI renames
+// things again.
+const XAI_MODEL = process.env.XAI_MODEL || 'grok-4.3';
 
-async function callXAIOnce(apiKey, model, messages, maxTokens) {
-  const response = await fetch('https://api.x.ai/v1/chat/completions', {
+async function callXAI(messages, maxTokens = 8000) {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) throw new Error('XAI_API_KEY not configured');
+
+  const doRequest = () => fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model,
+      model: XAI_MODEL,
       max_tokens: maxTokens,
-      temperature: 0,         // deterministic extraction
+      temperature: 0,          // deterministic extraction
+      reasoning_effort: 'none', // this is extraction/rewriting, not reasoning — keeps
+                                 // the whole token budget available for visible output
+                                 // instead of being silently spent on hidden "thinking"
       messages
     })
   });
 
+  let response = await doRequest();
+
+  // A single retry with backoff for transient errors (rate limit / server
+  // hiccup) — the pattern xAI's own docs recommend. Anything else (bad key,
+  // bad request, unknown model) won't succeed on retry, so we fail fast
+  // below with the real reason instead of masking it behind a generic
+  // "please try again".
+  if (!response.ok && (response.status === 429 || response.status >= 500)) {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    response = await doRequest();
+  }
+
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    const err = new Error(`xAI API ${response.status}: ${body.slice(0, 200)}`);
-    err.status = response.status;
-    throw err;
+    throw new Error(`xAI API ${response.status}: ${body.slice(0, 300)}`);
   }
 
   const data = await response.json();
-  const text = data.choices?.[0]?.message?.content || '';
-  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-}
+  const choice = data.choices?.[0];
+  const text = (choice?.message?.content || '').trim();
 
-async function callXAI(messages, maxTokens = 8000) {
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) throw new Error('XAI_API_KEY not configured');
-
-  // grok-3-mini is the model this app is provisioned/documented for. Try it first.
-  // If it's ever unavailable for the configured key, fall back to grok-3 rather
-  // than hard-failing every AI feature (parsing, tailoring, cover letters).
-  try {
-    return await callXAIOnce(apiKey, 'grok-3-mini', messages, maxTokens);
-  } catch (err) {
-    const retryableStatus = [400, 401, 403, 404, 422].includes(err.status);
-    if (!retryableStatus) throw err;
-    try {
-      return await callXAIOnce(apiKey, 'grok-3', messages, maxTokens);
-    } catch (err2) {
-      throw err; // surface the original error — it's for the model we actually expect to work
-    }
+  if (!text) {
+    // Reasoning-capable models can spend the whole max_tokens budget on
+    // hidden reasoning tokens and return no visible content at all if the
+    // budget is too tight for the task — surface that plainly rather than
+    // letting the caller hit a confusing "no JSON object found" error.
+    throw new Error(
+      choice?.finish_reason === 'length'
+        ? 'xAI response was cut off before it produced any output — try a shorter job description or resume.'
+        : 'xAI returned an empty response'
+    );
   }
+
+  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 }
 
 // ─── Resume text pre-processing ───────────────────────────────────────────────
@@ -246,11 +267,23 @@ function sanitizeParsed(p) {
     })),
     skills: (() => {
       const raw = p?.skills ?? p?.technicalSkills ?? p?.technical_skills ?? [];
-      if (typeof raw === 'string') return raw.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
-      return arr(raw).flatMap(s => {
-        if (typeof s === 'string') return s.split(/[,;|]/).map(t => t.trim()).filter(Boolean);
-        if (typeof s === 'object' && s !== null) return [str(s?.name, s?.skill, s?.value)].filter(Boolean);
-        return [];
+      let list;
+      if (typeof raw === 'string') {
+        list = raw.split(/[,;|]/).map(cleanSkill).filter(Boolean);
+      } else {
+        list = arr(raw).flatMap(s => {
+          if (typeof s === 'string') return s.split(/[,;|]/).map(cleanSkill).filter(Boolean);
+          if (typeof s === 'object' && s !== null) return [cleanSkill(str(s?.name, s?.skill, s?.value))].filter(Boolean);
+          return [];
+        });
+      }
+      // Dedupe case-insensitively while preserving first-seen casing/order
+      const seen = new Set();
+      return list.filter((s) => {
+        const key = s.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
     })(),
     projects: arr(p?.projects ?? p?.sideProjects).map((x) => ({
@@ -436,10 +469,23 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
         content: `Job Title: ${jobTitle || 'Not specified'}\n\nJob Description:\n${jobDescription.slice(0, 4000)}\n\nCurrent Resume:\n${snapshot}${extrasBlock}`
       }
     ],
-    3000
+    4000
   );
 
-  return extractJSON(json);
+  const result = extractJSON(json);
+  if (Array.isArray(result.skills)) {
+    const seen = new Set();
+    result.skills = result.skills
+      .map(cleanSkill)
+      .filter((s) => {
+        if (!s) return false;
+        const key = s.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+  return result;
 }
 
 // ─── Cover letter generation ────────────────────────────────────────────────
@@ -485,7 +531,7 @@ async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescripti
         content: `Job Title: ${jobTitle || 'Not specified'}\nCompany: ${company || 'Not specified'}\n\nJob Description:\n${(jobDescription || '').slice(0, 3000)}\n\nCandidate Resume Snapshot:\n${snapshot}`
       }
     ],
-    1200
+    2000
   );
 
   return text.trim();

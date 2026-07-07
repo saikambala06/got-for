@@ -108,9 +108,12 @@ router.post('/:id/tailor', async (req, res) => {
   } catch (err) {
     console.error('[/tailor]', err.message);
     if (err.message.includes('XAI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server.' });
+      return res.status(503).json({ error: 'AI features are not enabled on this server (XAI_API_KEY is not configured).' });
     }
-    res.status(500).json({ error: 'AI tailoring failed — please try again.' });
+    // Surface the real reason (xAI status code / message) instead of a
+    // generic "please try again" — a masked error is impossible to
+    // self-diagnose from the client side.
+    res.status(502).json({ error: `AI tailoring failed: ${err.message}` });
   }
 });
 
@@ -129,9 +132,9 @@ router.post('/:id/cover-letter', async (req, res) => {
   } catch (err) {
     console.error('[/cover-letter]', err.message);
     if (err.message.includes('XAI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server.' });
+      return res.status(503).json({ error: 'AI features are not enabled on this server (XAI_API_KEY is not configured).' });
     }
-    res.status(500).json({ error: 'Cover letter generation failed — please try again.' });
+    res.status(502).json({ error: `Cover letter generation failed: ${err.message}` });
   }
 });
 
