@@ -12,128 +12,88 @@
     'Statistical segmentation methodologies', 'A/B testing', 'Predictive modeling',
     'Feature engineering', 'Reinforcement learning', 'Neural networks', 'Recommendation systems',
     'Time series analysis', 'Forecasting', 'Data visualization', 'ETL', 'Data pipelines',
-    'Data warehousing', 'Data governance', 'Big Data',
+    'Data warehousing', 'Data governance', 'Big Data', 'Exploratory data analysis',
 
     // Languages
-    'Python', 'R', 'SQL', 'Java', 'JavaScript', 'TypeScript', 'C++', 'C#', 'Go', 'Scala',
-    'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin', 'MATLAB', 'Bash', 'Programming languages',
+    'Python', 'SQL', 'Java', 'JavaScript', 'TypeScript', 'C++', 'C#', 'Scala',
+    'Ruby', 'PHP', 'Kotlin', 'MATLAB', 'Bash', 'HTML', 'CSS',
 
     // Frameworks / libraries
-    'TensorFlow', 'PyTorch', 'Keras', 'scikit-learn', 'Pandas', 'NumPy', 'Spark', 'PySpark',
+    'TensorFlow', 'PyTorch', 'Keras', 'scikit-learn', 'Pandas', 'NumPy', 'PySpark',
     'Hadoop', 'React', 'Angular', 'Vue', 'Node.js', 'Django', 'Flask', 'FastAPI', '.NET',
-    'Spring Boot',
+    'Spring Boot', 'REST API', 'GraphQL', 'Microservices', 'Selenium',
 
     // Cloud / infra
     'AWS', 'Amazon Web Services', 'Azure', 'Google Cloud Platform', 'GCP', 'Databricks',
     'Snowflake', 'Kubernetes', 'Docker', 'Terraform', 'CI/CD', 'Airflow', 'Kafka',
-    'AWS Certified Data Analytics', 'AWS Certified Solutions Architect',
+    'AWS Certified Data Analytics', 'AWS Certified Solutions Architect', 'DevOps', 'Linux',
 
     // Databases
     'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'Oracle', 'DynamoDB', 'Cassandra', 'BigQuery',
     'Redshift', 'NoSQL',
 
     // Tools
-    'Tableau', 'Power BI', 'Looker', 'Excel', 'Jira', 'Git', 'GitHub', 'GitLab',
+    'Tableau', 'Power BI', 'Looker', 'Jira', 'Git', 'GitHub', 'GitLab', 'Salesforce', 'SAP',
+    'RStudio', 'SwiftUI', 'Xcode', 'Android development', 'iOS development',
 
-    // Business / soft
+    // Business / domain (kept to genuine, specifically-named skills —
+    // generic buzzwords like "Leadership" or "Communication skills" are
+    // intentionally excluded since they match almost every job posting and
+    // add noise, not signal).
     'Project management', 'Product management', 'Stakeholder management', 'Agile', 'Scrum',
-    'Cross-functional collaboration', 'Communication skills', 'Leadership', 'Consulting',
-    'Enterprise software', 'Business intelligence', 'Risk management', 'Financial modeling',
+    'Business intelligence', 'Risk management', 'Financial modeling',
 
     // Certifications / degrees (used for highlight detection too)
     'PMP', 'CFA', 'Six Sigma', "Master's degree", 'PhD', 'CPA'
   ];
 
+  // Short/common-English-word skills that need extra context before they
+  // count — otherwise "R&D" registers the R language, "go the extra mile"
+  // registers Go, "excel in this role" registers Excel, etc.
+  // `guard`: if this matches anywhere in the description, count it outright.
+  // Otherwise it only counts if it appears in a short delimited list right
+  // next to another already-confirmed, unambiguous skill (e.g.
+  // "Languages: Python, Go, Java" — see hasListNeighbor below).
+  const AMBIGUOUS_SKILLS = [
+    { name: 'R', guard: /\br\s*(?:programming|language)\b|\brstudio\b|\btidyverse\b|\bggplot2?\b|\bcran\b/i },
+    { name: 'Go', guard: /\bgolang\b|\bgo\s+(?:programming|language)\b/i },
+    { name: 'Excel', guard: /\bmicrosoft\s+excel\b|\bms\s+excel\b|\bexcel\s+(?:spreadsheets?|macros?|vba)\b|\bpivot\s+tables?\b|\bvlookup\b/i },
+    { name: 'Swift', guard: /\bswiftui\b|\bios\s+(?:development|developer|app)\b|\bxcode\b/i },
+    { name: 'Rust', guard: /\brust\s+(?:lang|programming)\b|\bactix\b|\bcargo\s+build\b/i },
+    { name: 'Spark', guard: /\bapache\s+spark\b|\bpyspark\b|\bspark\s+(?:sql|streaming|cluster)\b/i }
+  ];
+
+  function escapeRe(term) {
+    return term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   function toPattern(term) {
-    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Loose word boundaries so "ML Ops" / "AWS" etc. still match against
-    // punctuation-heavy job description text.
-    return new RegExp(`(?:^|[^a-zA-Z0-9])${escaped}(?:$|[^a-zA-Z0-9])`, 'i');
+    // Loose word boundaries (non-alphanumeric or string edge on both sides)
+    // so "ML Ops" / "AWS" / "C++" etc. still match against punctuation-heavy
+    // job description text — a real `\b` fails on trailing symbols like "++".
+    return new RegExp(`(?:^|[^a-zA-Z0-9])${escapeRe(term)}(?:$|[^a-zA-Z0-9])`, 'i');
   }
 
-  // A handful of skill names are also ordinary English words/fragments, so a
-  // plain word-boundary match produces confident-looking false positives:
-  //   "Go"  matches "...go the extra mile", "...go above and beyond"
-  //   "R"   matches "...R&D team", "Sr. Engineer" (word-boundary-only checks
-  //         would treat the punctuation next to "R&D" as a boundary too)
-  // For these, require the token to be bounded by the punctuation an actual
-  // skills list would use (comma, semicolon, colon, slash, pipe, brackets,
-  // line breaks) instead of by ordinary prose. This trades a little recall
-  // (a bare prose mention like "5 years of experience with Go" won't match)
-  // for a lot fewer wrong-looking matches, which is the better trade-off
-  // here since most job posts list stack/tools as a punctuated list anyway.
-  // Add more names to STRICT_TOKENS if they turn out to be similarly ambiguous.
-  const STRICT_TOKENS = new Set(['Go', 'R']);
+  const SKILLS_TAXONOMY = RAW_SKILLS.map((name) => ({ name, pattern: toPattern(name) }));
 
-  function strictTokenPattern(term) {
-    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const boundary = '[\\n,;:/|()]';
-    return new RegExp(`(?:^|${boundary})\\s*${escaped}\\s*(?=${boundary}|$)`, 'im');
-  }
-
-  // "Go" gets one extra allowance: an immediately-following "(Golang)" is
-  // unambiguous no matter what precedes it (nobody writes "let's go (Golang)
-  // grab lunch"), so that specific phrasing is recognized even in prose,
-  // where the general list-style boundary rule above wouldn't otherwise match.
-  const CUSTOM_PATTERNS = {
-    Go: new RegExp(`${strictTokenPattern('Go').source}|\\bGo(?=\\s*\\(\\s*golang\\s*\\))`, 'im')
-  };
-
-  const SKILLS_TAXONOMY = RAW_SKILLS.map((name) => ({
-    name,
-    pattern: CUSTOM_PATTERNS[name] || (STRICT_TOKENS.has(name) ? strictTokenPattern(name) : toPattern(name))
+  const AMBIGUOUS_TAXONOMY = AMBIGUOUS_SKILLS.map((s) => ({
+    name: s.name,
+    pattern: toPattern(s.name),
+    guard: s.guard
   }));
 
-  // ── Skill name cleanup & matching ──────────────────────────────────────
-  //
-  // Resumes sometimes store skills with a leftover category label, e.g.
-  // "Languages: Python" instead of "Python" (an artifact of how a resume's
-  // "Skills" section gets split during parsing). cleanSkill() strips that
-  // so both display and matching see the real skill name — this mirrors
-  // utils/skillUtils.js on the server side.
-  function cleanSkill(raw) {
-    let s = String(raw || '').trim();
-    if (!s) return '';
-    const withoutLabel = s.replace(/^[A-Za-z][A-Za-z&/+ ]{1,28}:\s*(?=\S)/, '').trim();
-    if (withoutLabel) s = withoutLabel;
-    s = s.replace(/^[-*•\u2022\u25AA\u25CF\u25BA\u27A2\u27B3▪▸]\s*/, '').trim();
-    return s;
-  }
-
-  // A curated alias map so common abbreviations/spelling variants still
-  // count as the same skill WITHOUT falling back to loose substring
-  // matching — substring matching incorrectly treats "Java" as matching
-  // "JavaScript" (JavaScript contains "Java"), or "Go" as matching "Django"
-  // (Django ends in "go"), which is precisely the kind of "matched skill"
-  // mismatch that looks obviously wrong to a candidate reviewing the panel.
-  const SKILL_ALIASES = {
-    'js': 'javascript', 'javascript': 'javascript',
-    'ts': 'typescript', 'typescript': 'typescript',
-    'k8s': 'kubernetes', 'kubernetes': 'kubernetes',
-    'gcp': 'google cloud platform', 'google cloud platform': 'google cloud platform', 'google cloud': 'google cloud platform',
-    'aws': 'amazon web services', 'amazon web services': 'amazon web services',
-    'ml': 'machine learning', 'machine learning': 'machine learning',
-    'nlp': 'natural language processing', 'natural language processing': 'natural language processing',
-    'postgres': 'postgresql', 'postgresql': 'postgresql',
-    'mongo': 'mongodb', 'mongodb': 'mongodb',
-    'node': 'node.js', 'nodejs': 'node.js', 'node.js': 'node.js',
-    'golang': 'go', 'go': 'go',
-    'dotnet': '.net', '.net': '.net',
-    'ci/cd': 'ci/cd', 'cicd': 'ci/cd', 'ci cd': 'ci/cd'
-  };
-
-  function canonicalSkill(raw) {
-    const norm = cleanSkill(raw).toLowerCase();
-    return SKILL_ALIASES[norm] || norm;
-  }
-
-  // Exact (post-canonicalisation) match — replaces the old bidirectional
-  // .includes() check, which matched any skill that merely contained (or
-  // was contained by) another as a substring.
-  function skillsMatch(a, b) {
-    const ca = canonicalSkill(a);
-    const cb = canonicalSkill(b);
-    return !!ca && ca === cb;
+  /**
+   * Checks whether `term` shows up inside a short comma/slash/bullet
+   * separated list right next to a recognised, unambiguous skill —
+   * e.g. "Languages: Python, Go, Java" legitimately counts "Go" even
+   * though the word "golang" never appears anywhere in the text.
+   */
+  function hasListNeighbor(text, term) {
+    const re = new RegExp(`([^\\n,.;/|•]{0,40})[,/|•]\\s*${escapeRe(term)}\\s*[,/|•]?([^\\n,.;/|•]{0,40})`, 'i');
+    const m = text.match(re);
+    if (!m) return false;
+    const neighbors = `${m[1] || ''} ${m[2] || ''}`.toLowerCase();
+    return SKILLS_TAXONOMY.some((s) => neighbors.includes(s.name.toLowerCase()));
   }
 
   // Signals used to build the "Key Highlights" chips (benefits, sponsorship, work model).
@@ -152,5 +112,5 @@
     { label: 'Bonus eligible', test: /\bannual bonus\b|\bbonus eligible\b|\bperformance bonus\b/i }
   ];
 
-  global.JobTrailSkillsData = { SKILLS_TAXONOMY, HIGHLIGHT_RULES, cleanSkill, canonicalSkill, skillsMatch };
+  global.JobTrailSkillsData = { SKILLS_TAXONOMY, AMBIGUOUS_TAXONOMY, hasListNeighbor, HIGHLIGHT_RULES };
 })(typeof window !== 'undefined' ? window : globalThis);

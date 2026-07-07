@@ -106,14 +106,11 @@ router.post('/:id/tailor', async (req, res) => {
     const tailored = await tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills);
     res.json({ tailored });
   } catch (err) {
+    // tailorResumeWithAI never throws under normal conditions (it falls back
+    // to a local, no-AI engine) — this only fires on a genuinely unexpected
+    // error, so we still fail soft with a friendly message.
     console.error('[/tailor]', err.message);
-    if (err.message.includes('XAI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (XAI_API_KEY is not configured).' });
-    }
-    // Surface the real reason (xAI status code / message) instead of a
-    // generic "please try again" — a masked error is impossible to
-    // self-diagnose from the client side.
-    res.status(502).json({ error: `AI tailoring failed: ${err.message}` });
+    res.status(500).json({ error: 'Could not tailor this resume — please try again.' });
   }
 });
 
@@ -130,11 +127,11 @@ router.post('/:id/cover-letter', async (req, res) => {
     const coverLetter = await generateCoverLetterWithAI(resume, jobTitle, company, jobDescription);
     res.json({ coverLetter });
   } catch (err) {
+    // generateCoverLetterWithAI never throws under normal conditions (it
+    // falls back to a local, no-AI template) — this only fires on a
+    // genuinely unexpected error, so we still fail soft with a friendly message.
     console.error('[/cover-letter]', err.message);
-    if (err.message.includes('XAI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (XAI_API_KEY is not configured).' });
-    }
-    res.status(502).json({ error: `Cover letter generation failed: ${err.message}` });
+    res.status(500).json({ error: 'Could not draft a cover letter — please try again.' });
   }
 });
 

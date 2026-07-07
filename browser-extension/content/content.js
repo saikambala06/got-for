@@ -151,7 +151,7 @@
       panel.panel.querySelector('#jt-save-tailor')?.addEventListener('click', () => saveTailored(result));
     } catch (err) {
       panel.resetButton('jt-tailor');
-      panel.renderResultError(`Tailoring failed: ${err.message}`, tailorResume);
+      alert(`Tailoring failed: ${err.message}`);
     }
   }
 
@@ -189,7 +189,7 @@
       });
     } catch (err) {
       panel.resetButton('jt-cover');
-      panel.renderResultError(`Cover letter generation failed: ${err.message}`, draftCoverLetter);
+      alert(`Cover letter generation failed: ${err.message}`);
     }
   }
 
