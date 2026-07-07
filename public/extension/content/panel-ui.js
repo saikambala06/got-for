@@ -82,6 +82,8 @@
     @keyframes jt-spin { to { transform: rotate(360deg); } }
 
     .jt-tailor-summary { font-size: 12.5px; line-height: 1.5; color: #d7dae8; background: #0c0f1c; border: 1px solid #262d49; border-radius: 10px; padding: 10px; margin-bottom: 10px; white-space: pre-wrap; }
+    .jt-tailor-exp-item { margin-bottom: 10px; }
+    .jt-tailor-exp-role { font-size: 12px; font-weight: 600; color: #9aa3c7; margin-bottom: 4px; }
     .jt-tag-new { font-size: 9.5px; background: #ff9a4d; color: #1a1326; border-radius: 5px; padding: 1px 4px; margin-left: 4px; font-weight: 700; }
     .jt-suggestions { font-size: 11.5px; color: #6a7196; margin-top: 8px; font-style: italic; }
     textarea.jt-cover { width: 100%; min-height: 220px; background: #0c0f1c; border: 1px solid #262d49; border-radius: 8px; color: #eef0fb; padding: 10px; font-size: 12px; line-height: 1.5; resize: vertical; }
@@ -229,15 +231,34 @@
       `);
     }
 
-    renderTailorResult(result) {
+    renderTailorResult(result, sourceResume) {
       const slot = this.panel.querySelector('#jt-result-slot');
       if (!slot) return;
+
+      const baseExperience = sourceResume?.experience || [];
+      const tailoredByIndex = new Map((result.experience || []).map((e) => [e.index, e.description]));
+      const experienceHtml = baseExperience.length
+        ? baseExperience
+            .map((e, i) => {
+              const desc = tailoredByIndex.has(i) ? tailoredByIndex.get(i) : e.description || '';
+              const roleLine = [e.role, e.company].filter(Boolean).join(' — ');
+              return `
+                <div class="jt-tailor-exp-item">
+                  ${roleLine ? `<div class="jt-tailor-exp-role">${esc(roleLine)}</div>` : ''}
+                  <div class="jt-tailor-summary">${esc(desc)}</div>
+                </div>
+              `;
+            })
+            .join('')
+        : '';
+
       slot.innerHTML = `
         <div class="jt-section">
           <div class="jt-section-title">Tailored summary</div>
           <div class="jt-tailor-summary">${esc(result.summary || '')}</div>
           <div class="jt-section-title">Reordered skills</div>
           <div class="jt-chips">${(result.skills || []).map((s) => `<span class="jt-chip matched">${esc(s)}</span>`).join('')}</div>
+          ${experienceHtml ? `<div class="jt-section-title">Tailored experience</div>${experienceHtml}` : ''}
           ${result.suggestions ? `<div class="jt-suggestions">${esc(result.suggestions)}</div>` : ''}
           <div class="jt-btn-row" style="margin-top:10px;">
             <button class="jt-btn primary" id="jt-save-tailor">Save to resume</button>
