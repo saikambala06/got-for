@@ -99,7 +99,7 @@
   // Signals used to build the "Key Highlights" chips (benefits, sponsorship, work model).
   const HIGHLIGHT_RULES = [
     { label: 'H1B Sponsor Likely', test: /\bh-?1b\b.{0,40}\b(sponsor|sponsorship)\b|\bsponsor(ship)?\b.{0,40}\bh-?1b\b|visa sponsorship available/i },
-    { label: 'Medical coverage', test: /\bmedical\s+(insurance|coverage|benefits)?\b/i },
+    { label: 'Medical coverage', test: /\bmedical\b(?:\s+(?:insurance|coverage|benefits))?/i },
     { label: 'Dental', test: /\bdental\b/i },
     { label: 'Vision', test: /\bvision\b/i },
     { label: '401(k)', test: /\b401\s?\(?k\)?\b/i },

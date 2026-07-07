@@ -90,6 +90,14 @@ const handlers = {
       body: JSON.stringify(job)
     });
     return body.job;
+  },
+
+  async 'jobs:extract'({ title, company, description }) {
+    const body = await apiFetch('/api/jobs/extract', {
+      method: 'POST',
+      body: JSON.stringify({ title, company, description })
+    });
+    return body.extracted;
   }
 };
 

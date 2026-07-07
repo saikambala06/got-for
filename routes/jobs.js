@@ -1,9 +1,29 @@
 const express = require('express');
 const Job = require('../models/Job');
 const requireAuth = require('../middleware/auth');
+const { extractJobDetails } = require('../utils/aiJobExtractor');
 
 const router = express.Router();
 router.use(requireAuth);
+
+// AI-powered extraction of skills/qualifications/highlights from a raw
+// scraped job posting. Used by the browser extension side panel so the
+// panel shows accurate, AI-parsed data instead of pure client-side regex
+// guesses. Always returns a usable result (falls back to a local engine
+// internally if XAI_API_KEY is missing or the AI call fails).
+router.post('/extract', async (req, res) => {
+  try {
+    const { title, company, description } = req.body || {};
+    if (!description || !description.trim()) {
+      return res.status(400).json({ error: 'Job description text is required' });
+    }
+    const extracted = await extractJobDetails(title, company, description);
+    res.json({ extracted });
+  } catch (err) {
+    console.error('[/jobs/extract]', err.message);
+    res.status(500).json({ error: 'Could not analyze this job posting — please try again.' });
+  }
+});
 
 // List all jobs for user, with optional search/status filter
 router.get('/', async (req, res) => {

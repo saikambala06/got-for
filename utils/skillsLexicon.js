@@ -15,23 +15,24 @@
 const SKILLS = [
   // Data / ML / AI
   'Machine learning', 'Deep learning', 'Data science', 'Data analysis', 'Data engineering',
-  'Natural language processing', 'Computer vision', 'MLOps', 'Generative AI',
-  'Large language models', 'Statistical modeling', 'A/B testing', 'Predictive modeling',
+  'Natural language processing', 'Computer vision', 'MLOps', 'ML Ops', 'Generative AI',
+  'LLM', 'Large language models', 'AI/ML application development', 'Statistical modeling',
+  'Statistical segmentation methodologies', 'A/B testing', 'Predictive modeling',
   'Feature engineering', 'Reinforcement learning', 'Neural networks', 'Recommendation systems',
   'Time series analysis', 'Forecasting', 'Data visualization', 'ETL', 'Data pipelines',
   'Data warehousing', 'Data governance', 'Big Data', 'Exploratory data analysis',
 
   // Languages
   'Python', 'SQL', 'Java', 'JavaScript', 'TypeScript', 'C++', 'C#', 'Scala',
-  'PHP', 'Kotlin', 'MATLAB', 'Bash',
+  'Ruby', 'PHP', 'Kotlin', 'MATLAB', 'Bash',
 
   // Frameworks / libraries
   'TensorFlow', 'PyTorch', 'Keras', 'scikit-learn', 'Pandas', 'NumPy', 'PySpark',
   'Hadoop', 'React', 'Angular', 'Vue', 'Node.js', 'Django', 'Flask', 'FastAPI', '.NET',
-  'Spring Boot', 'HTML', 'CSS', 'REST API', 'GraphQL', 'Microservices',
+  'Spring Boot', 'HTML', 'CSS', 'REST API', 'GraphQL', 'Microservices', 'Selenium',
 
   // Cloud / infra
-  'AWS', 'Azure', 'Google Cloud Platform', 'GCP', 'Databricks',
+  'AWS', 'Amazon Web Services', 'Azure', 'Google Cloud Platform', 'GCP', 'Databricks',
   'Snowflake', 'Kubernetes', 'Docker', 'Terraform', 'CI/CD', 'Airflow', 'Kafka',
   'DevOps', 'Linux',
 
