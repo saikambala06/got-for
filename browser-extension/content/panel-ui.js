@@ -101,34 +101,6 @@
       </svg>`;
   }
 
-  // Precise skill-name comparison used to decide whether a job-required
-  // skill is already on the resume. A naive `.includes()` substring check
-  // wrongly matches "Go" inside "Google Cloud Platform", or "R" inside
-  // almost any multi-letter skill — so short tokens (< 4 chars, e.g. R, Go,
-  // AWS, SQL) require an exact, whole-word match; longer multi-word skills
-  // still allow one to contain the other as a whole word/phrase.
-  function normSkill(s) {
-    return String(s || '').toLowerCase().trim().replace(/[.\-_/]/g, ' ').replace(/\s+/g, ' ');
-  }
-
-  function skillsMatch(a, b) {
-    const na = normSkill(a);
-    const nb = normSkill(b);
-    if (!na || !nb) return false;
-    if (na === nb) return true;
-
-    const shorter = na.length <= nb.length ? na : nb;
-    const longer = na.length <= nb.length ? nb : na;
-
-    // Very short tokens (R, Go, AWS, SQL, C#, ...) must match exactly —
-    // never as a substring of something longer.
-    if (shorter.length < 4) return false;
-
-    const escaped = shorter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(?:^|\\s)${escaped}(?:$|\\s)`);
-    return re.test(longer);
-  }
-
   function esc(s) {
     return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
@@ -189,8 +161,16 @@
     renderJob(state) {
       const { job, resumes, selectedResumeId, extraSkillsChecked } = state;
       const resume = resumes.find((r) => r._id === selectedResumeId) || resumes[0];
-      const resumeSkills = resume?.skills || [];
+      const { cleanSkill, skillsMatch } = global.JobTrailSkillsData;
+      // cleanSkill() strips any leftover "Category:" label from older/legacy
+      // parsed data (see skillUtils.js) so matching isn't thrown off by it.
+      const resumeSkills = (resume?.skills || []).map((s) => cleanSkill(s));
 
+      // skillsMatch() requires an exact match after canonicalising known
+      // aliases (JS/JavaScript, K8s/Kubernetes, etc). The old check used
+      // bidirectional .includes(), which meant "Java" always "matched"
+      // "JavaScript" and "Go" always "matched" "Django" — two unrelated
+      // skills that simply happen to be substrings of one another.
       const matchedSkills = job.skillsFound.filter((s) => resumeSkills.some((rs) => skillsMatch(s, rs)));
       const missingSkills = job.skillsFound.filter((s) => !matchedSkills.includes(s));
       const totalKeywords = job.skillsFound.length;
@@ -260,17 +240,12 @@
     renderTailorResult(result) {
       const slot = this.panel.querySelector('#jt-result-slot');
       if (!slot) return;
-      const added = new Set((result.addedSkills || []).map((s) => s.toLowerCase()));
-      const skillsTitle = added.size ? `Updated skills (${added.size} new)` : 'Updated skills';
       slot.innerHTML = `
         <div class="jt-section">
           <div class="jt-section-title">Tailored summary</div>
           <div class="jt-tailor-summary">${esc(result.summary || '')}</div>
-          <div class="jt-section-title">${esc(skillsTitle)}</div>
-          <div class="jt-chips">${(result.skills || []).map((s) => {
-            const isNew = added.has(s.toLowerCase());
-            return `<span class="jt-chip matched">${esc(s)}${isNew ? '<span class="jt-tag-new">NEW</span>' : ''}</span>`;
-          }).join('')}</div>
+          <div class="jt-section-title">Reordered skills</div>
+          <div class="jt-chips">${(result.skills || []).map((s) => `<span class="jt-chip matched">${esc(s)}</span>`).join('')}</div>
           ${result.suggestions ? `<div class="jt-suggestions">${esc(result.suggestions)}</div>` : ''}
           <div class="jt-btn-row" style="margin-top:10px;">
             <button class="jt-btn primary" id="jt-save-tailor">Save to resume</button>
@@ -291,6 +266,21 @@
           </div>
         </div>
       `;
+    }
+
+    // Shows a Tailor/Cover-letter failure in place, inline with the rest of
+    // the job card, instead of a native alert() popup that blocks the page
+    // and hides the qualifications/highlights/skills already on screen.
+    renderResultError(message, retryFn) {
+      const slot = this.panel.querySelector('#jt-result-slot');
+      if (!slot) return;
+      slot.innerHTML = `
+        <div class="jt-section">
+          <div class="jt-error" style="padding:14px 4px;text-align:left;">${esc(message)}</div>
+          ${retryFn ? '<div style="text-align:center;margin-top:6px;"><button class="jt-btn small" id="jt-result-retry">Try again</button></div>' : ''}
+        </div>
+      `;
+      if (retryFn) this.panel.querySelector('#jt-result-retry')?.addEventListener('click', retryFn);
     }
 
     renderManualForm(job, onSave) {

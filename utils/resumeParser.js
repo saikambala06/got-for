@@ -3,6 +3,7 @@
  * Used when XAI_API_KEY is absent or the AI call fails.
  * Handles most common resume layouts including ATS-formatted, modern, and dense formats.
  */
+const { cleanSkill } = require('./skillUtils');
 
 // ─── Section header patterns ──────────────────────────────────────────────────
 
@@ -112,7 +113,13 @@ const LOCATION_RE = /\b([A-Za-z][A-Za-z.\s]{1,25},\s*(?:[A-Z]{2}|[A-Za-z]{3,20})
 
 function extractLocation(nonEmpty) {
   for (const line of nonEmpty.slice(0, 10)) {
-    const segments = line.split(/[|•·,]/).map(s => s.trim()).filter(Boolean);
+    // NOTE: comma is deliberately NOT a split delimiter here — LOCATION_RE
+    // matches a "City, ST" pattern that needs its own internal comma intact.
+    // Splitting on comma first (as this used to) breaks "San Francisco, CA"
+    // into "San Francisco" and "CA" before the regex ever sees it, so a
+    // location that's only separated from the rest of the line by pipes or
+    // bullets (not further comma-split) would never match.
+    const segments = line.split(/[|•·]/).map(s => s.trim()).filter(Boolean);
     for (const seg of segments) {
       if (/@/.test(seg) || /https?:\/\//i.test(seg) || /linkedin/i.test(seg)) continue;
       const m = seg.match(LOCATION_RE);
@@ -284,7 +291,28 @@ function parseResumeText(rawText) {
   }
 
   // ── Skills ──
-  const skills = sections.skills ? splitList(sections.skills).slice(0, 60) : [];
+  const skills = sections.skills
+    ? (() => {
+        // A resume Skills section is often written one category per line, e.g.
+        //   Languages: Python, JavaScript, Java
+        //   Frameworks: React, Node.js
+        // splitList() only splits on commas/bullets/newlines, so the category
+        // label stays glued to the first item after it ("Languages: Python").
+        // cleanSkill() strips that label back off; the dedupe below then
+        // collapses anything that becomes a duplicate once cleaned.
+        const seen = new Set();
+        return splitList(sections.skills)
+          .map(cleanSkill)
+          .filter((s) => {
+            if (!s) return false;
+            const key = s.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .slice(0, 60);
+      })()
+    : [];
 
   // ── Experience ──
   const experience = (sections.experience ? splitBlocks(sections.experience) : [])

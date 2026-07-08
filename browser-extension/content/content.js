@@ -66,33 +66,6 @@
     }
 
     state.selectedResumeId = state.resumes.find((r) => r.isDefault)?._id || state.resumes[0]._id;
-
-    // Refine the locally-scraped skills/qualifications/highlights with the
-    // AI-powered extractor so the panel shows accurate, context-aware data
-    // instead of pure client-side regex guesses. If this fails for any
-    // reason (offline, server hiccup) we just keep the local parse — the
-    // panel never gets stuck.
-    panel.renderLoading('Analyzing this job posting with AI…');
-    try {
-      const extracted = await send('jobs:extract', {
-        title: state.job.title,
-        company: state.job.company,
-        description: state.job.description
-      });
-      state.job = {
-        ...state.job,
-        skillsFound: extracted.skills?.length ? extracted.skills : state.job.skillsFound,
-        qualificationPhrases: extracted.qualifications?.length ? extracted.qualifications : state.job.qualificationPhrases,
-        highlights: extracted.highlights?.length ? extracted.highlights : state.job.highlights,
-        employmentType: state.job.employmentType || extracted.employmentType || '',
-        salary: state.job.salary || (extracted.salaryMin
-          ? `$${extracted.salaryMin.toLocaleString()}${extracted.salaryMax ? ` - $${extracted.salaryMax.toLocaleString()}` : ''}${extracted.salaryPeriod ? `/${extracted.salaryPeriod === 'hour' ? 'hr' : 'yr'}` : ''}`
-          : '')
-      };
-    } catch (err) {
-      console.warn('JobTrail: AI extraction unavailable, using locally-parsed data instead:', err.message);
-    }
-
     renderCard();
   }
 
@@ -178,7 +151,7 @@
       panel.panel.querySelector('#jt-save-tailor')?.addEventListener('click', () => saveTailored(result));
     } catch (err) {
       panel.resetButton('jt-tailor');
-      alert(`Tailoring failed: ${err.message}`);
+      panel.renderResultError(`Tailoring failed: ${err.message}`, tailorResume);
     }
   }
 
@@ -216,7 +189,7 @@
       });
     } catch (err) {
       panel.resetButton('jt-cover');
-      alert(`Cover letter generation failed: ${err.message}`);
+      panel.renderResultError(`Cover letter generation failed: ${err.message}`, draftCoverLetter);
     }
   }
 

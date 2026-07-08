@@ -4,12 +4,31 @@
 // bullets, and benefit/sponsorship highlights.
 
 (function (global) {
-  const { SKILLS_TAXONOMY, AMBIGUOUS_TAXONOMY, hasListNeighbor, HIGHLIGHT_RULES } = global.JobTrailSkillsData;
+  const { SKILLS_TAXONOMY, HIGHLIGHT_RULES } = global.JobTrailSkillsData;
 
   function stripHtml(html) {
     const div = document.createElement('div');
     div.innerHTML = html;
-    return (div.textContent || div.innerText || '').replace(/\s+\n/g, '\n').trim();
+
+    // .textContent concatenates all text nodes with NO separator at element
+    // boundaries — e.g. "<li>Python</li><li>JavaScript</li>" becomes
+    // "PythonJavaScript" with nothing between them. That silently breaks two
+    // things downstream: (1) skill detection, since the word-boundary regex
+    // then sees "PythonJavaScript" as one unrecognizable token instead of
+    // two known skills, and (2) qualification-line splitting, which relies
+    // on each bullet/paragraph landing on its own line. Force a line break
+    // at every block-level boundary before reading textContent so structure
+    // survives the conversion to plain text.
+    div.querySelectorAll('script, style').forEach((el) => el.remove());
+    div.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+    div.querySelectorAll('li, p, div, tr, h1, h2, h3, h4, h5, h6').forEach((el) => {
+      el.insertAdjacentText('afterend', '\n');
+    });
+
+    return (div.textContent || '')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   function textOf(el) {
@@ -98,16 +117,6 @@
     const found = [];
     for (const skill of SKILLS_TAXONOMY) {
       if (skill.pattern.test(description)) found.push(skill.name);
-    }
-    // Ambiguous common-English-word skills (R, Go, Excel, Swift, Rust, Spark)
-    // only count when a contextual guard matches or they show up in a short
-    // delimited list next to a confirmed skill — otherwise "R&D" / "go the
-    // extra mile" / "excel in this role" would falsely register as skills.
-    for (const skill of AMBIGUOUS_TAXONOMY) {
-      if (!skill.pattern.test(description)) continue;
-      if (skill.guard.test(description) || hasListNeighbor(description, skill.name)) {
-        found.push(skill.name);
-      }
     }
     return found;
   }

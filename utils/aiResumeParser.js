@@ -1,11 +1,78 @@
 /**
- * AI-powered resume parser using xAI (Grok) or Google Gemini (whichever is
- * configured — see utils/xaiClient.js).
- * Falls back to the rule-based regex parser if no provider is configured or the call fails.
+ * AI-powered resume parser using xAI (Grok).
+ * Falls back to the rule-based regex parser if XAI_API_KEY is missing or the call fails.
  */
 const { parseResumeText } = require('./resumeParser');
-const { extractSkillsFromText } = require('./skillsLexicon');
-const { callAI } = require('./xaiClient');
+const { cleanSkill } = require('./skillUtils');
+
+// ─── Shared xAI caller ───────────────────────────────────────────────────────
+//
+// NOTE ON MODEL NAME: this previously called 'grok-3' with a 'grok-3-mini'
+// retry. Both of those model slugs are now deprecated/retired by xAI (grok-3
+// era models have been retired in favour of grok-4.3, xAI's current
+// general-purpose flagship). Calls to a retired/unknown model slug fail
+// outright — with no regex fallback for /tailor and /cover-letter — which is
+// exactly the "failed" behaviour those two features were showing. The model
+// can be overridden via XAI_MODEL without a code change if xAI renames
+// things again.
+const XAI_MODEL = process.env.XAI_MODEL || 'grok-4.3';
+
+async function callXAI(messages, maxTokens = 8000) {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) throw new Error('XAI_API_KEY not configured');
+
+  const doRequest = () => fetch('https://api.x.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: XAI_MODEL,
+      max_tokens: maxTokens,
+      temperature: 0,          // deterministic extraction
+      reasoning_effort: 'none', // this is extraction/rewriting, not reasoning — keeps
+                                 // the whole token budget available for visible output
+                                 // instead of being silently spent on hidden "thinking"
+      messages
+    })
+  });
+
+  let response = await doRequest();
+
+  // A single retry with backoff for transient errors (rate limit / server
+  // hiccup) — the pattern xAI's own docs recommend. Anything else (bad key,
+  // bad request, unknown model) won't succeed on retry, so we fail fast
+  // below with the real reason instead of masking it behind a generic
+  // "please try again".
+  if (!response.ok && (response.status === 429 || response.status >= 500)) {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    response = await doRequest();
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`xAI API ${response.status}: ${body.slice(0, 300)}`);
+  }
+
+  const data = await response.json();
+  const choice = data.choices?.[0];
+  const text = (choice?.message?.content || '').trim();
+
+  if (!text) {
+    // Reasoning-capable models can spend the whole max_tokens budget on
+    // hidden reasoning tokens and return no visible content at all if the
+    // budget is too tight for the task — surface that plainly rather than
+    // letting the caller hit a confusing "no JSON object found" error.
+    throw new Error(
+      choice?.finish_reason === 'length'
+        ? 'xAI response was cut off before it produced any output — try a shorter job description or resume.'
+        : 'xAI returned an empty response'
+    );
+  }
+
+  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+}
 
 // ─── Resume text pre-processing ───────────────────────────────────────────────
 
@@ -200,11 +267,23 @@ function sanitizeParsed(p) {
     })),
     skills: (() => {
       const raw = p?.skills ?? p?.technicalSkills ?? p?.technical_skills ?? [];
-      if (typeof raw === 'string') return raw.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
-      return arr(raw).flatMap(s => {
-        if (typeof s === 'string') return s.split(/[,;|]/).map(t => t.trim()).filter(Boolean);
-        if (typeof s === 'object' && s !== null) return [str(s?.name, s?.skill, s?.value)].filter(Boolean);
-        return [];
+      let list;
+      if (typeof raw === 'string') {
+        list = raw.split(/[,;|]/).map(cleanSkill).filter(Boolean);
+      } else {
+        list = arr(raw).flatMap(s => {
+          if (typeof s === 'string') return s.split(/[,;|]/).map(cleanSkill).filter(Boolean);
+          if (typeof s === 'object' && s !== null) return [cleanSkill(str(s?.name, s?.skill, s?.value))].filter(Boolean);
+          return [];
+        });
+      }
+      // Dedupe case-insensitively while preserving first-seen casing/order
+      const seen = new Set();
+      return list.filter((s) => {
+        const key = s.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
     })(),
     projects: arr(p?.projects ?? p?.sideProjects).map((x) => ({
@@ -284,8 +363,8 @@ function extractJSON(raw) {
  * Falls back to the regex parser if the API key is absent or the call fails.
  */
 async function parseResumeWithAI(rawText) {
-  if (!process.env.XAI_API_KEY && !process.env.GEMINI_API_KEY) {
-    console.warn('[aiResumeParser] No AI provider configured — using regex fallback');
+  if (!process.env.XAI_API_KEY) {
+    console.warn('[aiResumeParser] XAI_API_KEY not set — using regex fallback');
     return parseResumeText(rawText);
   }
 
@@ -294,7 +373,7 @@ async function parseResumeWithAI(rawText) {
     // Use up to 24000 chars — enough for a 3-page resume with all bullets
     const trimmed = cleaned.slice(0, 24000);
 
-    const rawJson = await callAI(
+    const rawJson = await callXAI(
       [
         { role: 'system', content: PARSE_SYSTEM_PROMPT },
         {
@@ -355,133 +434,58 @@ Return ONLY valid JSON, no markdown, no explanation:
   "suggestions": "1–2 sentence explanation of the key changes made"
 }`;
 
-/**
- * Case-insensitive de-duplicating merge of skill lists, preserving the first
- * casing seen and the original order (existing resume skills first).
- */
-function mergeSkills(...lists) {
-  const out = [];
-  const seen = new Set();
-  for (const list of lists) {
-    for (const raw of list || []) {
-      const s = String(raw || '').trim();
-      if (!s) continue;
-      const key = s.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(s);
-    }
-  }
-  return out;
-}
-
-/**
- * Builds a tailored resume result WITHOUT calling any external AI — used
- * whenever no AI provider is configured or the call fails, so "Tailor Resume"
- * never dead-ends. Guarantees every job-required skill (matched or
- * candidate-confirmed) ends up in the returned skill list.
- */
-function localTailorResume(resume, jobTitle, jobDescription, emphasizeSkills = []) {
-  const jobSkills = extractSkillsFromText(jobDescription);
-  const confirmed = Array.isArray(emphasizeSkills) ? emphasizeSkills.filter(Boolean).map(String) : [];
-
-  const existing = resume.skills || [];
-  const existingLower = existing.map((s) => s.toLowerCase());
-
-  const newlyAdded = mergeSkills(confirmed, jobSkills).filter(
-    (s) => !existingLower.includes(s.toLowerCase())
-  );
-  const skills = mergeSkills(existing, newlyAdded);
-
-  const topNew = newlyAdded.slice(0, 4);
-  const role = jobTitle ? jobTitle.trim() : 'this role';
-  const existingSummary = (resume.summary || '').trim();
-
-  let summary;
-  if (existingSummary) {
-    summary = topNew.length
-      ? `${existingSummary} Well-matched for ${role}, bringing hands-on experience with ${topNew.join(', ')}.`
-      : existingSummary;
-  } else {
-    const topSkills = skills.slice(0, 5).join(', ') || 'a strong, relevant skill set';
-    const latestRole = (resume.experience || [])[0];
-    const roleLine = latestRole?.role && latestRole?.company
-      ? ` Most recently ${latestRole.role} at ${latestRole.company}.`
-      : '';
-    summary = `Results-driven professional targeting ${role}, with hands-on experience in ${topSkills}.${roleLine}`.trim();
-  }
-
-  const suggestions = newlyAdded.length
-    ? `Added ${newlyAdded.length} skill${newlyAdded.length === 1 ? '' : 's'} from this posting (${newlyAdded.slice(0, 6).join(', ')}${newlyAdded.length > 6 ? ', …' : ''}) and refreshed your summary to lead with them. This was generated by JobTrail's built-in engine — connect an AI key on the server for deeper rewrites of your experience bullets.`
-    : `Your resume already covers every skill JobTrail detected in this posting — summary refreshed to reference the role. This was generated by JobTrail's built-in engine.`;
-
-  return { summary, skills, experience: [], suggestions, addedSkills: newlyAdded, usedAI: false };
-}
-
 async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills = []) {
-  const jobSkills = extractSkillsFromText(jobDescription);
+  if (!process.env.XAI_API_KEY) {
+    throw new Error('AI tailoring requires XAI_API_KEY to be configured');
+  }
+
+  const snapshot = JSON.stringify(
+    {
+      summary: resume.summary,
+      skills: resume.skills,
+      experience: resume.experience.map((e, i) => ({
+        index: i,
+        role: e.role,
+        company: e.company,
+        description: e.description
+      }))
+    },
+    null,
+    2
+  );
+
   const confirmedExtras = Array.isArray(emphasizeSkills)
     ? emphasizeSkills.filter(Boolean).map(String).slice(0, 30)
     : [];
+  const extrasBlock = confirmedExtras.length
+    ? `\n\nCandidate-confirmed additional skills (from the job posting's requirements, which the candidate has checked off as skills they genuinely have):\n${confirmedExtras.join(', ')}`
+    : '';
 
-  if (!process.env.XAI_API_KEY && !process.env.GEMINI_API_KEY) {
-    console.warn('[aiResumeParser] No AI provider configured — using local tailoring engine');
-    return localTailorResume(resume, jobTitle, jobDescription, emphasizeSkills);
-  }
-
-  try {
-    const snapshot = JSON.stringify(
+  const json = await callXAI(
+    [
+      { role: 'system', content: TAILOR_SYSTEM_PROMPT },
       {
-        summary: resume.summary,
-        skills: resume.skills,
-        experience: (resume.experience || []).map((e, i) => ({
-          index: i,
-          role: e.role,
-          company: e.company,
-          description: e.description
-        }))
-      },
-      null,
-      2
-    );
+        role: 'user',
+        content: `Job Title: ${jobTitle || 'Not specified'}\n\nJob Description:\n${jobDescription.slice(0, 4000)}\n\nCurrent Resume:\n${snapshot}${extrasBlock}`
+      }
+    ],
+    4000
+  );
 
-    const extrasBlock = confirmedExtras.length
-      ? `\n\nCandidate-confirmed additional skills (from the job posting's requirements, which the candidate has checked off as skills they genuinely have):\n${confirmedExtras.join(', ')}`
-      : '';
-
-    const json = await callAI(
-      [
-        { role: 'system', content: TAILOR_SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `Job Title: ${jobTitle || 'Not specified'}\n\nJob Description:\n${jobDescription.slice(0, 4000)}\n\nCurrent Resume:\n${snapshot}${extrasBlock}`
-        }
-      ],
-      3000
-    );
-
-    const result = extractJSON(json);
-
-    // Guarantee: every skill JobTrail detected in the job posting, plus every
-    // candidate-confirmed skill, ends up in the final list even if the model
-    // dropped some. Existing AI-ordered skills are kept first.
-    const finalSkills = mergeSkills(result.skills || resume.skills || [], confirmedExtras, jobSkills);
-    const addedSkills = finalSkills.filter(
-      (s) => !(resume.skills || []).some((rs) => rs.toLowerCase() === s.toLowerCase())
-    );
-
-    return {
-      summary: result.summary || resume.summary || '',
-      skills: finalSkills,
-      experience: Array.isArray(result.experience) ? result.experience : [],
-      suggestions: result.suggestions || '',
-      addedSkills,
-      usedAI: true
-    };
-  } catch (err) {
-    console.error('[aiResumeParser] AI tailoring failed, using local engine:', err.message);
-    return localTailorResume(resume, jobTitle, jobDescription, emphasizeSkills);
+  const result = extractJSON(json);
+  if (Array.isArray(result.skills)) {
+    const seen = new Set();
+    result.skills = result.skills
+      .map(cleanSkill)
+      .filter((s) => {
+        if (!s) return false;
+        const key = s.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
   }
+  return result;
 }
 
 // ─── Cover letter generation ────────────────────────────────────────────────
@@ -496,88 +500,41 @@ Rules:
 - Plain text only — no markdown, no placeholders like "[Your Name]" (use the candidate's real name/details from the resume snapshot; omit a line if the info truly isn't available)
 - Do not fabricate a signature block address; a simple sign-off with the candidate's name is enough`;
 
-/**
- * Builds a solid, template-based cover letter WITHOUT calling any external
- * AI — used whenever no AI provider is configured or the call fails, so
- * "Cover Letter" never dead-ends. Only uses facts already present on the
- * resume; never invents employers, titles, or achievements.
- */
-function localCoverLetter(resume, jobTitle, company, jobDescription) {
-  const name = resume.personal?.name || 'the hiring team';
-  const role = jobTitle?.trim() || 'this role';
-  const org = company?.trim() || 'your team';
-  const latest = (resume.experience || [])[0];
-  const skills = (resume.skills || []).slice(0, 5);
-  const jobSkills = extractSkillsFromText(jobDescription || '');
-  const overlap = skills.filter((s) => jobSkills.some((js) => js.toLowerCase() === s.toLowerCase()));
-  const highlightSkills = (overlap.length ? overlap : skills).slice(0, 4);
-
-  const opening = latest?.role && latest?.company
-    ? `I'm excited to apply for the ${role} position at ${org}. As ${latest.role} at ${latest.company}, I've built a track record that lines up closely with what you're looking for.`
-    : `I'm excited to apply for the ${role} position at ${org}. My background lines up closely with what you're looking for in this role.`;
-
-  const middleSkillsLine = highlightSkills.length
-    ? `My experience with ${highlightSkills.join(', ')} has prepared me to contribute from day one${jobSkills.length ? `, and directly matches several of the core requirements in your posting` : ''}.`
-    : `My background has prepared me to contribute from day one.`;
-
-  const achievementLine = latest?.description
-    ? (latest.description.split('\n').map((l) => l.trim()).filter(Boolean)[0] || '')
-    : '';
-
-  const middle = [
-    middleSkillsLine,
-    achievementLine ? `For example, ${achievementLine.replace(/^[-•]\s*/, '').replace(/\.$/, '')}.` : ''
-  ].filter(Boolean).join(' ');
-
-  const closing = `I'd welcome the chance to talk about how I can help ${org} succeed with this role. Thank you for your time and consideration.`;
-  const signoff = resume.personal?.name ? `\n\nSincerely,\n${resume.personal.name}` : '\n\nSincerely,';
-
-  return [opening, middle, closing].filter(Boolean).join('\n\n') + signoff;
-}
-
 async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescription) {
-  if (!process.env.XAI_API_KEY && !process.env.GEMINI_API_KEY) {
-    console.warn('[aiResumeParser] No AI provider configured — using local cover letter engine');
-    return localCoverLetter(resume, jobTitle, company, jobDescription);
+  if (!process.env.XAI_API_KEY) {
+    throw new Error('AI cover letter generation requires XAI_API_KEY to be configured');
   }
 
-  try {
-    const snapshot = JSON.stringify(
+  const snapshot = JSON.stringify(
+    {
+      name: resume.personal?.name,
+      email: resume.personal?.email,
+      phone: resume.personal?.phone,
+      summary: resume.summary,
+      skills: resume.skills,
+      experience: resume.experience.map((e) => ({
+        role: e.role,
+        company: e.company,
+        description: e.description
+      })),
+      education: resume.education.map((ed) => ({ school: ed.school, degree: ed.degree, field: ed.field }))
+    },
+    null,
+    2
+  );
+
+  const text = await callXAI(
+    [
+      { role: 'system', content: COVER_LETTER_SYSTEM_PROMPT },
       {
-        name: resume.personal?.name,
-        email: resume.personal?.email,
-        phone: resume.personal?.phone,
-        summary: resume.summary,
-        skills: resume.skills,
-        experience: (resume.experience || []).map((e) => ({
-          role: e.role,
-          company: e.company,
-          description: e.description
-        })),
-        education: (resume.education || []).map((ed) => ({ school: ed.school, degree: ed.degree, field: ed.field }))
-      },
-      null,
-      2
-    );
+        role: 'user',
+        content: `Job Title: ${jobTitle || 'Not specified'}\nCompany: ${company || 'Not specified'}\n\nJob Description:\n${(jobDescription || '').slice(0, 3000)}\n\nCandidate Resume Snapshot:\n${snapshot}`
+      }
+    ],
+    2000
+  );
 
-    const text = await callAI(
-      [
-        { role: 'system', content: COVER_LETTER_SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `Job Title: ${jobTitle || 'Not specified'}\nCompany: ${company || 'Not specified'}\n\nJob Description:\n${(jobDescription || '').slice(0, 3000)}\n\nCandidate Resume Snapshot:\n${snapshot}`
-        }
-      ],
-      1200
-    );
-
-    const trimmed = text.trim();
-    if (!trimmed) throw new Error('Empty response from model');
-    return trimmed;
-  } catch (err) {
-    console.error('[aiResumeParser] AI cover letter failed, using local engine:', err.message);
-    return localCoverLetter(resume, jobTitle, company, jobDescription);
-  }
+  return text.trim();
 }
 
 module.exports = { parseResumeWithAI, tailorResumeWithAI, generateCoverLetterWithAI };
