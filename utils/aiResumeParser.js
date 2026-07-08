@@ -1,54 +1,11 @@
 /**
- * AI-powered resume parser using xAI (Grok).
- * Falls back to the rule-based regex parser if XAI_API_KEY is missing or the call fails.
+ * AI-powered resume parser using xAI (Grok) or Google Gemini (whichever is
+ * configured — see utils/xaiClient.js).
+ * Falls back to the rule-based regex parser if no provider is configured or the call fails.
  */
 const { parseResumeText } = require('./resumeParser');
 const { extractSkillsFromText } = require('./skillsLexicon');
-
-// ─── Shared xAI caller ───────────────────────────────────────────────────────
-
-async function callXAI(messages, maxTokens = 8000) {
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) throw new Error('XAI_API_KEY not configured');
-
-  const response = await fetch('https://api.x.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'grok-3',        // grok-3 for highest accuracy; falls back to grok-3-mini if unavailable
-      max_tokens: maxTokens,
-      temperature: 0,         // deterministic extraction
-      messages
-    })
-  });
-
-  if (!response.ok) {
-    // Try grok-3-mini if grok-3 fails
-    if (response.status === 400 || response.status === 404) {
-      const retry = await fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: 'grok-3-mini', max_tokens: maxTokens, temperature: 0, messages })
-      });
-      if (!retry.ok) {
-        const body = await retry.text().catch(() => '');
-        throw new Error(`xAI API ${retry.status}: ${body.slice(0, 200)}`);
-      }
-      const data = await retry.json();
-      const text = data.choices?.[0]?.message?.content || '';
-      return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    }
-    const body = await response.text().catch(() => '');
-    throw new Error(`xAI API ${response.status}: ${body.slice(0, 200)}`);
-  }
-
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content || '';
-  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-}
+const { callAI } = require('./xaiClient');
 
 // ─── Resume text pre-processing ───────────────────────────────────────────────
 
@@ -327,8 +284,8 @@ function extractJSON(raw) {
  * Falls back to the regex parser if the API key is absent or the call fails.
  */
 async function parseResumeWithAI(rawText) {
-  if (!process.env.XAI_API_KEY) {
-    console.warn('[aiResumeParser] XAI_API_KEY not set — using regex fallback');
+  if (!process.env.XAI_API_KEY && !process.env.GEMINI_API_KEY) {
+    console.warn('[aiResumeParser] No AI provider configured — using regex fallback');
     return parseResumeText(rawText);
   }
 
@@ -337,7 +294,7 @@ async function parseResumeWithAI(rawText) {
     // Use up to 24000 chars — enough for a 3-page resume with all bullets
     const trimmed = cleaned.slice(0, 24000);
 
-    const rawJson = await callXAI(
+    const rawJson = await callAI(
       [
         { role: 'system', content: PARSE_SYSTEM_PROMPT },
         {
@@ -420,7 +377,7 @@ function mergeSkills(...lists) {
 
 /**
  * Builds a tailored resume result WITHOUT calling any external AI — used
- * whenever XAI_API_KEY is missing or the xAI call fails, so "Tailor Resume"
+ * whenever no AI provider is configured or the call fails, so "Tailor Resume"
  * never dead-ends. Guarantees every job-required skill (matched or
  * candidate-confirmed) ends up in the returned skill list.
  */
@@ -467,8 +424,8 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
     ? emphasizeSkills.filter(Boolean).map(String).slice(0, 30)
     : [];
 
-  if (!process.env.XAI_API_KEY) {
-    console.warn('[aiResumeParser] XAI_API_KEY not set — using local tailoring engine');
+  if (!process.env.XAI_API_KEY && !process.env.GEMINI_API_KEY) {
+    console.warn('[aiResumeParser] No AI provider configured — using local tailoring engine');
     return localTailorResume(resume, jobTitle, jobDescription, emphasizeSkills);
   }
 
@@ -492,7 +449,7 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
       ? `\n\nCandidate-confirmed additional skills (from the job posting's requirements, which the candidate has checked off as skills they genuinely have):\n${confirmedExtras.join(', ')}`
       : '';
 
-    const json = await callXAI(
+    const json = await callAI(
       [
         { role: 'system', content: TAILOR_SYSTEM_PROMPT },
         {
@@ -541,7 +498,7 @@ Rules:
 
 /**
  * Builds a solid, template-based cover letter WITHOUT calling any external
- * AI — used whenever XAI_API_KEY is missing or the xAI call fails, so
+ * AI — used whenever no AI provider is configured or the call fails, so
  * "Cover Letter" never dead-ends. Only uses facts already present on the
  * resume; never invents employers, titles, or achievements.
  */
@@ -579,8 +536,8 @@ function localCoverLetter(resume, jobTitle, company, jobDescription) {
 }
 
 async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescription) {
-  if (!process.env.XAI_API_KEY) {
-    console.warn('[aiResumeParser] XAI_API_KEY not set — using local cover letter engine');
+  if (!process.env.XAI_API_KEY && !process.env.GEMINI_API_KEY) {
+    console.warn('[aiResumeParser] No AI provider configured — using local cover letter engine');
     return localCoverLetter(resume, jobTitle, company, jobDescription);
   }
 
@@ -603,7 +560,7 @@ async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescripti
       2
     );
 
-    const text = await callXAI(
+    const text = await callAI(
       [
         { role: 'system', content: COVER_LETTER_SYSTEM_PROMPT },
         {

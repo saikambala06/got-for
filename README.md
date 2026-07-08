@@ -55,19 +55,29 @@ jobtrail/
 4. Copy your connection string:
    `mongodb+srv://<user>:<password>@cluster0.xxxxx.mongodb.net/jobtrail?retryWrites=true&w=majority`
 
-## 2. Get an xAI API key
+## 2. Get an AI provider key (pick one — or both)
 
+JobTrail's AI features (resume parsing, tailoring, cover letters, job-posting
+extraction) work with either provider below. If both are set, xAI is tried
+first and Gemini is used automatically if the xAI call fails.
+
+**Option A — Google Gemini (free tier, recommended if you don't want to pay):**
+1. Sign up at https://aistudio.google.com/apikey and create an API key.
+2. Add it to your environment as `GEMINI_API_KEY`.
+3. The free tier has generous per-minute/per-day request limits — plenty for personal use. See https://ai.google.dev/pricing for current limits.
+
+**Option B — xAI (Grok, paid, usage-based):**
 1. Sign up at https://console.x.ai and create an API key.
-2. Add it to your environment as `XAI_API_KEY` (see below).
+2. Add it to your environment as `XAI_API_KEY`.
 
-The app gracefully degrades — if the key is absent, resume parsing falls back to a regex-based extractor and the "Tailor to Job" button returns a clear error.
+The app gracefully degrades — if neither key is set (or a call fails), resume parsing falls back to a regex-based extractor, job-posting extraction falls back to a local skill-taxonomy/keyword engine, and "Tailor to Job" / "Cover Letter" fall back to template-based generators built from your actual resume data. Nothing ever hard-fails — you just get less nuanced output without a live model.
 
 ## 3. Run locally
 
 ```bash
 npm install
 cp .env.example .env
-# Edit .env — paste your MONGODB_URI, JWT_SECRET, and XAI_API_KEY
+# Edit .env — paste your MONGODB_URI, JWT_SECRET, and GEMINI_API_KEY (or XAI_API_KEY)
 npm run dev
 ```
 
@@ -80,7 +90,7 @@ Visit `http://localhost:4000`. Create an account to get started.
 3. Under **Environment Variables** add:
    - `MONGODB_URI` — your MongoDB Atlas connection string
    - `JWT_SECRET` — any long random string
-   - `XAI_API_KEY` — your xAI API key
+   - `GEMINI_API_KEY` — your Gemini API key (and/or `XAI_API_KEY`)
    - `NODE_ENV` — `production`
 4. Click **Deploy**.
 
