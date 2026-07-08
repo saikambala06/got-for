@@ -87,6 +87,21 @@
   .job-pick .role{ font-weight:700; font-size:13.5px; }
   .job-pick .co{ font-size:12px; color:var(--text-faint); }
 
+  .resume-card{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 18px; margin-bottom:10px;
+    background:var(--surface-2); cursor:pointer; transition:.15s ease;
+  }
+  .resume-card:hover{ border-color:var(--accent); }
+  .resume-card .rc-title{ font-weight:700; font-size:14px; }
+  .resume-card .rc-meta{ font-size:12px; color:var(--text-faint); margin-top:2px; }
+  .resume-card .rc-badge{
+    font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--accent-2);
+    background:var(--accent-soft); padding:3px 9px; border-radius:100px; margin-left:8px;
+  }
+  .resume-card .rc-actions{ display:flex; gap:8px; flex-shrink:0; }
+  .resume-card .rc-actions button{ position:relative; z-index:2; }
+
   .row-2{ display:grid; grid-template-columns:1fr 1fr; gap:22px; }
   @media (max-width:820px){ .row-2{ grid-template-columns:1fr; } .dossier{ grid-template-columns:1fr; } }
 </style>
@@ -105,14 +120,22 @@
 
     <div class="card section-card">
       <div class="rt-tabs">
-        <button class="rt-tab active" data-tab="parse">Parse resume</button>
+        <button class="rt-tab active" data-tab="saved">My resumes</button>
+        <button class="rt-tab" data-tab="parse">Parse resume</button>
         <button class="rt-tab" data-tab="tailor">Tailor resume</button>
         <button class="rt-tab" data-tab="jobs">Job board</button>
         <button class="rt-tab" data-tab="settings">Gemini API key</button>
       </div>
 
+      <!-- SAVED -->
+      <div class="rt-panel active" id="panel-saved">
+        <div class="rt-hint">Resumes you've parsed and saved. Click one to view its details.</div>
+        <div id="savedResumesList"></div>
+        <div id="savedResumeDetail"></div>
+      </div>
+
       <!-- PARSE -->
-      <div class="rt-panel active" id="panel-parse">
+      <div class="rt-panel" id="panel-parse">
         <div class="rt-hint" id="parseKeyHint" style="display:none;">No Gemini API key set yet — add one under the <b>Gemini API key</b> tab before parsing.</div>
         <textarea class="rt-textarea" id="resumeInput" placeholder="Paste the full resume text here..."></textarea>
         <div class="rt-actions">
@@ -239,6 +262,7 @@ document.querySelectorAll('.rt-tab').forEach(btn => {
     document.querySelectorAll('.rt-panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'saved') loadSavedResumes();
   });
 });
 
@@ -390,6 +414,11 @@ document.getElementById('saveResumeBtn').addEventListener('click', async () => {
     const payload = mapParsedToResumePayload(rtState.parsed, title);
     await api.post('/api/resumes', payload);
     showToast('Resume saved');
+    document.querySelectorAll('.rt-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.rt-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector('[data-tab="saved"]').classList.add('active');
+    document.getElementById('panel-saved').classList.add('active');
+    await loadSavedResumes();
   } catch (err) {
     showToast(err.message || 'Could not save resume', 'error');
   }
@@ -509,8 +538,108 @@ document.querySelectorAll('.job-pick').forEach(el => {
 
 refreshKeyHints();
 
+/* ---- saved resumes ---- */
+async function loadSavedResumes() {
+  const list = document.getElementById('savedResumesList');
+  document.getElementById('savedResumeDetail').innerHTML = '';
+  list.innerHTML = '<div class="rt-hint"><span class="loader-sm"></span> Loading your resumes…</div>';
+  try {
+    const { resumes } = await api.get('/api/resumes');
+    if (!resumes.length) {
+      list.innerHTML = `<div class="rt-hint">No saved resumes yet. Parse or upload one in the <b>Parse resume</b> tab, then hit Save.</div>`;
+      return;
+    }
+    list.innerHTML = resumes.map(r => `
+      <div class="resume-card" data-view="${r._id}">
+        <div>
+          <div class="rc-title">${r.title}${r.isDefault ? '<span class="rc-badge">Default</span>' : ''}</div>
+          <div class="rc-meta">${(r.skills || []).length} skills · updated ${timeAgo(r.updatedAt)}</div>
+        </div>
+        <div class="rc-actions">
+          <button class="btn" data-view-btn="${r._id}">View</button>
+          <button class="btn" data-delete="${r._id}">Delete</button>
+        </div>
+      </div>`).join('');
+
+    list.querySelectorAll('[data-view], [data-view-btn]').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const id = el.dataset.view || el.dataset.viewBtn;
+        viewSavedResume(id, resumes.find(r => r._id === id));
+      });
+    });
+    list.querySelectorAll('[data-delete]').forEach(el => {
+      el.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        if (!confirm('Delete this resume? This cannot be undone.')) return;
+        try {
+          await api.del('/api/resumes/' + el.dataset.delete);
+          showToast('Resume deleted');
+          loadSavedResumes();
+        } catch (err) {
+          showToast(err.message || 'Could not delete resume', 'error');
+        }
+      });
+    });
+  } catch (err) {
+    list.innerHTML = `<div class="rt-error">${err.message || 'Could not load resumes'}</div>`;
+  }
+}
+
+function viewSavedResume(id, resume) {
+  const detail = document.getElementById('savedResumeDetail');
+  if (!resume) { detail.innerHTML = ''; return; }
+  const p = resume.personal || {};
+  detail.innerHTML = `
+    <div class="dossier">
+      <div class="dtabs">
+        <button class="active">Summary</button>
+        <button data-exp>Experience</button>
+        <button data-edu>Education</button>
+      </div>
+      <div class="dcontent">
+        <div class="field-label">Name</div><div class="field-value">${p.name || '—'}</div>
+        <div class="field-label">Contact</div><div class="field-value">${p.email || '—'}${p.phone ? ' · ' + p.phone : ''}</div>
+        <div class="field-label">Summary</div><div class="field-value">${resume.summary || '—'}</div>
+        <div class="field-label">Skills</div>
+        <div>${(resume.skills || []).map(s => `<span class="skill-chip">${s}</span>`).join('') || '—'}</div>
+      </div>
+    </div>`;
+
+  const dtabs = detail.querySelector('.dtabs');
+  dtabs.querySelectorAll('button').forEach((btn, i) => {
+    btn.addEventListener('click', () => {
+      dtabs.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const content = detail.querySelector('.dcontent');
+      if (i === 0) {
+        content.innerHTML = `
+          <div class="field-label">Name</div><div class="field-value">${p.name || '—'}</div>
+          <div class="field-label">Contact</div><div class="field-value">${p.email || '—'}${p.phone ? ' · ' + p.phone : ''}</div>
+          <div class="field-label">Summary</div><div class="field-value">${resume.summary || '—'}</div>
+          <div class="field-label">Skills</div>
+          <div>${(resume.skills || []).map(s => `<span class="skill-chip">${s}</span>`).join('') || '—'}</div>`;
+      } else if (i === 1) {
+        content.innerHTML = (resume.experience || []).map(e => `
+          <div class="exp-entry">
+            <div class="role">${e.role || ''}</div>
+            <div class="org">${e.company || ''}${e.startDate ? ' · ' + e.startDate + (e.endDate ? ' – ' + e.endDate : '') : ''}</div>
+            <ul>${(e.description || '').split('\n').filter(Boolean).map(b => `<li>${b}</li>`).join('')}</ul>
+          </div>`).join('') || '<div class="rt-hint">No experience entries.</div>';
+      } else {
+        content.innerHTML = (resume.education || []).map(ed => `
+          <div class="exp-entry">
+            <div class="role">${ed.degree || ''}</div>
+            <div class="org">${ed.school || ''}${ed.startDate ? ' · ' + ed.startDate + (ed.endDate ? ' – ' + ed.endDate : '') : ''}</div>
+          </div>`).join('') || '<div class="rt-hint">No education entries.</div>';
+      }
+    });
+  });
+}
+
 (async function init() {
   await requireSession();
+  loadSavedResumes();
 })();
 </script>
 </body>
