@@ -1,284 +1,117 @@
 const express = require('express');
-const multer  = require('multer');
-const Resume  = require('../models/Resume');
-const User    = require('../models/User');
-const requireAuth = require('../middleware/auth');
-const { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI } = require('../utils/aiResumeParser');
-const { normalizeDocxText } = require('../utils/resumeParser');
-
 const router = express.Router();
-router.use(requireAuth);
+const Resume = require('../models/Resume');[cite: 1]
+const Job = require('../models/Job');[cite: 1]
+const auth = require('../middleware/auth');[cite: 1]
+const { tailorResume } = require('../utils/aiTailor');
+const { generateResumePDF } = require('../utils/pdfGenerator');
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const ok = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ].includes(file.mimetype);
-    cb(ok ? null : new Error('Only PDF or DOCX files are supported'), ok);
+/**
+ * @route   POST /api/resumes/tailor
+ * @desc    Process a resume against a targeted job description to calculate variations
+ */
+router.post('/tailor', auth, async (req, res) => {
+  try {
+    const { resumeId, jobId, tailoringLevel } = req.body;
+
+    if (!resumeId || !jobId) {
+      return res.status(400).json({ error: "Missing required resumeId or jobId parameter." });
+    }
+
+    const baseResume = await Resume.findOne({ _id: resumeId, userId: req.user.id });[cite: 1]
+    const targetJob = await Job.findById(jobId);[cite: 1]
+
+    if (!baseResume) return res.status(404).json({ error: "Base resume could not be located." });
+    if (!targetJob) return res.status(404).json({ error: "Target job context could not be located." });
+
+    // Execute the AI tailoring processing model
+    const diffMap = await tailorResume(baseResume, targetJob.description, tailoringLevel || 'Medium');
+
+    return res.json({
+      success: true,
+      jobTitle: targetJob.title,
+      company: targetJob.company,
+      diff: diffMap
+    });
+  } catch (error) {
+    console.error("Tailoring Route Failure:", error);
+    return res.status(500).json({ error: "Internal processing error during AI tailoring generation." });
   }
 });
 
 /**
- * Clean up raw PDF-extracted text before parsing:
- * - Remove page-number artifacts
- * - Remove repeated headers/footers (lines that appear 2+ times verbatim)
- * - Normalise bullet characters
- * - Collapse excessive blank lines
+ * @route   POST /api/resumes/download-pdf
+ * @desc    Compile finalized client data into a rendered styling template and stream the raw PDF
  */
-function cleanPdfText(raw) {
-  const lines = raw.replace(/\r/g, '').split('\n');
+router.post('/download-pdf', auth, async (req, res) => {
+  try {
+    const { resumeData, customOptions } = req.body;
 
-  // Count line frequencies — lines that appear 3+ times are likely headers/footers
-  const freq = {};
-  for (const l of lines) {
-    const t = l.trim();
-    if (t) freq[t] = (freq[t] || 0) + 1;
-  }
+    if (!resumeData) {
+      return res.status(400).json({ error: "Missing compiled structural resume payload." });
+    }
 
-  const cleaned = lines
-    .map(l => {
-      const t = l.trim();
-      // Remove page-number lines
-      if (/^--\s*\d+\s*(of\s+\d+)?\s*--$/i.test(t)) return '';
-      if (/^Page\s+\d+(\s+of\s+\d+)?$/i.test(t)) return '';
-      // Remove repeated header/footer lines
-      if (freq[t] >= 3) return '';
-      // Normalise bullets
-      return l.replace(/^[\s]*[\u2022\u25AA\u25CF\u2713\u2714\u25BA\u27A2\u27B3*▪▸]\s*/m, '- ');
+    const accentColor = customOptions?.accentColor || '#000000';
+    const fontName = customOptions?.fontName || 'Arial';
+
+    // Construct print layout based on chosen template parameters dynamically
+    let htmlLayout = `
+      <div style="font-family: '${fontName}', sans-serif;">
+        <div style="text-align: center; border-bottom: 2px solid ${accentColor}; padding-bottom: 12px; margin-bottom: 20px;">
+          <h1 style="margin: 0 0 5px 0; color: #111; font-size: 28px;">${resumeData.name || 'Applicant'}</h1>
+          <p style="margin: 0; color: #555; font-size: 14px;">
+            ${resumeData.email || ''} | ${resumeData.phone || ''} | ${resumeData.location || ''}
+          </p>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <h2 style="color: ${accentColor}; font-size: 16px; text-transform: uppercase; margin-bottom: 8px;">Professional Summary</h2>
+          <p style="margin: 0; font-size: 13px; text-align: justify;">${resumeData.summary || ''}</p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h2 style="color: ${accentColor}; font-size: 16px; text-transform: uppercase; margin-bottom: 8px;">Core Competencies</h2>
+          <p style="margin: 0; font-size: 13px;">${Array.isArray(resumeData.skills) ? resumeData.skills.join(' • ') : ''}</p>
+        </div>
+
+        <div>
+          <h2 style="color: ${accentColor}; font-size: 16px; text-transform: uppercase; margin-bottom: 8px;">Professional Experience</h2>
+    `;
+
+    if (resumeData.experience && Array.isArray(resumeData.experience)) {
+      resumeData.experience.forEach(exp => {
+        htmlLayout += `
+          <div style="margin-bottom: 15px;">
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 13px;">
+              <span>${exp.role} — ${exp.company}</span>
+              <span>${exp.duration || ''}</span>
+            </div>
+            <ul style="margin: 5px 0 0 0; padding-left: 20px; font-size: 13px;">
+        `;
+        if (exp.bullets && Array.isArray(exp.bullets)) {
+          exp.bullets.forEach(bullet => {
+            htmlLayout += `<li style="margin-bottom: 4px; text-align: justify;">${bullet}</li>`;
+          });
+        }
+        htmlLayout += `</ul></div>`;
+      });
+    }
+
+    htmlLayout += `</div></div>`;
+
+    // Process structured document composition markup into buffer streams
+    const pdfBuffer = await generateResumePDF(htmlLayout);
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="Tailored_Resume_${Date.now()}.pdf"`,
+      'Content-Length': pdfBuffer.length
     });
 
-  return cleaned.join('\n')
-    .replace(/\n{4,}/g, '\n\n')   // collapse 4+ blank lines to 2
-    .trim();
-}
-
-// ─── Parse uploaded resume ────────────────────────────────────────────────────
-
-router.post('/parse', (req, res) => {
-  upload.single('file')(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'Could not read that file' });
-    if (!req.file) return res.status(400).json({ error: 'Please choose a PDF or DOCX file' });
-
-    try {
-      let text = '';
-
-      if (req.file.mimetype === 'application/pdf') {
-        const pdfParse = require('pdf-parse');
-        const result = await pdfParse(req.file.buffer, {
-          // Use raw text extraction without normalization — we clean it ourselves
-          normalizeWhitespace: false
-        });
-        text = cleanPdfText(result.text);
-      } else {
-        const mammoth = require('mammoth');
-        const { value } = await mammoth.extractRawText({ buffer: req.file.buffer });
-        text = normalizeDocxText(value);
-      }
-
-      if (!text || !text.trim()) {
-        return res.status(422).json({
-          error: "We couldn't read any text from that file. Try Build from Scratch instead."
-        });
-      }
-
-      const parsed = await parseResumeWithAI(text);
-      res.json({ parsed });
-    } catch (err2) {
-      console.error('[/parse]', err2);
-      res.status(500).json({ error: 'Could not process that file. Try Build from Scratch instead.' });
-    }
-  });
-});
-
-// ─── Parse pasted resume text (web portal "Parse resume" tab) ────────────────
-// Uses the server's own GEMINI_API_KEY — the person never supplies one.
-
-router.post('/parse-text', async (req, res) => {
-  try {
-    const { text = '' } = req.body;
-    if (!text.trim()) return res.status(400).json({ error: 'Paste a resume first' });
-
-    const parsed = await parseRawResumeTextWithAI(text);
-    res.json({ parsed });
-  } catch (err) {
-    console.error('[/parse-text]', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
-    }
-    res.status(502).json({ error: `Resume parsing failed: ${err.message}` });
-  }
-});
-
-// ─── Tailor pasted resume text against a pasted job description ──────────────
-// (web portal "Tailor resume" tab — no saved resume required)
-
-router.post('/tailor-text', async (req, res) => {
-  try {
-    const { resumeText = '', jobDescription = '' } = req.body;
-    if (!resumeText.trim() || !jobDescription.trim()) {
-      return res.status(400).json({ error: 'Add both a resume and a job description' });
-    }
-
-    const tailored = await tailorRawTextWithAI(resumeText, jobDescription);
-    res.json({ tailored });
-  } catch (err) {
-    console.error('[/tailor-text]', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
-    }
-    res.status(502).json({ error: `AI tailoring failed: ${err.message}` });
-  }
-});
-
-// ─── Tailor an existing resume ────────────────────────────────────────────────
-
-router.post('/:id/tailor', async (req, res) => {
-  try {
-    const resume = await Resume.findOne({ _id: req.params.id, user: req.userId });
-    if (!resume) return res.status(404).json({ error: 'Resume not found' });
-
-    const { jobTitle = '', jobDescription = '', emphasizeSkills = [] } = req.body;
-    if (!jobDescription.trim()) return res.status(400).json({ error: 'Job description is required' });
-
-    const tailored = await tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills);
-    res.json({ tailored });
-  } catch (err) {
-    console.error('[/tailor]', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
-    }
-    // Surface the real reason (Gemini status code / message) instead of a
-    // generic "please try again" — a masked error is impossible to
-    // self-diagnose from the client side.
-    res.status(502).json({ error: `AI tailoring failed: ${err.message}` });
-  }
-});
-
-// ─── Generate a cover letter for a job ────────────────────────────────────────
-
-router.post('/:id/cover-letter', async (req, res) => {
-  try {
-    const resume = await Resume.findOne({ _id: req.params.id, user: req.userId });
-    if (!resume) return res.status(404).json({ error: 'Resume not found' });
-
-    const { jobTitle = '', company = '', jobDescription = '' } = req.body;
-    if (!jobDescription.trim()) return res.status(400).json({ error: 'Job description is required' });
-
-    const coverLetter = await generateCoverLetterWithAI(resume, jobTitle, company, jobDescription);
-    res.json({ coverLetter });
-  } catch (err) {
-    console.error('[/cover-letter]', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
-    }
-    res.status(502).json({ error: `Cover letter generation failed: ${err.message}` });
-  }
-});
-
-// ─── CRUD ─────────────────────────────────────────────────────────────────────
-
-router.get('/', async (req, res) => {
-  try {
-    const resumes = await Resume.find({ user: req.userId }).sort({ updatedAt: -1 });
-    res.json({ resumes });
-  } catch (err) {
-    res.status(500).json({ error: 'Could not load resumes' });
-  }
-});
-
-router.get('/:id', async (req, res) => {
-  try {
-    const resume = await Resume.findOne({ _id: req.params.id, user: req.userId });
-    if (!resume) return res.status(404).json({ error: 'Resume not found' });
-    res.json({ resume });
-  } catch (err) {
-    res.status(400).json({ error: 'Invalid resume id' });
-  }
-});
-
-router.post('/', async (req, res) => {
-  try {
-    const { title } = req.body;
-    if (!title) return res.status(400).json({ error: 'Resume name is required' });
-
-    const count = await Resume.countDocuments({ user: req.userId });
-
-    let personal = { name: '', email: '', phone: '', location: '', linkedin: '', portfolio: '' };
-    if (req.body.personal) {
-      personal = { ...personal, ...req.body.personal };
-    } else if (req.body.prefillFromProfile) {
-      const user = await User.findById(req.userId);
-      if (user) {
-        personal = {
-          name:      user.name      || '',
-          email:     user.email     || '',
-          phone:     user.phone     || '',
-          location:  user.location  || '',
-          linkedin:  user.linkedin  || '',
-          portfolio: user.portfolio || ''
-        };
-      }
-    }
-
-    const listFields = ['experience', 'education', 'skills', 'projects', 'certifications', 'achievements', 'languages', 'publications'];
-    const extra = {};
-    listFields.forEach(key => {
-      if (Array.isArray(req.body[key])) extra[key] = req.body[key];
-    });
-
-    const resume = await Resume.create({
-      user: req.userId,
-      title,
-      isDefault: count === 0,
-      personal,
-      summary: req.body.summary || '',
-      ...extra
-    });
-    res.status(201).json({ resume });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Could not create resume' });
-  }
-});
-
-router.put('/:id', async (req, res) => {
-  try {
-    if (req.body.isDefault === true) {
-      await Resume.updateMany({ user: req.userId }, { $set: { isDefault: false } });
-    }
-
-    const allowed = [
-      'title', 'isDefault', 'personal', 'summary', 'experience', 'education',
-      'skills', 'projects', 'certifications', 'achievements', 'languages', 'publications'
-    ];
-    const update = {};
-    allowed.forEach(key => {
-      if (req.body[key] !== undefined) update[key] = req.body[key];
-    });
-
-    const resume = await Resume.findOneAndUpdate(
-      { _id: req.params.id, user: req.userId },
-      { $set: update },
-      { new: true, runValidators: true }
-    );
-    if (!resume) return res.status(404).json({ error: 'Resume not found' });
-    res.json({ resume });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Could not update resume' });
-  }
-});
-
-router.delete('/:id', async (req, res) => {
-  try {
-    const resume = await Resume.findOneAndDelete({ _id: req.params.id, user: req.userId });
-    if (!resume) return res.status(404).json({ error: 'Resume not found' });
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Could not delete resume' });
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error("PDF Compilation Endpoint Failure:", error);
+    return res.status(500).json({ error: "Failed to output printable binary document asset streams." });
   }
 });
 
