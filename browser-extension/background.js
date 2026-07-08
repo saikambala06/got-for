@@ -90,6 +90,14 @@ const handlers = {
       body: JSON.stringify(job)
     });
     return body.job;
+  },
+
+  async 'job:analyze'({ jobTitle, company, jobDescription }) {
+    const body = await apiFetch('/api/jobs/analyze', {
+      method: 'POST',
+      body: JSON.stringify({ jobTitle, company, jobDescription })
+    });
+    return body.analysis;
   }
 };
 

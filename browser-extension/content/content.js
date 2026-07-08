@@ -66,6 +66,38 @@
     }
 
     state.selectedResumeId = state.resumes.find((r) => r.isDefault)?._id || state.resumes[0]._id;
+
+    // The on-page regex extraction (skillsFound / qualificationPhrases /
+    // highlights) is a fast baseline that works with no network call, but
+    // it's brittle: it only fires off literal section headings and a fixed
+    // skills taxonomy, so postings with unusual formatting or phrasing come
+    // back mostly empty. Enhance it with an AI read of the same description
+    // text, which understands paraphrased requirements and non-standard
+    // section titles. If the AI call fails (no API key configured, network
+    // issue, etc.) we silently keep the regex baseline already computed —
+    // the panel still works, just with a coarser read of the posting.
+    panel.renderLoading('Analyzing job requirements with AI…');
+    try {
+      const analysis = await send('job:analyze', {
+        jobTitle: state.job.title,
+        company: state.job.company,
+        jobDescription: state.job.description
+      });
+      if (analysis) {
+        if (analysis.skills?.length) state.job.skillsFound = analysis.skills;
+        if (analysis.qualifications?.length) state.job.qualificationPhrases = analysis.qualifications;
+        if (analysis.highlights?.length) state.job.highlights = analysis.highlights;
+        if (analysis.experience?.years || analysis.experience?.seniority) {
+          state.job.experience = {
+            years: analysis.experience.years || state.job.experience?.years || '',
+            seniority: analysis.experience.seniority || state.job.experience?.seniority || ''
+          };
+        }
+      }
+    } catch (_) {
+      // Keep the regex-based baseline already on state.job.
+    }
+
     renderCard();
   }
 

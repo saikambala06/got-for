@@ -443,7 +443,86 @@ async function parseResumeWithAI(rawText) {
   }
 }
 
-// ─── Resume tailoring ─────────────────────────────────────────────────────────
+// ─── Job posting analysis (skills / qualifications / highlights) ────────────
+
+const JOB_ANALYSIS_SYSTEM_PROMPT = `You are a precision job-posting analysis engine. Read the job posting text and output a single valid JSON object — nothing else. No markdown fences, no commentary.
+
+Your job is to extract, in the candidate's own resume-matching vocabulary:
+
+1. "skills": EVERY concrete hard skill, tool, language, framework, platform, or technology explicitly required or preferred in the posting. Use short canonical names matching how they'd appear on a resume (e.g. "React", "AWS", "Python", "SQL", "Kubernetes", "Figma"). Do not include soft skills (e.g. "communication", "teamwork") in this list. Do not invent skills that aren't mentioned or clearly implied by the posting's requirements. Aim to be thorough — junior postings may have 3-5, senior/technical postings often have 15-25.
+
+2. "qualifications": The concrete requirements/qualifications a candidate needs, as short standalone bullet phrases (max ~90 characters each), drawn from any "Requirements", "Qualifications", "What you'll need", "Who you are", or similar section — or, if no such section exists, inferred from the body of the posting (years of experience, degree requirements, must-have skills, certifications). Return 3-10 bullets. Never fabricate a requirement that isn't supported by the text.
+
+3. "highlights": Notable benefits, perks, or hiring-context callouts explicitly mentioned — e.g. "Remote-friendly", "Visa sponsorship available", "Equity/stock options", "Unlimited PTO", "Health insurance", "401k match", "Relocation assistance", "4-day work week". Only include ones actually supported by the text. Return [] if none are mentioned — do not invent generic ones.
+
+4. "experience": { "years": string like "5+ years" or "" if not stated, "seniority": one of "Entry-level"/"Junior"/"Mid-level"/"Senior"/"Lead"/"Principal"/"Staff"/"" if not stated }
+
+=== JSON SCHEMA ===
+{
+  "skills": [],
+  "qualifications": [],
+  "highlights": [],
+  "experience": { "years": "", "seniority": "" }
+}`;
+
+function sanitizeJobAnalysis(a) {
+  const arrStr = (v, max) => {
+    const list = Array.isArray(v) ? v : [];
+    return list
+      .map((s) => (typeof s === 'string' ? s.trim() : String(s?.name || s?.value || s || '').trim()))
+      .filter(Boolean)
+      .slice(0, max);
+  };
+  return {
+    skills: arrStr(a?.skills, 30),
+    qualifications: arrStr(a?.qualifications, 10),
+    highlights: arrStr(a?.highlights, 10),
+    experience: {
+      years: typeof a?.experience?.years === 'string' ? a.experience.years.trim() : '',
+      seniority: typeof a?.experience?.seniority === 'string' ? a.experience.seniority.trim() : ''
+    }
+  };
+}
+
+/**
+ * Analyze a job posting with Gemini to extract skills, qualifications,
+ * highlights, and experience level. Throws if GEMINI_API_KEY isn't
+ * configured or the call fails — callers should fall back to the
+ * regex-based extraction already computed client-side.
+ */
+async function analyzeJobWithAI(jobTitle, company, description) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY not configured');
+  }
+
+  const trimmed = (description || '').slice(0, 12000);
+  if (!trimmed.trim()) {
+    throw new Error('No job description text to analyze');
+  }
+
+  const json = await callGemini(
+    [
+      { role: 'system', content: JOB_ANALYSIS_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: [
+          `Job Title: ${jobTitle || 'Not specified'}`,
+          `Company: ${company || 'Not specified'}`,
+          '',
+          '=== JOB POSTING TEXT START ===',
+          trimmed,
+          '=== JOB POSTING TEXT END ==='
+        ].join('\n')
+      }
+    ],
+    3000,
+    { jsonMode: true }
+  );
+
+  return sanitizeJobAnalysis(extractJSON(json));
+}
+
+
 
 const TAILOR_SYSTEM_PROMPT = `You are an expert resume writer and career coach. Tailor the provided resume content to better match the job description by:
 - Rewriting the professional summary to reflect the target role
@@ -569,4 +648,4 @@ async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescripti
   return text.trim();
 }
 
-module.exports = { parseResumeWithAI, tailorResumeWithAI, generateCoverLetterWithAI };
+module.exports = { parseResumeWithAI, tailorResumeWithAI, generateCoverLetterWithAI, analyzeJobWithAI };

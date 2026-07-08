@@ -1,6 +1,7 @@
 const express = require('express');
 const Job = require('../models/Job');
 const requireAuth = require('../middleware/auth');
+const { analyzeJobWithAI } = require('../utils/aiResumeParser');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -144,6 +145,26 @@ router.delete('/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Could not delete job application' });
+  }
+});
+
+// AI-powered analysis of a job posting's skills / qualifications / highlights.
+// Falls back to a 503 (not an error the client should retry) if no Gemini
+// key is configured — the extension keeps its regex-based extraction as
+// its baseline and just skips the AI enhancement in that case.
+router.post('/analyze', async (req, res) => {
+  try {
+    const { jobTitle = '', company = '', jobDescription = '' } = req.body;
+    if (!jobDescription.trim()) return res.status(400).json({ error: 'Job description is required' });
+
+    const analysis = await analyzeJobWithAI(jobTitle, company, jobDescription);
+    res.json({ analysis });
+  } catch (err) {
+    console.error('[/jobs/analyze]', err.message);
+    if (err.message.includes('GEMINI_API_KEY')) {
+      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
+    }
+    res.status(502).json({ error: `AI job analysis failed: ${err.message}` });
   }
 });
 
