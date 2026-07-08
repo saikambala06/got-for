@@ -14,7 +14,6 @@ const appView = document.getElementById('app-view');
 
 async function refresh() {
   const state = await send('auth:getState').catch(() => ({ loggedIn: false }));
-  document.getElementById('apiBase').value = state.apiBase || 'http://localhost:4000';
 
   if (state.loggedIn && state.user) {
     loginView.style.display = 'none';
@@ -32,7 +31,6 @@ async function refresh() {
 document.getElementById('loginBtn').addEventListener('click', async () => {
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
-  const apiBase = document.getElementById('apiBase').value.trim().replace(/\/$/, '');
   const errorEl = document.getElementById('loginError');
   errorEl.textContent = '';
 
@@ -41,7 +39,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   const btn = document.getElementById('loginBtn');
   btn.disabled = true; btn.textContent = 'Logging in…';
   try {
-    await send('auth:login', { email, password, apiBase });
+    await send('auth:login', { email, password });
     await refresh();
   } catch (err) {
     errorEl.textContent = err.message;
@@ -56,7 +54,7 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 });
 
 document.getElementById('dashboardBtn').addEventListener('click', async () => {
-  const state = await send('auth:getState').catch(() => ({ apiBase: 'http://localhost:4000' }));
+  const state = await send('auth:getState').catch(() => ({ apiBase: 'https://got-for.vercel.app' }));
   chrome.tabs.create({ url: state.apiBase });
 });
 

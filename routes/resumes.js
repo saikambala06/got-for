@@ -3,7 +3,7 @@ const multer  = require('multer');
 const Resume  = require('../models/Resume');
 const User    = require('../models/User');
 const requireAuth = require('../middleware/auth');
-const { parseResumeWithAI, tailorResumeWithAI, generateCoverLetterWithAI } = require('../utils/aiResumeParser');
+const { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI } = require('../utils/aiResumeParser');
 const { normalizeDocxText } = require('../utils/resumeParser');
 
 const router = express.Router();
@@ -91,6 +91,46 @@ router.post('/parse', (req, res) => {
       res.status(500).json({ error: 'Could not process that file. Try Build from Scratch instead.' });
     }
   });
+});
+
+// ─── Parse pasted resume text (web portal "Parse resume" tab) ────────────────
+// Uses the server's own GEMINI_API_KEY — the person never supplies one.
+
+router.post('/parse-text', async (req, res) => {
+  try {
+    const { text = '' } = req.body;
+    if (!text.trim()) return res.status(400).json({ error: 'Paste a resume first' });
+
+    const parsed = await parseRawResumeTextWithAI(text);
+    res.json({ parsed });
+  } catch (err) {
+    console.error('[/parse-text]', err.message);
+    if (err.message.includes('GEMINI_API_KEY')) {
+      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
+    }
+    res.status(502).json({ error: `Resume parsing failed: ${err.message}` });
+  }
+});
+
+// ─── Tailor pasted resume text against a pasted job description ──────────────
+// (web portal "Tailor resume" tab — no saved resume required)
+
+router.post('/tailor-text', async (req, res) => {
+  try {
+    const { resumeText = '', jobDescription = '' } = req.body;
+    if (!resumeText.trim() || !jobDescription.trim()) {
+      return res.status(400).json({ error: 'Add both a resume and a job description' });
+    }
+
+    const tailored = await tailorRawTextWithAI(resumeText, jobDescription);
+    res.json({ tailored });
+  } catch (err) {
+    console.error('[/tailor-text]', err.message);
+    if (err.message.includes('GEMINI_API_KEY')) {
+      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
+    }
+    res.status(502).json({ error: `AI tailoring failed: ${err.message}` });
+  }
 });
 
 // ─── Tailor an existing resume ────────────────────────────────────────────────

@@ -124,7 +124,6 @@
         <button class="rt-tab" data-tab="parse">Parse resume</button>
         <button class="rt-tab" data-tab="tailor">Tailor resume</button>
         <button class="rt-tab" data-tab="jobs">Job board</button>
-        <button class="rt-tab" data-tab="settings">Gemini API key</button>
       </div>
 
       <!-- SAVED -->
@@ -136,7 +135,6 @@
 
       <!-- PARSE -->
       <div class="rt-panel" id="panel-parse">
-        <div class="rt-hint" id="parseKeyHint" style="display:none;">No Gemini API key set yet — add one under the <b>Gemini API key</b> tab before parsing.</div>
         <textarea class="rt-textarea" id="resumeInput" placeholder="Paste the full resume text here..."></textarea>
         <div class="rt-actions">
           <button class="btn btn-primary" id="parseBtn">Parse resume</button>
@@ -160,7 +158,6 @@
 
       <!-- TAILOR -->
       <div class="rt-panel" id="panel-tailor">
-        <div class="rt-hint" id="tailorKeyHint" style="display:none;">No Gemini API key set yet — add one under the <b>Gemini API key</b> tab before tailoring.</div>
         <div class="row-2">
           <div>
             <div class="field-label">Resume text</div>
@@ -184,18 +181,6 @@
         <div class="rt-hint">Pick a role to send its description straight into the tailor.</div>
         <div id="jobList"></div>
       </div>
-
-      <!-- SETTINGS -->
-      <div class="rt-panel" id="panel-settings">
-        <div class="field" style="max-width:420px;">
-          <label>Gemini API key</label>
-          <input type="password" id="apiKeyInput" placeholder="AIza..." />
-        </div>
-        <div class="rt-hint" style="margin-top:10px;">
-          Get a free key at <b>aistudio.google.com</b> → Get API key. No credit card required.
-          The key is kept only in this browser tab's memory for the AI Resume tools — it's never sent to our server or saved to disk, and disappears on reload.
-        </div>
-      </div>
     </div>
   </main>
 </div>
@@ -203,43 +188,13 @@
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-const rtState = { apiKey: '', resumeText: '', jobText: '', parsed: null, parsedTab: 'summary' };
+const rtState = { resumeText: '', jobText: '', parsed: null, parsedTab: 'summary' };
 
 const RT_JOBS = [
   {role:'Senior Frontend Engineer', co:'Meridian Health', desc:'We need a senior frontend engineer fluent in React and TypeScript to lead our patient portal rebuild. Requires 5+ years experience, strong accessibility knowledge, experience with design systems, GraphQL, and mentoring junior engineers. Healthcare data privacy (HIPAA) experience is a strong plus.'},
   {role:'Product Analyst', co:'Northwind Retail', desc:'Looking for a product analyst to own funnel metrics and experimentation. Must be skilled in SQL, A/B testing, dashboarding (Looker or Tableau), and communicating insights to non-technical stakeholders. E-commerce background preferred.'},
   {role:'Backend Engineer, Payments', co:'Fenwick Labs', desc:'Backend engineer for our payments infrastructure team. Strong Go or Java, distributed systems experience, understanding of idempotency and reconciliation, and exposure to PCI compliance. On-call rotation required.'},
 ];
-
-async function callGemini(prompt) {
-  if (!rtState.apiKey.trim()) {
-    throw new Error("Add your Google Gemini API key first, under the 'Gemini API key' tab.");
-  }
-  let res;
-  try {
-    res = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(rtState.apiKey.trim()),
-      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] }) }
-    );
-  } catch (e) {
-    throw new Error("Couldn't reach the Gemini API from this browser. Check your connection, or that the key is valid.");
-  }
-  if (!res.ok) {
-    let msg = 'Request failed (' + res.status + ')';
-    try { const b = await res.json(); if (b?.error?.message) msg = b.error.message; } catch (e) {}
-    throw new Error(msg);
-  }
-  const data = await res.json();
-  const parts = data.candidates?.[0]?.content?.parts;
-  return parts ? parts.map(p => p.text || '').join('') : '';
-}
-
-function extractJSON(text) {
-  const cleaned = text.replace(/```json|```/g, '').trim();
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  return JSON.parse(cleaned.slice(start, end + 1));
-}
 
 function gaugeSVG(score) {
   const r = 44, c = 2 * Math.PI * r;
@@ -265,14 +220,6 @@ document.querySelectorAll('.rt-tab').forEach(btn => {
     if (btn.dataset.tab === 'saved') loadSavedResumes();
   });
 });
-
-/* ---- key hints ---- */
-function refreshKeyHints() {
-  const has = !!rtState.apiKey.trim();
-  document.getElementById('parseKeyHint').style.display = has ? 'none' : 'block';
-  document.getElementById('tailorKeyHint').style.display = has ? 'none' : 'block';
-}
-document.getElementById('apiKeyInput').addEventListener('input', e => { rtState.apiKey = e.target.value; refreshKeyHints(); });
 
 /* ---- parse ---- */
 document.getElementById('resumeInput').addEventListener('input', e => { rtState.resumeText = e.target.value; });
@@ -311,22 +258,8 @@ document.getElementById('parseBtn').addEventListener('click', async () => {
   btn.disabled = true; btn.innerHTML = '<span class="loader-sm"></span> Reading resume…';
   document.getElementById('parseError').innerHTML = '';
   try {
-    const prompt = `Parse the following resume text into structured JSON only, with no preamble, no markdown fences. Use exactly this schema:
-{
-  "name": string, "title": string, "email": string, "phone": string,
-  "summary": string (2-3 sentences),
-  "skills": [string],
-  "experience": [{"role": string, "org": string, "dates": string, "bullets": [string]}],
-  "education": [{"degree": string, "school": string, "dates": string}]
-}
-If a field is missing, use an empty string or empty array. Do not invent facts not present in the resume.
-
-RESUME:
-"""
-${rtState.resumeText}
-"""`;
-    const raw = await callGemini(prompt);
-    rtState.parsed = extractJSON(raw);
+    const { parsed } = await api.post('/api/resumes/parse-text', { text: rtState.resumeText });
+    rtState.parsed = parsed;
     rtState.parsedTab = 'summary';
     renderDossier();
     showSaveRow();
@@ -370,34 +303,48 @@ function showSaveRow(defaultName) {
   const row = document.getElementById('saveRow');
   const titleInput = document.getElementById('saveTitleInput');
   if (!titleInput.value) {
-    titleInput.value = defaultName ? defaultName.replace(/\.(pdf|docx)$/i, '') : (rtState.parsed?.title || rtState.parsed?.name || 'Untitled resume');
+    titleInput.value = defaultName ? defaultName.replace(/\.(pdf|docx)$/i, '') : (rtState.parsed?.personal?.name || 'Untitled resume');
   }
   row.style.display = 'block';
 }
 
 function mapParsedToResumePayload(parsed, title) {
   return {
-    title: title || parsed.name || parsed.title || 'Untitled resume',
+    title: title || parsed.personal?.name || 'Untitled resume',
     personal: {
-      name: parsed.name || '',
-      email: parsed.email || '',
-      phone: parsed.phone || ''
+      name: parsed.personal?.name || '',
+      email: parsed.personal?.email || '',
+      phone: parsed.personal?.phone || '',
+      location: parsed.personal?.location || '',
+      linkedin: parsed.personal?.linkedin || '',
+      portfolio: parsed.personal?.portfolio || ''
     },
     summary: parsed.summary || '',
     skills: Array.isArray(parsed.skills) ? parsed.skills : [],
     experience: (parsed.experience || []).map(e => ({
-      company: e.org || '',
+      company: e.company || '',
       role: e.role || '',
-      startDate: (e.dates || '').split(/[-–—]/)[0]?.trim() || '',
-      endDate: (e.dates || '').split(/[-–—]/)[1]?.trim() || '',
-      description: (e.bullets || []).join('\n')
+      location: e.location || '',
+      startDate: e.startDate || '',
+      endDate: e.endDate || '',
+      current: !!e.current,
+      description: e.description || ''
     })),
     education: (parsed.education || []).map(ed => ({
       school: ed.school || '',
       degree: ed.degree || '',
-      startDate: (ed.dates || '').split(/[-–—]/)[0]?.trim() || '',
-      endDate: (ed.dates || '').split(/[-–—]/)[1]?.trim() || ''
-    }))
+      field: ed.field || '',
+      location: ed.location || '',
+      startDate: ed.startDate || '',
+      endDate: ed.endDate || '',
+      current: !!ed.current,
+      description: ed.description || ''
+    })),
+    projects: Array.isArray(parsed.projects) ? parsed.projects : [],
+    certifications: Array.isArray(parsed.certifications) ? parsed.certifications : [],
+    achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
+    languages: Array.isArray(parsed.languages) ? parsed.languages : [],
+    publications: Array.isArray(parsed.publications) ? parsed.publications : []
   };
 }
 
@@ -433,9 +380,8 @@ function renderDossier() {
   let content = '';
   if (rtState.parsedTab === 'summary') {
     content = `
-      <div class="field-label">Name</div><div class="field-value">${p.name || '—'}</div>
-      <div class="field-label">Title</div><div class="field-value">${p.title || '—'}</div>
-      <div class="field-label">Contact</div><div class="field-value">${p.email || '—'}${p.phone ? ' · ' + p.phone : ''}</div>
+      <div class="field-label">Name</div><div class="field-value">${p.personal?.name || '—'}</div>
+      <div class="field-label">Contact</div><div class="field-value">${p.personal?.email || '—'}${p.personal?.phone ? ' · ' + p.personal.phone : ''}${p.personal?.location ? ' · ' + p.personal.location : ''}</div>
       <div class="field-label">Summary</div><div class="field-value">${p.summary || '—'}</div>
       <div class="field-label">Skills</div>
       <div>${(p.skills || []).map(s => `<span class="skill-chip">${s}</span>`).join('') || '—'}</div>`;
@@ -443,14 +389,14 @@ function renderDossier() {
     content = (p.experience || []).map(e => `
       <div class="exp-entry">
         <div class="role">${e.role || ''}</div>
-        <div class="org">${e.org || ''}${e.dates ? ' · ' + e.dates : ''}</div>
-        <ul>${(e.bullets || []).map(b => `<li>${b}</li>`).join('')}</ul>
+        <div class="org">${e.company || ''}${e.startDate ? ' · ' + e.startDate + (e.endDate ? ' – ' + e.endDate : '') : ''}</div>
+        <ul>${(e.description || '').split('\n').filter(Boolean).map(b => `<li>${b}</li>`).join('')}</ul>
       </div>`).join('') || '<div class="rt-hint">No experience entries found.</div>';
   } else {
     content = (p.education || []).map(ed => `
       <div class="exp-entry">
-        <div class="role">${ed.degree || ''}</div>
-        <div class="org">${ed.school || ''}${ed.dates ? ' · ' + ed.dates : ''}</div>
+        <div class="role">${ed.degree || ''}${ed.field ? ' · ' + ed.field : ''}</div>
+        <div class="org">${ed.school || ''}${ed.startDate ? ' · ' + ed.startDate + (ed.endDate ? ' – ' + ed.endDate : '') : ''}</div>
       </div>`).join('') || '<div class="rt-hint">No education entries found.</div>';
   }
   out.innerHTML = `
@@ -470,28 +416,10 @@ document.getElementById('tailorBtn').addEventListener('click', async () => {
   btn.disabled = true; btn.innerHTML = '<span class="loader-sm"></span> Comparing against job…';
   document.getElementById('tailorError').innerHTML = '';
   try {
-    const prompt = `You are a resume tailoring assistant. Compare the RESUME to the JOB DESCRIPTION and respond with JSON only, no preamble, no markdown fences, using exactly this schema:
-{
-  "match_score": number (0-100),
-  "matched_keywords": [string],
-  "missing_keywords": [string],
-  "tailored_summary": string (2-3 sentences, based only on real experience already in the resume),
-  "tailored_bullets": [string] (3-5 rewritten bullets reframing real existing experience using language from the job description),
-  "advice": string (2-3 sentences of concrete, honest advice)
-}
-Do not fabricate skills or experience the candidate doesn't have.
-
-RESUME:
-"""
-${rtState.resumeText}
-"""
-
-JOB DESCRIPTION:
-"""
-${rtState.jobText}
-"""`;
-    const raw = await callGemini(prompt);
-    const r = extractJSON(raw);
+    const { tailored: r } = await api.post('/api/resumes/tailor-text', {
+      resumeText: rtState.resumeText,
+      jobDescription: rtState.jobText
+    });
     document.getElementById('tailorOut').innerHTML = `
       <div class="rt-block">
         <h3>Match score</h3>
@@ -535,8 +463,6 @@ document.querySelectorAll('.job-pick').forEach(el => {
     document.getElementById('panel-tailor').classList.add('active');
   });
 });
-
-refreshKeyHints();
 
 /* ---- saved resumes ---- */
 async function loadSavedResumes() {

@@ -443,7 +443,70 @@ async function parseResumeWithAI(rawText) {
   }
 }
 
-// ─── Job posting analysis (skills / qualifications / highlights) ────────────
+// ─── Parse pasted (not uploaded) resume text ──────────────────────────────────
+// Same underlying parseResumeWithAI pipeline — pulled out under its own name
+// so callers (the web portal's "paste text" flow) read clearly.
+async function parseRawResumeTextWithAI(rawText) {
+  return parseResumeWithAI(rawText);
+}
+
+// ─── Tailor an arbitrary pasted resume against a pasted job description ──────
+// Unlike tailorResumeWithAI (which tailors an existing saved Resume document
+// and returns a resume-shaped patch), this is for the web portal's "Tailor"
+// tab where the person just pastes free text on both sides — no saved
+// resume required. Returns a match-score/keyword-gap shaped result instead.
+
+const TAILOR_TEXT_SYSTEM_PROMPT = `You are a resume tailoring assistant. Compare the RESUME to the JOB DESCRIPTION and respond with JSON only, no preamble, no markdown fences, using exactly this schema:
+{
+  "match_score": number (0-100),
+  "matched_keywords": [string],
+  "missing_keywords": [string],
+  "tailored_summary": string (2-3 sentences, based only on real experience already in the resume),
+  "tailored_bullets": [string] (3-5 rewritten bullets reframing real existing experience using language from the job description),
+  "advice": string (2-3 sentences of concrete, honest advice)
+}
+Do not fabricate skills or experience the candidate doesn't have.`;
+
+function sanitizeTailorTextResult(r) {
+  const arr = (v, max) => (Array.isArray(v) ? v : [])
+    .map((s) => (typeof s === 'string' ? s.trim() : String(s || '').trim()))
+    .filter(Boolean)
+    .slice(0, max);
+  const score = Number(r?.match_score);
+  return {
+    match_score: Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : 0,
+    matched_keywords: arr(r?.matched_keywords, 30),
+    missing_keywords: arr(r?.missing_keywords, 30),
+    tailored_summary: typeof r?.tailored_summary === 'string' ? r.tailored_summary.trim() : '',
+    tailored_bullets: arr(r?.tailored_bullets, 6),
+    advice: typeof r?.advice === 'string' ? r.advice.trim() : ''
+  };
+}
+
+async function tailorRawTextWithAI(resumeText, jobDescription) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY not configured');
+  }
+  if (!resumeText?.trim() || !jobDescription?.trim()) {
+    throw new Error('Both resume text and job description are required');
+  }
+
+  const json = await callGemini(
+    [
+      { role: 'system', content: TAILOR_TEXT_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: `RESUME:\n"""\n${resumeText.slice(0, 20000)}\n"""\n\nJOB DESCRIPTION:\n"""\n${jobDescription.slice(0, 6000)}\n"""`
+      }
+    ],
+    3000,
+    { jsonMode: true }
+  );
+
+  return sanitizeTailorTextResult(extractJSON(json));
+}
+
+
 
 const JOB_ANALYSIS_SYSTEM_PROMPT = `You are a precision job-posting analysis engine. Read the job posting text and output a single valid JSON object — nothing else. No markdown fences, no commentary.
 
@@ -648,4 +711,4 @@ async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescripti
   return text.trim();
 }
 
-module.exports = { parseResumeWithAI, tailorResumeWithAI, generateCoverLetterWithAI, analyzeJobWithAI };
+module.exports = { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI, analyzeJobWithAI };

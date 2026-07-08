@@ -2,11 +2,11 @@
 // Owns the session (JWT + API base URL) and proxies every backend call so
 // content scripts never need CORS access of their own.
 
-const DEFAULT_API_BASE = 'http://localhost:4000';
+const DEFAULT_API_BASE = 'https://got-for.vercel.app';
 
 async function getConfig() {
-  const { apiBase, token, user } = await chrome.storage.local.get(['apiBase', 'token', 'user']);
-  return { apiBase: apiBase || DEFAULT_API_BASE, token: token || null, user: user || null };
+  const { token, user } = await chrome.storage.local.get(['token', 'user']);
+  return { apiBase: DEFAULT_API_BASE, token: token || null, user: user || null };
 }
 
 async function apiFetch(path, options = {}) {
@@ -36,9 +36,8 @@ const handlers = {
     return { loggedIn: !!token, apiBase, user };
   },
 
-  async 'auth:login'({ email, password, apiBase }) {
-    if (apiBase) await chrome.storage.local.set({ apiBase });
-    const base = apiBase || (await getConfig()).apiBase;
+  async 'auth:login'({ email, password }) {
+    const base = DEFAULT_API_BASE;
     const res = await fetch(`${base}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -46,7 +45,7 @@ const handlers = {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || 'Login failed');
-    await chrome.storage.local.set({ token: body.token, user: body.user, apiBase: base });
+    await chrome.storage.local.set({ token: body.token, user: body.user });
     return { user: body.user };
   },
 
