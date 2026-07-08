@@ -451,9 +451,9 @@ Your job is to extract, in the candidate's own resume-matching vocabulary:
 
 1. "skills": EVERY concrete hard skill, tool, language, framework, platform, or technology explicitly required or preferred in the posting. Use short canonical names matching how they'd appear on a resume (e.g. "React", "AWS", "Python", "SQL", "Kubernetes", "Figma"). Do not include soft skills (e.g. "communication", "teamwork") in this list. Do not invent skills that aren't mentioned or clearly implied by the posting's requirements. Aim to be thorough — junior postings may have 3-5, senior/technical postings often have 15-25.
 
-2. "qualifications": The concrete requirements/qualifications a candidate needs, as short standalone bullet phrases (max ~90 characters each), drawn from any "Requirements", "Qualifications", "What you'll need", "Who you are", or similar section — or, if no such section exists, inferred from the body of the posting (years of experience, degree requirements, must-have skills, certifications). Return 3-10 bullets. Never fabricate a requirement that isn't supported by the text.
+2. "qualifications": ONLY the 3-4 MOST IMPORTANT, MUST-HAVE requirements a candidate needs — the ones that would actually decide whether to apply (e.g. required years of experience, a required degree, the single most critical required skill/certification, a hard eligibility requirement like work authorization). Rank every candidate requirement by how central it is to being qualified, then return ONLY the top 3-4. Drop nice-to-haves, generic filler ("strong communication skills"), and anything redundant with a higher-ranked item. Each bullet: short, standalone, max ~90 characters. Never fabricate a requirement that isn't supported by the text. If the posting truly only supports 1-2 real requirements, return just those — do not pad with weak filler to reach 3.
 
-3. "highlights": Notable benefits, perks, or hiring-context callouts explicitly mentioned — e.g. "Remote-friendly", "Visa sponsorship available", "Equity/stock options", "Unlimited PTO", "Health insurance", "401k match", "Relocation assistance", "4-day work week". Only include ones actually supported by the text. Return [] if none are mentioned — do not invent generic ones.
+3. "highlights": ONLY the 3-4 MOST NOTABLE, CONCRETE benefits/perks/hiring-context callouts explicitly mentioned — the ones a candidate would actually care about (e.g. "Visa sponsorship available", "Fully remote", "Equity/stock options", "Unlimited PTO"). Rank by how compelling/distinctive they are and return ONLY the top 3-4; skip generic or minor ones (e.g. don't list "health insurance" if there are more distinctive callouts like sponsorship or a 4-day week). Only include ones actually supported by the text. Return [] if none are mentioned — do not invent generic ones.
 
 4. "experience": { "years": string like "5+ years" or "" if not stated, "seniority": one of "Entry-level"/"Junior"/"Mid-level"/"Senior"/"Lead"/"Principal"/"Staff"/"" if not stated }
 
@@ -475,8 +475,8 @@ function sanitizeJobAnalysis(a) {
   };
   return {
     skills: arrStr(a?.skills, 30),
-    qualifications: arrStr(a?.qualifications, 10),
-    highlights: arrStr(a?.highlights, 10),
+    qualifications: arrStr(a?.qualifications, 4),
+    highlights: arrStr(a?.highlights, 4),
     experience: {
       years: typeof a?.experience?.years === 'string' ? a.experience.years.trim() : '',
       seniority: typeof a?.experience?.seniority === 'string' ? a.experience.seniority.trim() : ''
