@@ -15,13 +15,20 @@ const { cleanSkill } = require('./skillUtils');
 // change if Google renames/retires it later.
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
-async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {}) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
+const { getKeyPool } = require('./geminiKeyPool');
 
-  // Convert the OpenAI-style {role, content} messages array (system + user)
-  // into Gemini's request shape: a top-level systemInstruction plus a
-  // contents[] array using 'user'/'model' roles.
+function parseRetryAfterSeconds(response, bodyText) {
+  const header = response.headers.get?.('retry-after');
+  if (header && !Number.isNaN(Number(header))) return Number(header);
+  // Gemini also sometimes embeds a RetryInfo with a "retryDelay": "37s" in the JSON error body.
+  const match = bodyText && bodyText.match(/"retryDelay"\s*:\s*"(\d+)s"/);
+  return match ? Number(match[1]) : null;
+}
+
+async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {}) {
+  const pool = getKeyPool();
+  if (!pool.hasKeys()) throw new Error('GEMINI_API_KEY not configured');
+
   const systemText = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
   const contents = messages
     .filter(m => m.role !== 'system')
@@ -48,7 +55,7 @@ async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {})
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-  const doRequest = () => fetch(url, {
+  const doRequest = (apiKey) => fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -57,51 +64,71 @@ async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {})
     body: JSON.stringify(requestBody)
   });
 
-  let response = await doRequest();
+  // Try every key in the pool (round-robin, skipping ones on cooldown) until
+  // one succeeds. A 429 (quota exhausted) or 403 (key disabled/blocked)
+  // rotates immediately to the next key with no delay to the user — that's
+  // the whole point of having a pool. A transient 5xx gets one same-key
+  // retry with backoff (Google's own recommendation) before moving on.
+  const order = pool.availableOrder().length ? pool.availableOrder() : pool.allBySoonestAvailable();
+  let lastError = null;
 
-  // A single retry with backoff for transient errors (rate limit / server
-  // hiccup) — the pattern Google's own docs recommend. Anything else (bad
-  // key, bad request, unknown model) won't succeed on retry, so we fail fast
-  // below with the real reason instead of masking it behind a generic
-  // "please try again".
-  if (!response.ok && (response.status === 429 || response.status >= 500)) {
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    response = await doRequest();
+  for (const apiKey of order) {
+    let response;
+    try {
+      response = await doRequest(apiKey);
+    } catch (networkErr) {
+      lastError = networkErr;
+      continue; // network hiccup on this key — try the next one
+    }
+
+    if (!response.ok && response.status >= 500) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      response = await doRequest(apiKey);
+    }
+
+    if (response.status === 429 || response.status === 403) {
+      const bodyText = await response.text().catch(() => '');
+      const retryAfter = parseRetryAfterSeconds(response, bodyText);
+      pool.markExhausted(apiKey, retryAfter);
+      lastError = new Error(`Gemini API ${response.status} on key ${pool.label(apiKey)}: ${bodyText.slice(0, 200)}`);
+      continue; // rotate to the next key in the pool
+    }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      // Not a quota issue (bad request, bad model, etc.) — retrying with a
+      // different key won't help, so fail fast with the real reason.
+      throw new Error(`Gemini API ${response.status}: ${body.slice(0, 300)}`);
+    }
+
+    pool.markWorking(apiKey);
+    const data = await response.json();
+
+    if (!data.candidates?.length) {
+      const blockReason = data.promptFeedback?.blockReason;
+      throw new Error(
+        blockReason
+          ? `Gemini blocked the request (${blockReason}) — try rephrasing the job description or resume.`
+          : 'Gemini returned no candidates'
+      );
+    }
+
+    const candidate = data.candidates[0];
+    const text = (candidate.content?.parts || []).map(p => p.text || '').join('').trim();
+
+    if (!text) {
+      throw new Error(
+        candidate.finishReason === 'MAX_TOKENS'
+          ? 'Gemini response was cut off before it produced any output — try a shorter job description or resume.'
+          : `Gemini returned an empty response${candidate.finishReason ? ` (${candidate.finishReason})` : ''}`
+      );
+    }
+
+    return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
   }
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Gemini API ${response.status}: ${body.slice(0, 300)}`);
-  }
-
-  const data = await response.json();
-
-  if (!data.candidates?.length) {
-    // No candidates at all means the prompt itself was blocked — surface
-    // the reason instead of falling through to a confusing empty-JSON error.
-    const blockReason = data.promptFeedback?.blockReason;
-    throw new Error(
-      blockReason
-        ? `Gemini blocked the request (${blockReason}) — try rephrasing the job description or resume.`
-        : 'Gemini returned no candidates'
-    );
-  }
-
-  const candidate = data.candidates[0];
-  const text = (candidate.content?.parts || []).map(p => p.text || '').join('').trim();
-
-  if (!text) {
-    // A tight max_tokens budget can be exhausted before any visible content
-    // is produced — surface that plainly rather than letting the caller hit
-    // a confusing "no JSON object found" error.
-    throw new Error(
-      candidate.finishReason === 'MAX_TOKENS'
-        ? 'Gemini response was cut off before it produced any output — try a shorter job description or resume.'
-        : `Gemini returned an empty response${candidate.finishReason ? ` (${candidate.finishReason})` : ''}`
-    );
-  }
-
-  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  // Every key in the pool is either exhausted or errored.
+  throw lastError || new Error('All configured Gemini API keys are currently unavailable');
 }
 
 // ─── Resume text pre-processing ───────────────────────────────────────────────
@@ -393,8 +420,8 @@ function extractJSON(raw) {
  * Falls back to the regex parser if the API key is absent or the call fails.
  */
 async function parseResumeWithAI(rawText) {
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn('[aiResumeParser] GEMINI_API_KEY not set — using regex fallback');
+  if (!getKeyPool().hasKeys()) {
+    console.warn('[aiResumeParser] No Gemini API key configured — using regex fallback');
     return parseResumeText(rawText);
   }
 
@@ -484,7 +511,7 @@ function sanitizeTailorTextResult(r) {
 }
 
 async function tailorRawTextWithAI(resumeText, jobDescription) {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!getKeyPool().hasKeys()) {
     throw new Error('GEMINI_API_KEY not configured');
   }
   if (!resumeText?.trim() || !jobDescription?.trim()) {
@@ -554,7 +581,7 @@ function sanitizeJobAnalysis(a) {
  * regex-based extraction already computed client-side.
  */
 async function analyzeJobWithAI(jobTitle, company, description) {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!getKeyPool().hasKeys()) {
     throw new Error('GEMINI_API_KEY not configured');
   }
 
@@ -691,7 +718,7 @@ function sanitizeTailorResult(result, resume) {
 }
 
 async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills = [], tailoringLevel = 'high') {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!getKeyPool().hasKeys()) {
     throw new Error('AI tailoring requires GEMINI_API_KEY to be configured');
   }
 
@@ -748,7 +775,7 @@ Rules:
 - Do not fabricate a signature block address; a simple sign-off with the candidate's name is enough`;
 
 async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescription) {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!getKeyPool().hasKeys()) {
     throw new Error('AI cover letter generation requires GEMINI_API_KEY to be configured');
   }
 

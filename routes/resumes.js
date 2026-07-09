@@ -5,9 +5,19 @@ const User    = require('../models/User');
 const requireAuth = require('../middleware/auth');
 const { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI } = require('../utils/aiResumeParser');
 const { normalizeDocxText } = require('../utils/resumeParser');
+const { getKeyPool } = require('../utils/geminiKeyPool');
 
 const router = express.Router();
 router.use(requireAuth);
+
+// ─── AI key pool status (for diagnosing quota issues) ─────────────────────────
+router.get('/ai-status', (req, res) => {
+  const pool = getKeyPool();
+  res.json({
+    configuredKeys: pool.count(),
+    keys: pool.status()
+  });
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),
