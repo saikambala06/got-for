@@ -396,21 +396,67 @@ function extractJSON(raw) {
   try {
     return JSON.parse(s);
   } catch (e) {
-    // Attempt to auto-close truncated JSON (happens when max_tokens is hit)
-    // Count open braces/brackets and close them
-    let fixed = s;
-    let openBraces   = (s.match(/\{/g) || []).length - (s.match(/\}/g) || []).length;
-    let openBrackets = (s.match(/\[/g) || []).length - (s.match(/\]/g) || []).length;
-    // Remove trailing incomplete token (e.g. partial string)
-    fixed = fixed.replace(/,\s*$/, '');
-    while (openBrackets-- > 0) fixed += ']';
-    while (openBraces--   > 0) fixed += '}';
     try {
-      return JSON.parse(fixed);
+      return repairTruncatedJSON(s);
     } catch {
       throw new Error(`JSON parse failed: ${e.message}`);
     }
   }
+}
+
+/**
+ * Recover a usable object from JSON that got cut off mid-response (hit the
+ * token budget) or otherwise has trailing garbage after some valid prefix.
+ *
+ * Naively counting '{'/'[' vs '}'/']' and appending the difference (the old
+ * approach) breaks whenever `lastIndexOf('}')` above happened to land on a
+ * brace that *isn't* the true end of the document — e.g. the closing brace
+ * of some nested object in the middle of an array — because everything
+ * between that point and the real cutoff is left in place and is not valid
+ * JSON on its own. That produces exactly the "Expected ',' or ']' after
+ * array element" error this function exists to prevent.
+ *
+ * Instead, walk the string tracking bracket depth and string state, and
+ * remember every point where a container (object/array) fully closes. On
+ * failure we cut back to the *last* such safe point — guaranteed to be a
+ * complete, valid value — then close whatever containers are still open at
+ * that point. This reliably recovers all-but-the-last (incomplete) element
+ * of a truncated array, which is exactly what happens when maxOutputTokens
+ * is hit mid-way through a long bullet list.
+ */
+function repairTruncatedJSON(s) {
+  const stack = [];
+  let inString = false;
+  let escape = false;
+  let lastSafeCut = null;
+
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (c === '\\') escape = true;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') { inString = true; continue; }
+    if (c === '{' || c === '[') { stack.push(c); continue; }
+    if (c === '}' || c === ']') {
+      stack.pop();
+      lastSafeCut = { index: i + 1, stack: stack.slice() };
+    }
+  }
+
+  if (!lastSafeCut || lastSafeCut.index >= s.length) {
+    // Nothing usable, or the string already parses cleanly up to its end
+    // (shouldn't reach here since JSON.parse already failed) — nothing to repair.
+    throw new Error('no safe truncation point found');
+  }
+
+  let fixed = s.slice(0, lastSafeCut.index);
+  const closers = lastSafeCut.stack.slice().reverse().map((ch) => (ch === '{' ? '}' : ']'));
+  fixed += closers.join('');
+
+  return JSON.parse(fixed);
 }
 
 // ─── Main parse function ──────────────────────────────────────────────────────
@@ -754,7 +800,12 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
         content: `${TAILOR_LEVEL_INSTRUCTIONS[level]}\n\nJob Title: ${jobTitle || 'Not specified'}\n\nJob Description:\n${jobDescription.slice(0, 4000)}\n\nCurrent Resume:\n${snapshot}${extrasBlock}`
       }
     ],
-    4000,
+    // The bullet-level diff duplicates every bullet as both "old" and "new",
+    // so a resume with several roles/many bullets needs a lot more headroom
+    // than a plain rewrite would. Too tight a budget here truncates the
+    // response mid-JSON, which is what caused "JSON parse failed: Expected
+    // ',' or ']'..." errors on longer resumes.
+    12000,
     { jsonMode: true }
   );
 
