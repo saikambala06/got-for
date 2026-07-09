@@ -587,30 +587,115 @@ async function analyzeJobWithAI(jobTitle, company, description) {
 
 
 
-const TAILOR_SYSTEM_PROMPT = `You are an expert resume writer and career coach. Tailor the provided resume content to better match the job description by:
-- Rewriting the professional summary to reflect the target role
-- Reordering and refining the skills list to prioritise the most relevant ones first
-- Folding in any items listed under "Candidate-confirmed additional skills" — the candidate has explicitly confirmed they have these, so include them in the skills list (do not treat them as unverified)
-- Sharpening experience bullet points to highlight achievements that align with the job requirements, using keywords from the job posting where authentic
-- Never inventing facts, employers, dates, or achievements — only rephrase, reorder, and incorporate what already exists or what the candidate has explicitly confirmed
+const TAILOR_LEVEL_INSTRUCTIONS = {
+  low: 'Tailoring level: LOW. Make light, conservative edits — fix weak verbs and align a few keywords, but change as little of the original wording as possible. Touch only the bullets/summary that clearly need it. Do not suggest removing any bullets.',
+  medium: 'Tailoring level: MEDIUM. Rewrite the summary and rephrase most bullets to foreground relevant keywords and quantify impact where the original already implies a number. Keep every bullet (rewrite, do not remove) unless it is truly off-topic for this job.',
+  high: 'Tailoring level: HIGH. Aggressively rewrite the summary and every bullet to maximize keyword alignment with the job description, tighten language, and add stronger action verbs and metrics phrasing consistent with what is already in the resume. You may mark bullets that are irrelevant to this job as "remove" and may add up to 2 new bullets per role synthesized from the candidate confirmed skills/summary (never inventing employers, dates, or unverified facts).'
+};
+
+const TAILOR_SYSTEM_PROMPT = `You are an expert resume writer and career coach. Tailor the provided resume content to better match the job description. This is a bullet-level, reviewable tailoring pass: the candidate will see every change as an old to new diff and accept or reject each one individually, so preserve a clear one-to-one mapping between original and rewritten content.
+
+Rules:
+- Rewrite the professional summary to reflect the target role
+- Reorder and refine the skills list to prioritise the most relevant ones first
+- Fold in any items listed under "Candidate-confirmed additional skills" into the skills list (the candidate has explicitly confirmed they have these)
+- For EVERY bullet in EVERY role, decide one of: "modify" (rewrite it), "keep" (return it unchanged, old equals new), or "remove" (suggest removal — only at HIGH tailoring level and only for bullets truly irrelevant to this job)
+- You may also "add" a small number of brand new bullets per role (only at MEDIUM/HIGH level, and only synthesized from facts already present elsewhere in the resume — never invented)
+- Never invent facts, employers, dates, or achievements — only rephrase, reorder, and incorporate what already exists or what the candidate has explicitly confirmed
+- Follow the requested tailoring level intensity exactly as instructed
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
-  "summary": "New 2–3 sentence tailored professional summary",
-  "skills": ["skill1", "skill2", ...reordered/refined list, including confirmed additions],
+  "summary": { "old": "original summary text", "new": "new 2 to 3 sentence tailored professional summary" },
+  "skills": ["skill1", "skill2", "...full reordered/refined list, including confirmed additions"],
   "experience": [
     {
       "index": 0,
-      "description": "Rewritten bullet points (\\n-separated)"
+      "bullets": [
+        { "old": "original bullet text", "new": "rewritten bullet text", "action": "modify" },
+        { "old": "original bullet text", "new": "original bullet text", "action": "keep" },
+        { "old": "original bullet text", "new": "", "action": "remove" },
+        { "old": "", "new": "a brand new bullet", "action": "add" }
+      ]
     }
   ],
   "suggestions": "1–2 sentence explanation of the key changes made"
 }`;
 
-async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills = []) {
+function splitBullets(description) {
+  return String(description || '')
+    .split('\n')
+    .map((l) => l.replace(/^[\s]*[-•*]\s*/, '').trim())
+    .filter(Boolean);
+}
+
+function sanitizeTailorResult(result, resume) {
+  const out = { ...result };
+
+  // Summary: accept either the new {old,new} shape or a legacy plain string.
+  const originalSummary = resume.summary || '';
+  if (out.summary && typeof out.summary === 'object') {
+    out.summary = {
+      old: typeof out.summary.old === 'string' ? out.summary.old : originalSummary,
+      new: typeof out.summary.new === 'string' ? out.summary.new : originalSummary
+    };
+  } else {
+    out.summary = { old: originalSummary, new: typeof out.summary === 'string' ? out.summary : originalSummary };
+  }
+
+  if (Array.isArray(out.skills)) {
+    const seen = new Set();
+    out.skills = out.skills
+      .map(cleanSkill)
+      .filter((s) => {
+        if (!s) return false;
+        const key = s.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  } else {
+    out.skills = resume.skills || [];
+  }
+
+  const experienceByIndex = new Map((out.experience || []).map((e) => [e.index, e]));
+  out.experience = (resume.experience || []).map((role, i) => {
+    const aiEntry = experienceByIndex.get(i);
+    const originalBullets = splitBullets(role.description);
+
+    let bullets;
+    if (aiEntry && Array.isArray(aiEntry.bullets) && aiEntry.bullets.length) {
+      bullets = aiEntry.bullets.map((b) => ({
+        old: typeof b.old === 'string' ? b.old : '',
+        new: typeof b.new === 'string' ? b.new : (b.old || ''),
+        action: ['modify', 'keep', 'remove', 'add'].includes(b.action) ? b.action : 'modify'
+      }));
+    } else if (aiEntry && typeof aiEntry.description === 'string') {
+      // Legacy shape fallback: a single rewritten block with no per-bullet alignment.
+      const newBullets = splitBullets(aiEntry.description);
+      const len = Math.max(originalBullets.length, newBullets.length);
+      bullets = Array.from({ length: len }, (_, j) => ({
+        old: originalBullets[j] || '',
+        new: newBullets[j] || originalBullets[j] || '',
+        action: newBullets[j] ? (originalBullets[j] ? 'modify' : 'add') : 'remove'
+      }));
+    } else {
+      bullets = originalBullets.map((b) => ({ old: b, new: b, action: 'keep' }));
+    }
+
+    return { index: i, role: role.role, company: role.company, bullets };
+  });
+
+  out.suggestions = typeof out.suggestions === 'string' ? out.suggestions : '';
+  return out;
+}
+
+async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills = [], tailoringLevel = 'high') {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('AI tailoring requires GEMINI_API_KEY to be configured');
   }
+
+  const level = TAILOR_LEVEL_INSTRUCTIONS[tailoringLevel] ? tailoringLevel : 'high';
 
   const snapshot = JSON.stringify(
     {
@@ -639,7 +724,7 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
       { role: 'system', content: TAILOR_SYSTEM_PROMPT },
       {
         role: 'user',
-        content: `Job Title: ${jobTitle || 'Not specified'}\n\nJob Description:\n${jobDescription.slice(0, 4000)}\n\nCurrent Resume:\n${snapshot}${extrasBlock}`
+        content: `${TAILOR_LEVEL_INSTRUCTIONS[level]}\n\nJob Title: ${jobTitle || 'Not specified'}\n\nJob Description:\n${jobDescription.slice(0, 4000)}\n\nCurrent Resume:\n${snapshot}${extrasBlock}`
       }
     ],
     4000,
@@ -647,19 +732,7 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
   );
 
   const result = extractJSON(json);
-  if (Array.isArray(result.skills)) {
-    const seen = new Set();
-    result.skills = result.skills
-      .map(cleanSkill)
-      .filter((s) => {
-        if (!s) return false;
-        const key = s.toLowerCase();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-  }
-  return result;
+  return sanitizeTailorResult(result, resume);
 }
 
 // ─── Cover letter generation ────────────────────────────────────────────────

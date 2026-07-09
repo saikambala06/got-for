@@ -59,10 +59,10 @@ const handlers = {
     return body.resumes || [];
   },
 
-  async 'resumes:tailor'({ resumeId, jobTitle, jobDescription, emphasizeSkills }) {
+  async 'resumes:tailor'({ resumeId, jobTitle, jobDescription, emphasizeSkills, tailoringLevel }) {
     const body = await apiFetch(`/api/resumes/${resumeId}/tailor`, {
       method: 'POST',
-      body: JSON.stringify({ jobTitle, jobDescription, emphasizeSkills })
+      body: JSON.stringify({ jobTitle, jobDescription, emphasizeSkills, tailoringLevel })
     });
     return body.tailored;
   },
@@ -122,6 +122,7 @@ chrome.action.onClicked?.addListener(async (tab) => {
         'content/skills-data.js',
         'content/job-parser.js',
         'content/panel-ui.js',
+        'content/tailor-studio.js',
         'content/content.js'
       ]
     });

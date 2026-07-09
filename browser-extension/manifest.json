@@ -30,6 +30,7 @@
         "content/skills-data.js",
         "content/job-parser.js",
         "content/panel-ui.js",
+        "content/tailor-studio.js",
         "content/content.js"
       ],
       "run_at": "document_idle",

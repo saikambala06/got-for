@@ -8,8 +8,15 @@
 
   const { parseJobFromPage } = window.JobTrailParser;
   const { JobTrailPanel } = window.JobTrailPanelUI;
+  const { TailorStudio } = window.JobTrailTailorStudio;
+  const { cleanSkill, skillsMatch } = window.JobTrailSkillsData;
 
   const panel = new JobTrailPanel();
+  const studio = new TailorStudio();
+
+  function esc(s) {
+    return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
 
   const state = {
     job: null,
@@ -168,37 +175,167 @@
     }
   }
 
-  async function tailorResume() {
-    panel.setButtonBusy('jt-tailor', 'Tailoring…');
+  // ─── Tailor Studio (full review flow) ───────────────────────────────────
+  const studioState = { diff: null, tailoringLevel: 'high', decisions: {}, resume: null };
+
+  function matchScoreFor(skillsList, job) {
+    const total = job.skillsFound?.length || 0;
+    if (!total) return 0;
+    const clean = (skillsList || []).map((s) => cleanSkill(s));
+    const matched = job.skillsFound.filter((s) => clean.some((rs) => skillsMatch(s, rs)));
+    return Math.round((matched.length / total) * 100);
+  }
+
+  // Builds the skills/summary/experience the person would end up with if
+  // they accepted exactly the changes currently marked "accepted".
+  function projectedResume() {
+    const { diff, decisions, resume } = studioState;
+    const summary = decisions.summary !== false ? diff.summary.new : diff.summary.old;
+    const skills = diff.skills; // AI already returns the full merged/reordered list
+    const experience = diff.experience.map((role, ri) => {
+      const original = resume.experience[ri];
+      const lines = [];
+      role.bullets.forEach((b, bi) => {
+        const key = `exp:${role.index}:${bi}`;
+        const accepted = decisions[key] !== false;
+        if (b.action === 'remove') { if (!accepted) lines.push(b.old); return; }
+        if (b.action === 'keep') { lines.push(b.new); return; }
+        lines.push(accepted ? b.new : (b.old || b.new));
+      });
+      return { ...original, description: lines.join('\n') };
+    });
+    return { ...resume, summary, skills, experience };
+  }
+
+  function openStudio() {
     const job = currentJob();
+    studio.renderLoading('Matching it against your resume…');
+    fetchTailorDiff(job);
+  }
+
+  async function fetchTailorDiff(job) {
     try {
+      const resume = state.resumes.find((r) => r._id === state.selectedResumeId);
+      studioState.resume = resume;
       const result = await send('resumes:tailor', {
         resumeId: state.selectedResumeId,
         jobTitle: job.title,
         jobDescription: job.description,
-        emphasizeSkills: Array.from(state.extraSkillsChecked)
+        emphasizeSkills: Array.from(state.extraSkillsChecked),
+        tailoringLevel: studioState.tailoringLevel
       });
-      panel.resetButton('jt-tailor');
-      panel.renderTailorResult(result);
-      panel.panel.querySelector('#jt-save-tailor')?.addEventListener('click', () => saveTailored(result));
+      studioState.diff = result;
+      studioState.decisions = {};
+      renderStudio(job);
     } catch (err) {
-      panel.resetButton('jt-tailor');
-      panel.renderResultError(`Tailoring failed: ${err.message}`, tailorResume);
+      studio.renderError(`Tailoring failed: ${err.message}`, () => { studio.unmount(); });
     }
   }
 
-  async function saveTailored(result) {
-    const btn = panel.panel.querySelector('#jt-save-tailor');
-    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-    try {
-      await send('resumes:save', {
-        resumeId: state.selectedResumeId,
-        patch: { summary: result.summary, skills: result.skills }
-      });
-      if (btn) { btn.textContent = 'Saved ✓'; }
-    } catch (err) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Save to resume'; }
-      alert(`Could not save: ${err.message}`);
+  function renderStudio(job) {
+    const proj = projectedResume();
+    const currentScore = matchScoreFor(studioState.resume.skills, job);
+    const projectedScore = matchScoreFor(proj.skills, job);
+    studio.render(
+      {
+        resume: studioState.resume,
+        diff: studioState.diff,
+        tailoringLevel: studioState.tailoringLevel,
+        decisions: studioState.decisions,
+        currentScore,
+        projectedScore
+      },
+      {
+        onBack: () => studio.unmount(),
+        onLevelChange: (lv) => {
+          if (lv === studioState.tailoringLevel) return;
+          studioState.tailoringLevel = lv;
+          studio.renderLoading('Re-tailoring at ' + lv + ' intensity…');
+          fetchTailorDiff(job);
+        },
+        onToggle: (key, accept) => {
+          studioState.decisions[key] = accept;
+          renderStudio(job);
+        },
+        onApplyAll: () => {
+          studioState.decisions = { summary: true };
+          studioState.diff.experience.forEach((r) => r.bullets.forEach((b, bi) => {
+            studioState.decisions[`exp:${r.index}:${bi}`] = true;
+          }));
+          renderStudio(job);
+        },
+        onResetChanges: () => {
+          studioState.decisions = {};
+          renderStudio(job);
+        },
+        onDownload: () => {
+          studio.renderDownloadDrawer({}, {
+            onConfirmDownload: (opts) => downloadTailoredResume(proj, opts)
+          });
+        }
+      }
+    );
+  }
+
+  function tailorResume() {
+    openStudio();
+  }
+
+  // ─── Resume export (client-side, no server dependency) ─────────────────
+
+  function resumeToHtml(resume, opts) {
+    const p = resume.personal || {};
+    const accent = opts.accent || '#16a34a';
+    const contact = [p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' &nbsp;|&nbsp; ');
+    const skillsHtml = (resume.skills || []).map((s) => esc(s)).join(', ');
+    const expHtml = (resume.experience || []).map((e) => `
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-weight:700;">
+          <span>${esc(e.role || '')}</span><span>${esc(e.dates || '')}</span>
+        </div>
+        <div style="font-style:italic;color:#444;margin-bottom:4px;">${esc(e.company || '')}</div>
+        <ul style="margin:0;padding-left:18px;">
+          ${(e.description || '').split('\n').filter(Boolean).map((l) => `<li>${esc(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}
+        </ul>
+      </div>`).join('');
+    const eduHtml = (resume.education || []).map((ed) => `
+      <div style="margin-bottom:8px;"><strong>${esc(ed.school || '')}</strong> — ${esc(ed.degree || '')} ${esc(ed.field || '')}</div>`).join('');
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${esc(p.name || 'Resume')}</title>
+      <style>
+        body{ font-family: Georgia, 'Times New Roman', serif; color:#111; padding:40px; max-width:760px; margin:0 auto; }
+        h1{ text-align:center; margin-bottom:2px; }
+        .contact{ text-align:center; font-size:12px; color:#555; margin-bottom:18px; }
+        h2{ font-size:13px; text-transform:uppercase; letter-spacing:0.05em; border-bottom:2px solid ${accent}; padding-bottom:3px; margin-top:22px; }
+        @media print { body{ padding:0; } }
+      </style></head><body>
+      <h1>${esc(p.name || '')}</h1>
+      <div class="contact">${contact}</div>
+      <h2>Summary</h2><p>${esc(resume.summary || '')}</p>
+      <h2>Skills</h2><p>${skillsHtml}</p>
+      <h2>Experience</h2>${expHtml}
+      <h2>Education</h2>${eduHtml}
+      </body></html>`;
+  }
+
+  function downloadTailoredResume(resume, opts) {
+    const html = resumeToHtml(resume, opts);
+    if (opts.format === 'docx') {
+      // Lightweight Word-compatible export: Word opens HTML saved with a
+      // .doc extension and the right MIME/header just fine.
+      const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
+      const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(resume.personal?.name || 'resume').replace(/\s+/g, '_')}.doc`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } else {
+      const win = window.open('', '_blank');
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 300);
     }
   }
 
