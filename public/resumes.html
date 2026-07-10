@@ -136,7 +136,6 @@
         <textarea class="rt-textarea" id="resumeInput" placeholder="Paste the full resume text here..."></textarea>
         <div class="rt-actions">
           <button class="btn btn-primary" id="parseBtn">Parse resume</button>
-          <button class="btn" id="sampleBtn">Load sample resume</button>
           <button class="btn" id="uploadBtn">Upload PDF/DOCX</button>
           <input type="file" id="resumeFileInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />
         </div>
@@ -190,31 +189,6 @@ document.querySelectorAll('.rt-tab').forEach(btn => {
 
 /* ---- parse ---- */
 document.getElementById('resumeInput').addEventListener('input', e => { rtState.resumeText = e.target.value; });
-
-document.getElementById('sampleBtn').addEventListener('click', () => {
-  const sample = `Jordan Alvarez
-jordan.alvarez@email.com | (512) 555-0148
-
-Frontend engineer with 6 years building consumer web apps. Currently at Braidwell Inc.
-
-EXPERIENCE
-Frontend Engineer, Braidwell Inc. (2021-Present)
-- Built and maintained the checkout flow used by 2M monthly users
-- Migrated legacy jQuery codebase to React, reducing bundle size by 40%
-- Led weekly code reviews for a team of 4 engineers
-
-Junior Developer, Coastline Media (2018-2021)
-- Built marketing landing pages using HTML, CSS, and vanilla JS
-- Collaborated with designers to implement responsive layouts
-
-EDUCATION
-B.S. Computer Science, University of Texas at Austin (2014-2018)
-
-SKILLS
-JavaScript, React, HTML, CSS, Git, REST APIs, Jest`;
-  rtState.resumeText = sample;
-  document.getElementById('resumeInput').value = sample;
-});
 
 document.getElementById('parseBtn').addEventListener('click', async () => {
   if (!rtState.resumeText.trim()) { showToast('Paste a resume first', 'error'); return; }

@@ -132,10 +132,11 @@
 
   // "Reload job details" always asks first whether the user already
   // applied, so applied-state doesn't silently get lost on a re-parse.
+  // "No, not yet" simply dismisses the popup — it does not reload/re-parse
+  // the panel. Only "Yes, I applied" (mark + reload) triggers a reload.
   function confirmReload() {
     panel.showReloadConfirm({
-      onYes: async () => { await markApplied(); loadAndRender(); },
-      onNo: () => loadAndRender()
+      onYes: async () => { await markApplied(); loadAndRender(); }
     });
   }
 
