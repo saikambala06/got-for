@@ -22,6 +22,12 @@
   },
   "permissions": ["storage", "scripting", "activeTab"],
   "host_permissions": ["https://got-for.vercel.app/*", "https://*/*", "http://*/*"],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/tailor-loader.gif", "icons/icon128.png"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],

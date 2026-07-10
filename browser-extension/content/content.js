@@ -176,7 +176,7 @@
   }
 
   // ─── Tailor Studio (full review flow) ───────────────────────────────────
-  const studioState = { diff: null, tailoringLevel: 'high', decisions: {}, resume: null };
+  const studioState = { diff: null, tailoringLevel: 'high', decisions: {}, resume: null, mode: 'review' };
 
   function matchScoreFor(skillsList, job) {
     const total = job.skillsFound?.length || 0;
@@ -226,6 +226,18 @@
       });
       studioState.diff = result;
       studioState.decisions = {};
+      if (studioState.mode === 'quick') {
+        // Auto-apply every suggestion, then download straight away with
+        // saved defaults instead of dropping into the review screen.
+        studioState.decisions = { summary: true };
+        studioState.diff.experience.forEach((r) => r.bullets.forEach((b, bi) => {
+          studioState.decisions[`exp:${r.index}:${bi}`] = true;
+        }));
+        const proj = projectedResume();
+        downloadTailoredResume(proj, { format: 'pdf', accent: '#16a34a', template: 'Classic' });
+        studio.unmount();
+        return;
+      }
       renderStudio(job);
     } catch (err) {
       studio.renderError(`Tailoring failed: ${err.message}`, () => { studio.unmount(); });
@@ -278,7 +290,17 @@
   }
 
   function tailorResume() {
-    openStudio();
+    studio.renderPicker(
+      { resumes: state.resumes, selectedResumeId: state.selectedResumeId },
+      {
+        onCancel: () => {},
+        onContinue: (resumeId, mode) => {
+          state.selectedResumeId = resumeId;
+          studioState.mode = mode;
+          openStudio();
+        }
+      }
+    );
   }
 
   // ─── Resume export (client-side, no server dependency) ─────────────────
