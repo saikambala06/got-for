@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tailor Resume — SK VK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css" />
+<style>
+  .tl-tabs{ display:flex; gap:6px; margin-bottom:22px; border-bottom:1px solid var(--border); }
+  .tl-tab{
+    padding:11px 18px; font-size:13.5px; font-weight:600; color:var(--text-faint);
+    border:none; background:none; cursor:pointer; border-bottom:2px solid transparent;
+    position:relative; top:1px; font-family:var(--font-body);
+  }
+  .tl-tab.active{ color:var(--accent-2); border-bottom-color:var(--accent); }
+  .tl-tab:disabled{ opacity:.4; cursor:default; }
+  .tl-panel{ display:none; }
+  .tl-panel.active{ display:block; }
+
+  /* ---- picker (Tailor your resume) ---- */
+  .tl-picker{ max-width:560px; margin:26px auto; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:34px 38px; }
+  .tl-picker h1{ text-align:center; font-size:22px; margin-bottom:6px; }
+  .tl-picker p.sub{ text-align:center; font-size:13px; color:var(--text-faint); margin-bottom:24px; }
+  .field-label{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-faint); margin-bottom:6px; }
+  .tl-select{ width:100%; padding:11px 14px; border-radius:var(--radius-sm); border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text); font-size:13.5px; margin-bottom:20px; }
+  .tl-mode{ display:flex; align-items:flex-start; gap:12px; border:1.5px solid var(--border); border-radius:12px;
+    padding:14px 16px; margin-bottom:12px; cursor:pointer; transition:.15s; background:var(--surface-2); }
+  .tl-mode:hover{ border-color:var(--accent); }
+  .tl-mode.selected{ border-color:var(--green); background:rgba(54,211,153,0.08); }
+  .tl-mode-radio{ width:18px; height:18px; border-radius:50%; border:2px solid var(--border); flex-shrink:0; margin-top:2px;
+    display:flex; align-items:center; justify-content:center; }
+  .tl-mode.selected .tl-mode-radio{ border-color:var(--green); }
+  .tl-mode-radio-dot{ width:9px; height:9px; border-radius:50%; background:var(--green); display:none; }
+  .tl-mode.selected .tl-mode-radio-dot{ display:block; }
+  .tl-mode-title{ font-size:14.5px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  .tl-mode-badge{ font-size:11px; font-weight:700; color:var(--blue); }
+  .tl-mode-desc{ font-size:12.5px; color:var(--text-faint); margin-top:3px; line-height:1.45; }
+  .tl-continue{ width:100%; margin-top:10px; background:var(--green); color:#04140d; border:none; border-radius:10px;
+    padding:13px; font-size:14.5px; font-weight:700; cursor:pointer; }
+  .tl-continue:hover{ filter:brightness(1.06); }
+  .tl-continue:disabled{ opacity:.5; cursor:default; }
+
+  /* ---- review ---- */
+  .tl-review-top{ display:flex; align-items:center; gap:16px; margin-bottom:18px; flex-wrap:wrap; }
+  .tl-level-group{ display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .tl-level-btn{ border:none; background:var(--surface-2); color:var(--text-dim); padding:7px 15px; font-size:12.5px;
+    font-weight:600; cursor:pointer; border-right:1px solid var(--border); }
+  .tl-level-btn:last-child{ border-right:none; }
+  .tl-level-btn.active{ background:var(--green); color:#04140d; }
+  .tl-sheet{ max-width:720px; margin:0 auto; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:30px 36px; }
+  .tl-sheet h2{ text-align:center; font-size:20px; margin-bottom:4px; }
+  .tl-sheet .contact{ text-align:center; font-size:12px; color:var(--text-faint); margin-bottom:16px; }
+  .tl-heading{ font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent-2);
+    margin:18px 0 8px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+  .tl-old{ font-size:13px; line-height:1.6; color:var(--text-faint); text-decoration:line-through;
+    background:rgba(255,107,129,0.08); padding:4px 8px; border-radius:6px; margin-bottom:2px; }
+  .tl-new{ font-size:13px; line-height:1.6; color:var(--text); background:rgba(54,211,153,0.08); padding:4px 8px; border-radius:6px; }
+  .tl-plain{ font-size:13px; line-height:1.6; color:var(--text); padding:3px 8px; }
+  .tl-skill{ display:inline-block; font-size:12px; padding:3px 10px; border-radius:100px; border:1px solid var(--border);
+    margin:3px 5px 3px 0; color:var(--text-dim); }
+  .tl-skill.added{ border-color:var(--green); color:var(--green); }
+  .tl-review-actions{ display:flex; justify-content:center; gap:12px; margin-top:22px; }
+
+  /* ---- quick download (live preview + customizations) ---- */
+  .qd-body{ display:flex; gap:22px; align-items:flex-start; }
+  .qd-left{ flex:1; min-width:0; }
+  .qd-left-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .qd-badge{ font-size:11px; font-weight:700; color:var(--green); display:flex; align-items:center; gap:5px; }
+  .qd-badge::before{ content:''; width:7px; height:7px; border-radius:50%; background:var(--green); display:inline-block; }
+  .qd-preview-wrap{ background:var(--bg-soft); border:1px solid var(--border); border-radius:var(--radius);
+    display:flex; justify-content:center; padding:22px; }
+  .qd-page{ width:100%; max-width:640px; background:#fff; border-radius:4px; box-shadow:0 8px 30px rgba(0,0,0,.4); }
+  .qd-page iframe{ width:100%; height:760px; border:none; display:block; border-radius:4px; }
+  .qd-foot{ text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px; }
+
+  .qd-right{ width:340px; flex-shrink:0; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:20px; display:flex; flex-direction:column; gap:16px; }
+  .qd-right-head{ display:flex; align-items:center; gap:7px; }
+  .qd-dot{ width:7px; height:7px; border-radius:50%; background:var(--green); }
+  .qd-title{ font-size:15px; font-weight:700; }
+  .qd-sub{ font-size:11.5px; color:var(--text-faint); margin-top:-8px; }
+  .qd-field label{ display:block; font-size:11px; font-weight:700; color:var(--text-faint); text-transform:uppercase;
+    letter-spacing:.04em; margin-bottom:7px; }
+  .qd-field select{ width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:9px; font-size:13px;
+    background:var(--surface-2); color:var(--text); }
+  .qd-row2{ display:flex; gap:12px; }
+  .qd-row2 > .qd-field{ flex:1; min-width:0; }
+  .qd-swatches{ display:flex; gap:9px; flex-wrap:wrap; }
+  .qd-swatch{ width:24px; height:24px; border-radius:50%; cursor:pointer; border:2px solid transparent;
+    display:flex; align-items:center; justify-content:center; }
+  .qd-swatch.selected{ border-color:var(--text); }
+  .qd-swatch .chk{ color:#fff; font-size:11px; font-weight:900; display:none; text-shadow:0 0 2px rgba(0,0,0,.6); }
+  .qd-swatch.selected .chk{ display:block; }
+  .qd-pillgroup{ display:flex; border:1px solid var(--border); border-radius:9px; overflow:hidden; }
+  .qd-pill{ flex:1; border:none; background:var(--surface-2); color:var(--text-dim); padding:8px; font-size:12.5px;
+    font-weight:600; cursor:pointer; border-right:1px solid var(--border); }
+  .qd-pill:last-child{ border-right:none; }
+  .qd-pill.active{ background:var(--green); color:#04140d; }
+  .qd-toggle-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; background:var(--surface-2);
+    border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .qd-toggle-copy .t1{ font-size:13px; font-weight:700; }
+  .qd-toggle-copy .t2{ font-size:11.5px; color:var(--text-faint); margin-top:3px; line-height:1.4; }
+  .qd-switch{ position:relative; width:38px; height:22px; flex-shrink:0; }
+  .qd-switch input{ opacity:0; width:0; height:0; }
+  .qd-switch .slider{ position:absolute; inset:0; background:var(--border); border-radius:999px; cursor:pointer; transition:.15s; }
+  .qd-switch .slider::before{ content:''; position:absolute; width:16px; height:16px; left:3px; top:3px; background:#fff;
+    border-radius:50%; transition:.15s; }
+  .qd-switch input:checked + .slider{ background:var(--green); }
+  .qd-switch input:checked + .slider::before{ transform:translateX(16px); }
+  .qd-download{ width:100%; background:var(--green); color:#04140d; border:none; border-radius:10px; padding:13px;
+    font-size:14px; font-weight:800; cursor:pointer; }
+  .qd-download:hover{ filter:brightness(1.06); }
+  .qd-note{ font-size:11px; color:var(--text-faint); line-height:1.5; }
+
+  @media (max-width:900px){ .qd-body{ flex-direction:column; } .qd-right{ width:100%; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="sidebar-root" data-active="resumes"></div>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Tailor Resume</div>
+        <div class="page-sub" id="jobSubline">Match your resume against a job description, then download.</div>
+      </div>
+    </div>
+
+    <div class="card section-card">
+      <div class="tl-tabs">
+        <button class="tl-tab active" data-tab="picker">Tailor your resume</button>
+        <button class="tl-tab" data-tab="quick" id="qdTabBtn" disabled>Quick Download</button>
+      </div>
+
+      <!-- TAB 1: picker + review -->
+      <div class="tl-panel active" id="panel-picker">
+        <div id="pickerCard" class="tl-picker">
+          <h1>Tailor your resume</h1>
+          <p class="sub">Pick a resume, then choose how to apply AI suggestions.</p>
+
+          <div class="field-label">Resume</div>
+          <select class="tl-select" id="tl-resume"></select>
+
+          <div class="tl-mode selected" data-mode="review">
+            <div class="tl-mode-radio"><div class="tl-mode-radio-dot"></div></div>
+            <div>
+              <div class="tl-mode-title">Review &amp; edit <span class="tl-mode-badge">☑ Full tailoring</span></div>
+              <div class="tl-mode-desc">Full tailoring — review the AI's changes before downloading.</div>
+            </div>
+          </div>
+          <div class="tl-mode" data-mode="quick">
+            <div class="tl-mode-radio"><div class="tl-mode-radio-dot"></div></div>
+            <div>
+              <div class="tl-mode-title">Quick Download <span class="tl-mode-badge">⚡ Fastest</span></div>
+              <div class="tl-mode-desc">Auto-apply every AI suggestion, then download with your saved defaults.</div>
+            </div>
+          </div>
+
+          <button class="tl-continue" id="tl-continue">Continue →</button>
+        </div>
+
+        <div id="reviewOut" style="display:none;">
+          <div class="tl-review-top">
+            <span class="field-label" style="margin:0;">Tailoring level</span>
+            <div class="tl-level-group" id="reviewLevels">
+              <button class="tl-level-btn" data-level="low">Low</button>
+              <button class="tl-level-btn" data-level="medium">Med</button>
+              <button class="tl-level-btn active" data-level="high">High</button>
+            </div>
+          </div>
+          <div class="tl-sheet" id="reviewSheet"></div>
+          <div class="tl-review-actions">
+            <button class="btn" id="tl-back-to-picker">← Start over</button>
+            <button class="btn btn-primary" id="tl-go-download">Download resume →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: quick download -->
+      <div class="tl-panel" id="panel-quick">
+        <div class="qd-body">
+          <div class="qd-left">
+            <div class="qd-left-head">
+              <span class="field-label" style="margin:0;">Live preview</span>
+              <span class="qd-badge">Auto-tailored</span>
+            </div>
+            <div class="qd-preview-wrap">
+              <div class="qd-page"><iframe id="qdFrame"></iframe></div>
+            </div>
+            <div class="qd-foot" id="qdFoot"></div>
+          </div>
+
+          <div class="qd-right">
+            <div>
+              <div class="qd-right-head"><span class="qd-dot"></span><span class="qd-title">Quick Download</span></div>
+              <div class="qd-sub">Saved defaults applied to every quick download.</div>
+            </div>
+
+            <div class="qd-row2">
+              <div class="qd-field">
+                <label>Resume</label>
+                <select id="qdResume"></select>
+              </div>
+              <div class="qd-field">
+                <label>Template</label>
+                <select id="qdTemplate">
+                  <option>Classic</option><option>Harvard</option><option>Jake's</option><option>Modern</option><option>Minimal</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="qd-field">
+              <label>Text color</label>
+              <div class="qd-swatches" id="qdTextColors"></div>
+            </div>
+
+            <div class="qd-field">
+              <label>Accent color</label>
+              <div class="qd-swatches" id="qdAccents"></div>
+            </div>
+
+            <div class="qd-row2">
+              <div class="qd-field">
+                <label>Format</label>
+                <div class="qd-pillgroup" id="qdFormat">
+                  <button class="qd-pill active" data-value="pdf">PDF</button>
+                  <button class="qd-pill" data-value="docx">DOCX</button>
+                </div>
+              </div>
+              <div class="qd-field">
+                <label>Tailoring level</label>
+                <div class="qd-pillgroup" id="qdLevel">
+                  <button class="qd-pill" data-value="low">Low</button>
+                  <button class="qd-pill" data-value="medium">Med</button>
+                  <button class="qd-pill active" data-value="high">High</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="qd-toggle-row">
+              <div class="qd-toggle-copy">
+                <div class="t1">No metrics</div>
+                <div class="t2">When off, AI adds numbers (like "20%" or "500 users") to bullet points. Toggle on to keep bullets number-free.</div>
+              </div>
+              <label class="qd-switch">
+                <input type="checkbox" id="qdNoMetrics" />
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <button class="qd-download" id="qdDownload">↓ Download PDF</button>
+            <div class="qd-note">Every quick download uses these settings. Change them anytime — we'll remember.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+const qp = new URLSearchParams(location.search);
+const job = {
+  title: qp.get('jobTitle') || '',
+  company: qp.get('company') || '',
+  description: qp.get('jobDescription') || '',
+  resumeId: qp.get('resumeId') || ''
+};
+if (job.title) {
+  document.getElementById('jobSubline').textContent =
+    `Tailoring against “${job.title}”${job.company ? ' at ' + job.company : ''}.`;
+}
+
+const TEMPLATES = ['Classic', 'Harvard', "Jake's", 'Modern', 'Minimal'];
+const ACCENTS = ['#2563eb', '#16a34a', '#0ea5a4', '#dc2626', '#ec4899', '#d946ef', '#ea580c', '#f59e0b', '#0f172a', '#7c3aed'];
+const TEXT_COLORS = ['#0f172a', '#000000'];
+
+const state = {
+  resumes: [],
+  selectedResumeId: job.resumeId || null,
+  mode: 'review',
+  diff: null,
+  resume: null,
+  qd: { template: 'Classic', textColor: TEXT_COLORS[0], accent: '#16a34a', format: 'pdf', tailoringLevel: 'high', noMetrics: false }
+};
+
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function stripMetrics(text) {
+  return String(text || '')
+    .replace(/\$[\d,]+(\.\d+)?\s*[kKmMbB]?\+?/g, '')
+    .replace(/\b\d[\d,]*(\.\d+)?\s*%/g, '')
+    .replace(/\b\d[\d,]*(\.\d+)?\s*(x|X)\b/g, '')
+    .replace(/\b\d[\d,]*(\.\d+)?\+?\s*(users?|customers?|clients?|engineers?|members?|teams?|hours?|days?|weeks?|months?|years?|projects?|releases?|deployments?|servers?|nodes?|requests?|incidents?|tickets?)\b/gi, '$1')
+    .replace(/\s{2,}/g, ' ').replace(/\s+([.,;])/g, '$1').replace(/\(\s*\)/g, '').trim();
+}
+
+const TEMPLATE_STYLES = {
+  'Classic': { font: "Georgia, 'Times New Roman', serif", headingMode: 'rule', headingCase: 'uppercase' },
+  'Harvard': { font: "'Times New Roman', Times, serif", headingMode: 'rule-bold', headingCase: 'uppercase' },
+  "Jake's": { font: 'Calibri, Arial, sans-serif', headingMode: 'rule-thin', headingCase: 'uppercase' },
+  'Modern': { font: "'Segoe UI', Arial, sans-serif", headingMode: 'color', headingCase: 'none' },
+  'Minimal': { font: 'Helvetica, Arial, sans-serif', headingMode: 'plain', headingCase: 'uppercase' }
+};
+
+function resumeToHtml(resume, opts) {
+  const p = resume.personal || {};
+  const accent = opts.accent || '#16a34a';
+  const textColor = opts.textColor || '#0f172a';
+  const noMetrics = !!opts.noMetrics;
+  const tpl = TEMPLATE_STYLES[opts.template] || TEMPLATE_STYLES.Classic;
+  const clean = s => esc(noMetrics ? stripMetrics(s) : s);
+  const headingCss = {
+    rule: `border-bottom:2px solid ${accent}; padding-bottom:3px;`,
+    'rule-bold': `border-bottom:3px double ${accent}; padding-bottom:4px; font-weight:800;`,
+    'rule-thin': `border-bottom:1px solid ${accent}; padding-bottom:2px;`,
+    color: `color:${accent};`,
+    plain: `color:${textColor}; opacity:0.75;`
+  }[tpl.headingMode];
+  const contact = [p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' &nbsp;|&nbsp; ');
+  const skillsHtml = (resume.skills || []).map(esc).join(', ');
+  const expHtml = (resume.experience || []).map(e => `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${esc(e.role || '')}</span><span>${esc(e.dates || e.endDate || '')}</span>
+      </div>
+      <div style="font-style:italic;color:#444;margin-bottom:4px;">${esc(e.company || '')}</div>
+      <ul style="margin:0;padding-left:18px;">
+        ${(e.description || '').split('\n').filter(Boolean).map(l => `<li>${clean(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}
+      </ul>
+    </div>`).join('');
+  const eduHtml = (resume.education || []).map(ed => `
+    <div style="margin-bottom:8px;"><strong>${esc(ed.school || '')}</strong> — ${esc(ed.degree || '')} ${esc(ed.field || '')}</div>`).join('');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
+    body{ font-family:${tpl.font}; color:${textColor}; padding:32px; max-width:720px; margin:0 auto; }
+    h1{ text-align:center; margin-bottom:2px; } .contact{ text-align:center; font-size:12px; color:#555; margin-bottom:16px; }
+    h2{ font-size:13px; text-transform:${tpl.headingCase}; letter-spacing:.05em; ${headingCss} margin-top:20px; }
+  </style></head><body>
+    <h1>${esc(p.name || '')}</h1><div class="contact">${contact}</div>
+    <h2>Summary</h2><p>${clean(resume.summary || '')}</p>
+    <h2>Skills</h2><p>${skillsHtml}</p>
+    <h2>Experience</h2>${expHtml}
+    <h2>Education</h2>${eduHtml}
+  </body></html>`;
+}
+
+function downloadResume(resume, opts) {
+  const html = resumeToHtml(resume, opts);
+  if (opts.format === 'docx') {
+    const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
+    const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(resume.personal?.name || 'resume').replace(/\s+/g, '_')}.doc`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } else {
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
+  }
+}
+
+function projectedResume() {
+  const { diff, resume } = state;
+  const experience = diff.experience.map((role, ri) => {
+    const original = resume.experience[ri] || {};
+    const lines = role.bullets.map(b => (b.action === 'remove' ? null : b.new)).filter(Boolean);
+    return { ...original, description: lines.join('\n') };
+  });
+  return { ...resume, summary: diff.summary.new, skills: diff.skills, experience };
+}
+
+async function loadResumes() {
+  try {
+    const { resumes } = await api.get('/api/resumes');
+    state.resumes = resumes || [];
+    if (!state.selectedResumeId) state.selectedResumeId = state.resumes.find(r => r.isDefault)?._id || state.resumes[0]?._id;
+    const opts = state.resumes.map(r => `<option value="${r._id}" ${r._id === state.selectedResumeId ? 'selected' : ''}>${esc(r.name || 'Untitled resume')}${r.isDefault ? ' (Default)' : ''}</option>`).join('');
+    document.getElementById('tl-resume').innerHTML = opts;
+    document.getElementById('qdResume').innerHTML = opts;
+  } catch (e) {
+    showToast('Log in to load your resumes', 'error');
+  }
+}
+
+/* ---- top-level tabs ---- */
+document.querySelectorAll('.tl-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    document.querySelectorAll('.tl-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tl-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ---- picker ---- */
+document.getElementById('tl-resume').addEventListener('change', e => { state.selectedResumeId = e.target.value; });
+document.querySelectorAll('.tl-mode').forEach(opt => {
+  opt.addEventListener('click', () => {
+    document.querySelectorAll('.tl-mode').forEach(o => o.classList.remove('selected'));
+    opt.classList.add('selected');
+    state.mode = opt.dataset.mode;
+  });
+});
+
+async function runTailor(level) {
+  const resume = state.resumes.find(r => r._id === state.selectedResumeId);
+  if (!resume) { showToast('Pick a resume first', 'error'); return null; }
+  state.resume = resume;
+  const { tailored } = await api.post(`/api/resumes/${state.selectedResumeId}/tailor`, {
+    jobTitle: job.title, jobDescription: job.description, tailoringLevel: level || 'high'
+  });
+  state.diff = tailored;
+  return tailored;
+}
+
+function renderReviewSheet() {
+  const diff = state.diff, p = state.resume.personal || {};
+  const summaryChanged = diff.summary.old.trim() !== diff.summary.new.trim();
+  const summaryHtml = !summaryChanged ? `<div class="tl-plain">${esc(diff.summary.new)}</div>` :
+    `<div class="tl-old">${esc(diff.summary.old)}</div><div class="tl-new">${esc(diff.summary.new)}</div>`;
+  const origSkills = new Set((state.resume.skills || []).map(s => s.toLowerCase()));
+  const skillsHtml = diff.skills.map(s => `<span class="tl-skill ${origSkills.has(s.toLowerCase()) ? '' : 'added'}">${esc(s)}</span>`).join('');
+  const expHtml = diff.experience.map(role => {
+    const bullets = role.bullets.map(b => {
+      if (b.action === 'keep') return `<div class="tl-plain">${esc(b.new)}</div>`;
+      if (b.action === 'remove') return `<div class="tl-old">${esc(b.old)}</div>`;
+      return (b.old ? `<div class="tl-old">${esc(b.old)}</div>` : '') + `<div class="tl-new">${esc(b.new)}</div>`;
+    }).join('');
+    return `<div class="tl-heading" style="margin-bottom:2px;">${esc(role.role)}</div>
+      <div style="font-size:12px;color:var(--text-faint);margin-bottom:6px;">${esc(role.company)}</div>${bullets}`;
+  }).join('');
+  document.getElementById('reviewSheet').innerHTML = `
+    <h2>${esc(p.name || 'Your Name')}</h2>
+    <div class="contact">${[p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' | ')}</div>
+    <div class="tl-heading">Summary</div>${summaryHtml}
+    <div class="tl-heading">Skills</div><div>${skillsHtml}</div>
+    <div class="tl-heading">Experience</div>${expHtml}`;
+}
+
+document.getElementById('tl-continue').addEventListener('click', async () => {
+  const btn = document.getElementById('tl-continue');
+  btn.disabled = true; btn.textContent = 'Matching against your resume…';
+  try {
+    if (state.mode === 'quick') {
+      await runTailor(state.qd.tailoringLevel);
+      document.getElementById('qdTabBtn').disabled = false;
+      renderQuickDownload();
+      document.querySelector('[data-tab="quick"]').click();
+    } else {
+      await runTailor('high');
+      document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.toggle('active', b.dataset.level === 'high'));
+      renderReviewSheet();
+      document.getElementById('pickerCard').style.display = 'none';
+      document.getElementById('reviewOut').style.display = 'block';
+      document.getElementById('qdTabBtn').disabled = false;
+    }
+  } catch (e) {
+    showToast(e.message || 'Tailoring failed', 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Continue →';
+});
+
+document.getElementById('tl-back-to-picker').addEventListener('click', () => {
+  document.getElementById('pickerCard').style.display = 'block';
+  document.getElementById('reviewOut').style.display = 'none';
+});
+
+document.getElementById('reviewLevels').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.tl-level-btn');
+  if (!btn) return;
+  document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  await runTailor(btn.dataset.level);
+  renderReviewSheet();
+});
+
+document.getElementById('tl-go-download').addEventListener('click', () => {
+  downloadResume(projectedResume(), state.qd);
+});
+
+/* ---- quick download tab ---- */
+function renderQuickDownload() {
+  document.getElementById('qdFrame').srcdoc = resumeToHtml(projectedResume(), state.qd);
+  document.getElementById('qdFoot').textContent = `${state.qd.template} · ${state.qd.format.toUpperCase()} · ${state.qd.tailoringLevel[0].toUpperCase()}${state.qd.tailoringLevel.slice(1)} tailoring`;
+  document.getElementById('qdDownload').textContent = `↓ Download ${state.qd.format.toUpperCase()}`;
+  document.getElementById('qdResume').value = state.selectedResumeId;
+  document.getElementById('qdTemplate').value = state.qd.template;
+  document.querySelectorAll('#qdFormat .qd-pill').forEach(b => b.classList.toggle('active', b.dataset.value === state.qd.format));
+  document.querySelectorAll('#qdLevel .qd-pill').forEach(b => b.classList.toggle('active', b.dataset.value === state.qd.tailoringLevel));
+  document.getElementById('qdNoMetrics').checked = state.qd.noMetrics;
+  document.getElementById('qdTextColors').innerHTML = TEXT_COLORS.map(c =>
+    `<span class="qd-swatch ${c === state.qd.textColor ? 'selected' : ''}" data-color="${c}" style="background:${c}"><span class="chk">✓</span></span>`).join('');
+  document.getElementById('qdAccents').innerHTML = ACCENTS.map(c =>
+    `<span class="qd-swatch ${c === state.qd.accent ? 'selected' : ''}" data-color="${c}" style="background:${c}"><span class="chk">✓</span></span>`).join('');
+  document.getElementById('qdTextColors').querySelectorAll('.qd-swatch').forEach(sw =>
+    sw.addEventListener('click', () => { state.qd.textColor = sw.dataset.color; renderQuickDownload(); }));
+  document.getElementById('qdAccents').querySelectorAll('.qd-swatch').forEach(sw =>
+    sw.addEventListener('click', () => { state.qd.accent = sw.dataset.color; renderQuickDownload(); }));
+}
+
+document.getElementById('qdResume').addEventListener('change', async (e) => {
+  state.selectedResumeId = e.target.value;
+  await runTailor(state.qd.tailoringLevel);
+  renderQuickDownload();
+});
+document.getElementById('qdTemplate').addEventListener('change', e => { state.qd.template = e.target.value; renderQuickDownload(); });
+document.getElementById('qdNoMetrics').addEventListener('change', e => { state.qd.noMetrics = e.target.checked; renderQuickDownload(); });
+document.getElementById('qdFormat').addEventListener('click', e => {
+  const btn = e.target.closest('.qd-pill'); if (!btn) return;
+  state.qd.format = btn.dataset.value; renderQuickDownload();
+});
+document.getElementById('qdLevel').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.qd-pill'); if (!btn) return;
+  if (btn.dataset.value === state.qd.tailoringLevel) return;
+  state.qd.tailoringLevel = btn.dataset.value;
+  await runTailor(state.qd.tailoringLevel);
+  renderQuickDownload();
+});
+document.getElementById('qdDownload').addEventListener('click', () => downloadResume(projectedResume(), state.qd));
+
+loadResumes().then(() => {
+  if (qp.get('mode') === 'quick') {
+    document.querySelectorAll('.tl-mode').forEach(o => o.classList.toggle('selected', o.dataset.mode === 'quick'));
+    state.mode = 'quick';
+    document.getElementById('tl-continue').click();
+  }
+});
+</script>
+</body>
+</html>

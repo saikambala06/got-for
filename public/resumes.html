@@ -122,8 +122,6 @@
       <div class="rt-tabs">
         <button class="rt-tab active" data-tab="saved">My resumes</button>
         <button class="rt-tab" data-tab="parse">Parse resume</button>
-        <button class="rt-tab" data-tab="tailor">Tailor resume</button>
-        <button class="rt-tab" data-tab="jobs">Job board</button>
       </div>
 
       <!-- SAVED -->
@@ -156,31 +154,6 @@
         </div>
       </div>
 
-      <!-- TAILOR -->
-      <div class="rt-panel" id="panel-tailor">
-        <div class="row-2">
-          <div>
-            <div class="field-label">Resume text</div>
-            <textarea class="rt-textarea" id="resumeInput2" style="min-height:130px;" placeholder="Paste resume text..."></textarea>
-          </div>
-          <div>
-            <div class="field-label">Job description</div>
-            <textarea class="rt-textarea" id="jobInput" style="min-height:130px;" placeholder="Paste job description, or pick one from Job board..."></textarea>
-          </div>
-        </div>
-        <div class="rt-actions">
-          <button class="btn btn-primary" id="tailorBtn">Tailor resume</button>
-        </div>
-        <div id="tailorStatus"></div>
-        <div id="tailorError"></div>
-        <div id="tailorOut"></div>
-      </div>
-
-      <!-- JOBS -->
-      <div class="rt-panel" id="panel-jobs">
-        <div class="rt-hint">Pick a role to send its description straight into the tailor.</div>
-        <div id="jobList"></div>
-      </div>
     </div>
   </main>
 </div>
@@ -188,13 +161,7 @@
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-const rtState = { resumeText: '', jobText: '', parsed: null, parsedTab: 'summary' };
-
-const RT_JOBS = [
-  {role:'Senior Frontend Engineer', co:'Meridian Health', desc:'We need a senior frontend engineer fluent in React and TypeScript to lead our patient portal rebuild. Requires 5+ years experience, strong accessibility knowledge, experience with design systems, GraphQL, and mentoring junior engineers. Healthcare data privacy (HIPAA) experience is a strong plus.'},
-  {role:'Product Analyst', co:'Northwind Retail', desc:'Looking for a product analyst to own funnel metrics and experimentation. Must be skilled in SQL, A/B testing, dashboarding (Looker or Tableau), and communicating insights to non-technical stakeholders. E-commerce background preferred.'},
-  {role:'Backend Engineer, Payments', co:'Fenwick Labs', desc:'Backend engineer for our payments infrastructure team. Strong Go or Java, distributed systems experience, understanding of idempotency and reconciliation, and exposure to PCI compliance. On-call rotation required.'},
-];
+const rtState = { resumeText: '', parsed: null, parsedTab: 'summary' };
 
 function gaugeSVG(score) {
   const r = 44, c = 2 * Math.PI * r;
@@ -223,8 +190,6 @@ document.querySelectorAll('.rt-tab').forEach(btn => {
 
 /* ---- parse ---- */
 document.getElementById('resumeInput').addEventListener('input', e => { rtState.resumeText = e.target.value; });
-document.getElementById('resumeInput2').addEventListener('input', e => { rtState.resumeText = e.target.value; document.getElementById('resumeInput').value = e.target.value; });
-document.getElementById('jobInput').addEventListener('input', e => { rtState.jobText = e.target.value; });
 
 document.getElementById('sampleBtn').addEventListener('click', () => {
   const sample = `Jordan Alvarez
@@ -249,7 +214,6 @@ SKILLS
 JavaScript, React, HTML, CSS, Git, REST APIs, Jest`;
   rtState.resumeText = sample;
   document.getElementById('resumeInput').value = sample;
-  document.getElementById('resumeInput2').value = sample;
 });
 
 document.getElementById('parseBtn').addEventListener('click', async () => {
@@ -409,60 +373,7 @@ function renderDossier() {
   });
 }
 
-/* ---- tailor ---- */
-document.getElementById('tailorBtn').addEventListener('click', async () => {
-  if (!rtState.resumeText.trim() || !rtState.jobText.trim()) { showToast('Add both a resume and a job description', 'error'); return; }
-  const btn = document.getElementById('tailorBtn');
-  btn.disabled = true; btn.innerHTML = '<span class="loader-sm"></span> Comparing against job…';
-  document.getElementById('tailorError').innerHTML = '';
-  try {
-    const { tailored: r } = await api.post('/api/resumes/tailor-text', {
-      resumeText: rtState.resumeText,
-      jobDescription: rtState.jobText
-    });
-    document.getElementById('tailorOut').innerHTML = `
-      <div class="rt-block">
-        <h3>Match score</h3>
-        <div class="gauge-wrap">
-          <div class="gauge">${gaugeSVG(r.match_score)}<div class="num">${r.match_score}</div></div>
-          <div class="gauge-label">${r.advice || ''}</div>
-        </div>
-        <div class="kw-list">
-          ${(r.matched_keywords || []).map(k => `<span class="skill-chip kw-present">${k}</span>`).join('')}
-          ${(r.missing_keywords || []).map(k => `<span class="skill-chip kw-missing">missing: ${k}</span>`).join('')}
-        </div>
-      </div>
-      <div class="rt-block">
-        <h3>Rewritten summary</h3>
-        <div class="rt-box">${r.tailored_summary || ''}</div>
-      </div>
-      <div class="rt-block">
-        <h3>Rewritten bullets</h3>
-        <div class="rt-box">${(r.tailored_bullets || []).map(b => '• ' + b).join('\n')}</div>
-      </div>`;
-  } catch (e) {
-    document.getElementById('tailorError').innerHTML = `<div class="rt-error">${e.message}</div>`;
-  }
-  btn.disabled = false; btn.textContent = 'Tailor resume';
-});
 
-/* ---- jobs ---- */
-document.getElementById('jobList').innerHTML = RT_JOBS.map((j, i) => `
-  <div class="job-pick" data-job="${i}">
-    <div class="role">${j.role}</div>
-    <div class="co">${j.co}</div>
-  </div>`).join('');
-document.querySelectorAll('.job-pick').forEach(el => {
-  el.addEventListener('click', () => {
-    const j = RT_JOBS[el.dataset.job];
-    rtState.jobText = j.desc;
-    document.getElementById('jobInput').value = j.desc;
-    document.querySelectorAll('.rt-tab').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.rt-panel').forEach(p => p.classList.remove('active'));
-    document.querySelector('[data-tab="tailor"]').classList.add('active');
-    document.getElementById('panel-tailor').classList.add('active');
-  });
-});
 
 /* ---- saved resumes ---- */
 async function loadSavedResumes() {

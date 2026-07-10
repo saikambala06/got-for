@@ -97,6 +97,18 @@ const handlers = {
       body: JSON.stringify({ jobTitle, company, jobDescription })
     });
     return body.analysis;
+  },
+
+  async 'tabs:openTailor'({ resumeId, jobTitle, company, jobDescription }) {
+    const { apiBase } = await getConfig();
+    const params = new URLSearchParams({
+      resumeId: resumeId || '',
+      jobTitle: jobTitle || '',
+      company: company || '',
+      jobDescription: jobDescription || ''
+    });
+    await chrome.tabs.create({ url: `${apiBase}/tailor.html?${params.toString()}` });
+    return { ok: true };
   }
 };
 

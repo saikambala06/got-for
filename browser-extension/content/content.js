@@ -341,17 +341,13 @@
   }
 
   function tailorResume() {
-    studio.renderPicker(
-      { resumes: state.resumes, selectedResumeId: state.selectedResumeId },
-      {
-        onCancel: () => {},
-        onContinue: (resumeId, mode) => {
-          state.selectedResumeId = resumeId;
-          studioState.mode = mode;
-          openStudio();
-        }
-      }
-    );
+    const job = currentJob();
+    send('tabs:openTailor', {
+      resumeId: state.selectedResumeId,
+      jobTitle: job.title,
+      company: job.company,
+      jobDescription: job.description
+    }).catch((err) => alert(`Could not open Tailor Resume: ${err.message}`));
   }
 
   // ─── Resume export (client-side, no server dependency) ─────────────────
