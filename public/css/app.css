@@ -231,6 +231,69 @@ button{ font-family:inherit; }
 }
 @keyframes spin{ to{ transform: rotate(360deg); } }
 
+/* ---------- Modal / picker (Tailor resume, etc.) ---------- */
+.modal-backdrop{
+  position:fixed; inset:0; z-index:80; background:rgba(6,8,16,0.6);
+  display:flex; align-items:center; justify-content:center; padding:24px;
+}
+.modal-card{
+  width:480px; max-width:100%; background:var(--surface); border:1px solid var(--border);
+  border-radius:18px; padding:30px 34px 26px; box-shadow:var(--shadow);
+}
+.modal-card h1{ font-size:22px; text-align:center; margin-bottom:6px; }
+.modal-card p.sub{ text-align:center; color:var(--text-dim); font-size:13px; margin-bottom:22px; }
+
+.mode-option{
+  display:flex; align-items:flex-start; gap:12px; border:1.5px solid var(--border); border-radius:12px;
+  padding:14px 16px; margin-bottom:12px; cursor:pointer; transition:border-color .15s, background .15s;
+}
+.mode-option:hover{ background:var(--surface-2); }
+.mode-option.selected{ border-color:var(--accent); background:var(--accent-soft); }
+.mode-radio{
+  width:18px; height:18px; border-radius:50%; border:2px solid var(--border); flex-shrink:0; margin-top:2px;
+  display:flex; align-items:center; justify-content:center;
+}
+.mode-option.selected .mode-radio{ border-color:var(--accent); }
+.mode-radio-dot{ width:9px; height:9px; border-radius:50%; background:var(--accent); display:none; }
+.mode-option.selected .mode-radio-dot{ display:block; }
+.mode-title{ font-size:14.5px; font-weight:700; display:flex; align-items:center; gap:8px; }
+.mode-badge{ font-size:11px; font-weight:700; color:var(--blue); background:rgba(111,141,255,0.12); padding:2px 8px; border-radius:999px; }
+.mode-badge.fast{ color:var(--accent-2); background:var(--accent-soft); }
+.mode-desc{ font-size:12.5px; color:var(--text-dim); margin-top:2px; line-height:1.4; }
+
+/* Segmented control (tailoring level, format, etc.) */
+.seg-group{ display:flex; border:1px solid var(--border); border-radius:9px; overflow:hidden; }
+.seg-btn{
+  flex:1; border:none; background:var(--surface-2); padding:8px 12px; font-size:12.5px; font-weight:600;
+  cursor:pointer; color:var(--text-dim); border-right:1px solid var(--border);
+}
+.seg-btn:last-child{ border-right:none; }
+.seg-btn.active{ background:var(--accent); color:#1a1326; }
+.seg-btn:hover:not(.active){ color:var(--text); }
+
+/* Color swatches */
+.swatch-row{ display:flex; gap:8px; flex-wrap:wrap; }
+.swatch{ width:24px; height:24px; border-radius:50%; cursor:pointer; border:2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15); }
+.swatch.selected{ border-color:var(--text); }
+
+/* Toggle switch */
+.toggle-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.toggle-row .toggle-copy{ flex:1; }
+.toggle-row .toggle-title{ font-size:13.5px; font-weight:600; margin-bottom:2px; }
+.toggle-row .toggle-desc{ font-size:12px; color:var(--text-dim); line-height:1.5; }
+.switch{ position:relative; width:40px; height:22px; flex-shrink:0; }
+.switch input{ opacity:0; width:0; height:0; }
+.switch .track{
+  position:absolute; inset:0; background:var(--surface-2); border:1px solid var(--border); border-radius:999px;
+  cursor:pointer; transition:background .15s;
+}
+.switch .track::before{
+  content:''; position:absolute; width:16px; height:16px; left:2px; top:2px; border-radius:50%;
+  background:var(--text-faint); transition:transform .15s, background .15s;
+}
+.switch input:checked + .track{ background:var(--accent-soft); border-color:var(--accent); }
+.switch input:checked + .track::before{ transform:translateX(18px); background:var(--accent); }
+
 @media (max-width: 920px){
   .app{ grid-template-columns: 1fr; }
   .sidebar{ position:relative; height:auto; flex-direction:row; align-items:center; padding:14px 18px; overflow-x:auto; }

@@ -482,11 +482,18 @@ async function loadSavedResumes() {
           <div class="rc-meta">${(r.skills || []).length} skills · updated ${timeAgo(r.updatedAt)}</div>
         </div>
         <div class="rc-actions">
+          <button class="btn btn-primary" data-tailor="${r._id}">Tailor</button>
           <button class="btn" data-view-btn="${r._id}">View</button>
           <button class="btn" data-delete="${r._id}">Delete</button>
         </div>
       </div>`).join('');
 
+    list.querySelectorAll('[data-tailor]').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        window.location.href = `/tailor-resume.html?resumeId=${el.dataset.tailor}`;
+      });
+    });
     list.querySelectorAll('[data-view], [data-view-btn]').forEach(el => {
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();

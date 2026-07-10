@@ -97,40 +97,14 @@ const handlers = {
       body: JSON.stringify({ jobTitle, company, jobDescription })
     });
     return body.analysis;
-  },
-
-  // ─── Full-page tailor flow (tailor.html / quick-download.html) ─────────
-  async 'tailor:openPicker'({ sessionId }, sender) {
-    const key = `jt_session_${sessionId}`;
-    const store = await chrome.storage.local.get(key);
-    const session = store[key] || {};
-    session.originTabId = sender?.tab?.id || null;
-    await chrome.storage.local.set({ [key]: session });
-    const tab = await chrome.tabs.create({ url: chrome.runtime.getURL(`tailor.html?sid=${sessionId}`) });
-    return { tabId: tab.id };
-  },
-
-  async 'tailor:openQuickDownload'({ sessionId }) {
-    const tab = await chrome.tabs.create({ url: chrome.runtime.getURL(`quick-download.html?sid=${sessionId}`) });
-    return { tabId: tab.id };
-  },
-
-  async 'tailor:startReview'({ sessionId, resumeId }) {
-    const key = `jt_session_${sessionId}`;
-    const store = await chrome.storage.local.get(key);
-    const session = store[key];
-    if (!session || !session.originTabId) throw new Error('The original job tab is no longer available.');
-    await chrome.tabs.update(session.originTabId, { active: true });
-    await chrome.tabs.sendMessage(session.originTabId, { type: 'tailor:runReview', payload: { resumeId } });
-    return { ok: true };
   }
 };
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handler = handlers[message?.type];
   if (!handler) return false;
 
-  handler(message.payload || {}, sender)
+  handler(message.payload || {})
     .then((data) => sendResponse({ ok: true, data }))
     .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
 

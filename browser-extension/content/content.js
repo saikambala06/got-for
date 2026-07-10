@@ -176,7 +176,7 @@
   }
 
   // ─── Tailor Studio (full review flow) ───────────────────────────────────
-  const studioState = { diff: null, tailoringLevel: 'high', decisions: {}, resume: null };
+  const studioState = { diff: null, tailoringLevel: 'high', decisions: {}, resume: null, mode: 'review' };
 
   function matchScoreFor(skillsList, job) {
     const total = job.skillsFound?.length || 0;
@@ -226,6 +226,18 @@
       });
       studioState.diff = result;
       studioState.decisions = {};
+      if (studioState.mode === 'quick') {
+        // Auto-apply every suggestion, then download straight away with
+        // saved defaults instead of dropping into the review screen.
+        studioState.decisions = { summary: true };
+        studioState.diff.experience.forEach((r) => r.bullets.forEach((b, bi) => {
+          studioState.decisions[`exp:${r.index}:${bi}`] = true;
+        }));
+        const proj = projectedResume();
+        downloadTailoredResume(proj, { format: 'pdf', accent: '#16a34a', template: 'Classic' });
+        studio.unmount();
+        return;
+      }
       renderStudio(job);
     } catch (err) {
       studio.renderError(`Tailoring failed: ${err.message}`, () => { studio.unmount(); });
@@ -277,25 +289,18 @@
     );
   }
 
-  function genSessionId() {
-    return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-  }
-
-  async function tailorResume() {
-    const sessionId = genSessionId();
-    const key = `jt_session_${sessionId}`;
-    try {
-      await chrome.storage.local.set({
-        [key]: {
-          job: currentJob(),
-          resumes: state.resumes,
-          selectedResumeId: state.selectedResumeId
+  function tailorResume() {
+    studio.renderPicker(
+      { resumes: state.resumes, selectedResumeId: state.selectedResumeId },
+      {
+        onCancel: () => {},
+        onContinue: (resumeId, mode) => {
+          state.selectedResumeId = resumeId;
+          studioState.mode = mode;
+          openStudio();
         }
-      });
-      await send('tailor:openPicker', { sessionId });
-    } catch (err) {
-      alert(`Could not open the tailor screen: ${err.message}`);
-    }
+      }
+    );
   }
 
   // ─── Resume export (client-side, no server dependency) ─────────────────
@@ -397,12 +402,6 @@
     if (message?.type === 'panel:toggle') {
       panel.toggle();
       if (panel.isOpen && !state.job) loadAndRender();
-      sendResponse({ ok: true });
-    }
-    if (message?.type === 'tailor:runReview') {
-      const { resumeId } = message.payload || {};
-      if (resumeId) state.selectedResumeId = resumeId;
-      openStudio();
       sendResponse({ ok: true });
     }
   });

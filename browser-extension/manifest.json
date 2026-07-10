@@ -20,7 +20,7 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage", "scripting", "activeTab", "tabs"],
+  "permissions": ["storage", "scripting", "activeTab"],
   "host_permissions": ["https://got-for.vercel.app/*", "https://*/*", "http://*/*"],
   "web_accessible_resources": [
     {

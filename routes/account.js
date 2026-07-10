@@ -41,4 +41,24 @@ router.put('/password', async (req, res) => {
   }
 });
 
+// Save the person's "Quick Download" panel settings so every future
+// quick download opens pre-filled with the same choices.
+router.put('/quick-download-defaults', async (req, res) => {
+  try {
+    const { template, textColor, accentColor, format, tailoringLevel, noMetrics } = req.body;
+    const patch = {};
+    if (template !== undefined) patch['quickDownloadDefaults.template'] = template;
+    if (textColor !== undefined) patch['quickDownloadDefaults.textColor'] = textColor;
+    if (accentColor !== undefined) patch['quickDownloadDefaults.accentColor'] = accentColor;
+    if (format !== undefined) patch['quickDownloadDefaults.format'] = format;
+    if (tailoringLevel !== undefined) patch['quickDownloadDefaults.tailoringLevel'] = tailoringLevel;
+    if (noMetrics !== undefined) patch['quickDownloadDefaults.noMetrics'] = noMetrics;
+    const user = await User.findByIdAndUpdate(req.userId, { $set: patch }, { new: true, runValidators: true }).select('-password');
+    res.json({ quickDownloadDefaults: user.quickDownloadDefaults });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not save quick download defaults' });
+  }
+});
+
 module.exports = router;

@@ -156,6 +156,7 @@
         <div class="field"><label>Applied on</label><input type="date" id="fDate" /></div>
       </div>
       <div class="field" style="margin-top:16px;"><label>Skills required (comma separated)</label><input id="fSkills" placeholder="Python, AWS, SQL" /></div>
+      <div class="field" style="margin-top:16px;"><label>Job description <span style="font-weight:400;color:var(--text-faint);">(pasted in — used to tailor your resume)</span></label><textarea id="fDescription" style="min-height:100px;" placeholder="Paste the full job posting text here…"></textarea></div>
       <div class="field" style="margin-top:16px;"><label>Notes</label><textarea id="fNotes" placeholder="Anything worth remembering…"></textarea></div>
       <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:22px;">
         <button type="button" class="btn btn-ghost" id="cancelModal">Cancel</button>
@@ -260,12 +261,17 @@ function renderDetail() {
     ${job.source ? `<div class="kv-row"><span>Source</span><span>${escapeHtml(job.source)}</span></div>` : ''}
     ${job.jobUrl ? `<div class="kv-row"><span>Posting</span><span><a href="${escapeHtml(job.jobUrl)}" target="_blank" style="color:var(--accent-2)">View original →</a></span></div>` : ''}
     ${job.skills && job.skills.length ? `<div style="margin-top:16px;"><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">SKILLS</div>${job.skills.map(s=>`<span class="skill-chip">${escapeHtml(s)}</span>`).join('')}</div>` : ''}
+    ${job.description ? `<div style="margin-top:16px;"><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">JOB DESCRIPTION</div><p style="font-size:13px;line-height:1.6;color:var(--text-dim);max-height:140px;overflow:auto;white-space:pre-wrap;">${escapeHtml(job.description)}</p></div>` : ''}
     ${job.notes ? `<div style="margin-top:16px;"><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">NOTES</div><p style="font-size:13.5px;line-height:1.6;color:var(--text);">${escapeHtml(job.notes)}</p></div>` : ''}
     <div style="display:flex;gap:10px;margin-top:24px;">
+      <button class="btn btn-sm btn-primary" id="tailorJobBtn">Tailor Resume</button>
       <button class="btn btn-sm" id="editJobBtn">Edit</button>
       <button class="btn btn-sm btn-danger" id="deleteJobBtn">Delete</button>
     </div>
   `;
+  document.getElementById('tailorJobBtn').addEventListener('click', () => {
+    window.location.href = `/tailor-resume.html?jobId=${job._id}`;
+  });
   document.getElementById('editJobBtn').addEventListener('click', () => openModal(job));
   document.getElementById('deleteJobBtn').addEventListener('click', async () => {
     if (!confirm('Delete this application? This cannot be undone.')) return;
@@ -363,6 +369,7 @@ function openModal(job) {
   document.getElementById('fSource').value = job ? job.source : '';
   document.getElementById('fUrl').value = job ? job.jobUrl : '';
   document.getElementById('fSkills').value = job && job.skills ? job.skills.join(', ') : '';
+  document.getElementById('fDescription').value = job ? (job.description || '') : '';
   document.getElementById('fNotes').value = job ? job.notes : '';
   document.getElementById('fDate').value = job ? new Date(job.appliedOn).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
   backdrop.classList.add('open');
@@ -386,6 +393,7 @@ document.getElementById('jobForm').addEventListener('submit', async (e) => {
     source: document.getElementById('fSource').value.trim(),
     jobUrl: document.getElementById('fUrl').value.trim(),
     notes: document.getElementById('fNotes').value.trim(),
+    description: document.getElementById('fDescription').value.trim(),
     skills: document.getElementById('fSkills').value.split(',').map(s=>s.trim()).filter(Boolean),
     appliedOn: document.getElementById('fDate').value
   };
