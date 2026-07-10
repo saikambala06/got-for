@@ -862,4 +862,52 @@ async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescripti
   return text.trim();
 }
 
-module.exports = { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI, analyzeJobWithAI };
+module.exports = { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI, analyzeJobWithAI, enhanceResumeFieldWithAI };
+
+// ─── Single-field "Enhance with AI" (used by the resume editor UI) ─────────
+
+const ENHANCE_SYSTEM_PROMPT = `You are an expert resume writer. You improve one piece of resume text at a time.
+Rules:
+- Never invent facts, employers, dates, numbers, or achievements that aren't implied by the input text or context
+- Keep the same underlying meaning — you are polishing wording, not changing what happened
+- Use strong action verbs, concise and specific language, and remove filler words
+- Preserve the person's real accomplishments; do not add fabricated metrics
+- Match professional resume tone — no first person "I", no emojis, no markdown
+- Return ONLY the improved text, nothing else (no preamble, no quotes, no explanation)`;
+
+function enhancePromptFor(kind, text, context) {
+  const jobLine = context?.jobTitle || context?.jobDescription
+    ? `\n\nTailor the wording toward this target role where it genuinely fits (do not invent skills):\nJob Title: ${context.jobTitle || 'Not specified'}\nJob Description: ${(context.jobDescription || '').slice(0, 1500)}`
+    : '';
+
+  if (kind === 'summary') {
+    const roleContext = context?.currentRole ? `\nCandidate's most recent role: ${context.currentRole}` : '';
+    return `Rewrite this resume professional summary to be sharper and more compelling (3–4 sentences max).${roleContext}${jobLine}\n\nCurrent summary:\n${(text || '').slice(0, 2000) || '(empty — write a strong summary from the role/context given)'}`;
+  }
+
+  // experience bullet block — one bullet per line
+  const roleLine = context?.role || context?.company
+    ? `\nRole: ${context.role || ''} at ${context.company || ''}`
+    : '';
+  return `Rewrite these resume bullet points to be more impactful — strong action verbs, concise, one bullet per line, same facts only.${roleLine}${jobLine}\n\nCurrent bullets:\n${(text || '').slice(0, 3000) || '(empty — leave empty, do not invent bullets)'}`;
+}
+
+async function enhanceResumeFieldWithAI(kind, text, context = {}) {
+  if (!getKeyPool().hasKeys()) {
+    throw new Error('AI enhance requires GEMINI_API_KEY to be configured');
+  }
+  if (!['summary', 'experience'].includes(kind)) {
+    throw new Error('Unsupported field type for AI enhance');
+  }
+
+  const result = await callGemini(
+    [
+      { role: 'system', content: ENHANCE_SYSTEM_PROMPT },
+      { role: 'user', content: enhancePromptFor(kind, text, context) }
+    ],
+    1200
+  );
+
+  // Strip accidental wrapping quotes/markdown the model sometimes adds despite instructions.
+  return result.replace(/^["'`]+|["'`]+$/g, '').trim();
+}

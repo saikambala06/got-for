@@ -165,6 +165,8 @@
           <button class="tl-continue" id="tl-continue">Continue →</button>
         </div>
 
+        <div id="editOut" style="display:none;"></div>
+
         <div id="reviewOut" style="display:none;">
           <div class="tl-review-top">
             <span class="field-label" style="margin:0;">Tailoring level</span>
@@ -265,6 +267,7 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/resumeEditor.js"></script>
 <script>
 const qp = new URLSearchParams(location.search);
 const job = {
@@ -531,18 +534,65 @@ document.getElementById('tl-continue').addEventListener('click', async () => {
       renderQuickDownload();
       document.querySelector('[data-tab="quick"]').click();
     } else {
-      await runTailor('high');
-      document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.toggle('active', b.dataset.level === 'high'));
-      renderReviewSheet();
-      document.getElementById('pickerCard').style.display = 'none';
-      document.getElementById('reviewOut').style.display = 'block';
-      document.getElementById('qdTabBtn').disabled = false;
+      const resume = state.resumes.find(r => r._id === state.selectedResumeId);
+      if (!resume) { showToast('Pick a resume first', 'error'); btn.disabled = false; btn.textContent = 'Continue →'; return; }
+      state.resume = resume;
+      showResumeEditStep(resume);
     }
   } catch (e) {
     showToast(e.message || 'Tailoring failed', 'error');
   }
   btn.disabled = false; btn.textContent = 'Continue →';
 });
+
+/* ---- edit & tailor with AI step (shown before the AI diff review) ---- */
+function showResumeEditStep(resume) {
+  document.getElementById('pickerCard').style.display = 'none';
+  const editOut = document.getElementById('editOut');
+  editOut.style.display = 'block';
+  ResumeEditor.mount(editOut, resume, {
+    title: 'Edit & Tailor Resume with AI',
+    subtitle: 'Fix anything that needs updating, then continue — the AI will tailor this against the job description next.',
+    cancelLabel: '← Start over',
+    saveLabel: 'Continue to tailoring →',
+    onCancel: () => {
+      editOut.style.display = 'none';
+      editOut.innerHTML = '';
+      document.getElementById('pickerCard').style.display = 'block';
+    },
+    onSave: async (edited) => {
+      // merge the user's edits into the working resume before running the AI tailoring pass
+      state.resume = { ...state.resume, ...edited };
+      editOut.style.display = 'none';
+      editOut.innerHTML = '';
+      const btn = document.getElementById('tl-continue');
+      btn.disabled = true; btn.textContent = 'Matching against your resume…';
+      try {
+        await runTailor('high');
+        document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.toggle('active', b.dataset.level === 'high'));
+        renderReviewSheet();
+        document.getElementById('reviewOut').style.display = 'block';
+        document.getElementById('qdTabBtn').disabled = false;
+      } catch (e) {
+        showToast(e.message || 'Tailoring failed', 'error');
+        document.getElementById('pickerCard').style.display = 'block';
+      }
+      btn.disabled = false; btn.textContent = 'Continue →';
+    },
+    onAiEnhance: async (kind, text, data, entry) => {
+      const { result } = await api.post('/api/resumes/enhance-field', {
+        kind,
+        text,
+        jobTitle: job.title,
+        jobDescription: job.description,
+        role: entry?.role || '',
+        company: entry?.company || '',
+        currentRole: data.experience?.[0]?.role || ''
+      });
+      return result;
+    }
+  });
+}
 
 document.getElementById('tl-back-to-picker').addEventListener('click', () => {
   document.getElementById('pickerCard').style.display = 'block';
