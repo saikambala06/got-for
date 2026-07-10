@@ -83,7 +83,7 @@
   .qd-right-head{ display:flex; align-items:center; gap:7px; }
   .qd-dot{ width:7px; height:7px; border-radius:50%; background:var(--green); }
   .qd-title{ font-size:15px; font-weight:700; }
-  .qd-sub{ font-size:11.5px; color:var(--text-faint); margin-top:-8px; }
+  .qd-sub{ font-size:11.5px; color:var(--text-faint); margin-top:4px; }
   .qd-field label{ display:block; font-size:11px; font-weight:700; color:var(--text-faint); text-transform:uppercase;
     letter-spacing:.04em; margin-bottom:7px; }
   .qd-field select{ width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:9px; font-size:13px;
@@ -197,7 +197,7 @@
           </div>
 
           <div class="qd-right">
-            <div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
               <div class="qd-right-head"><span class="qd-dot"></span><span class="qd-title">Quick Download</span></div>
               <div class="qd-sub">Saved defaults applied to every quick download.</div>
             </div>
@@ -313,7 +313,7 @@ const TEMPLATE_STYLES = {
 };
 
 function resumeToHtml(resume, opts) {
-  const p = resume.personal || {};
+  const p = withProfileFallback(resume.personal);
   const accent = opts.accent || '#16a34a';
   const textColor = opts.textColor || '#0f172a';
   const noMetrics = !!opts.noMetrics;
@@ -355,20 +355,65 @@ function resumeToHtml(resume, opts) {
 
 function downloadResume(resume, opts) {
   const html = resumeToHtml(resume, opts);
+  const fileBase = (withProfileFallback(resume.personal).name || 'resume').replace(/\s+/g, '_');
   if (opts.format === 'docx') {
     const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
     const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${(resume.personal?.name || 'resume').replace(/\s+/g, '_')}.doc`;
+    a.download = `${fileBase}.doc`;
     a.click();
     URL.revokeObjectURL(a.href);
   } else {
-    const win = window.open('', '_blank');
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 300);
+    downloadHtmlAsPdf(html, fileBase);
+  }
+}
+
+/* Renders the resume HTML off-screen and saves it as an actual PDF file
+   (instead of opening the browser print dialog). Uses html2pdf.js (html2canvas + jsPDF),
+   loaded lazily from CDN on first use. */
+let _html2pdfLoading = null;
+function loadHtml2Pdf() {
+  if (window.html2pdf) return Promise.resolve();
+  if (_html2pdfLoading) return _html2pdfLoading;
+  _html2pdfLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Could not load PDF generator'));
+    document.head.appendChild(s);
+  });
+  return _html2pdfLoading;
+}
+
+async function downloadHtmlAsPdf(html, fileBase) {
+  const btn = document.getElementById('qdDownload') || document.getElementById('tl-go-download');
+  const prevText = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
+  try {
+    await loadHtml2Pdf();
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-99999px';
+    container.style.top = '0';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const bodyEl = container.querySelector('body') || container;
+    await window.html2pdf()
+      .set({
+        margin: 0,
+        filename: `${fileBase}.pdf`,
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] }
+      })
+      .from(bodyEl)
+      .save();
+    document.body.removeChild(container);
+  } catch (e) {
+    showToast(e.message || 'Could not generate PDF', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = prevText; }
   }
 }
 
@@ -382,12 +427,37 @@ function projectedResume() {
   return { ...resume, summary: diff.summary.new, skills: diff.skills, experience };
 }
 
+async function loadUserProfile() {
+  try {
+    const { user } = await api.get('/api/auth/me');
+    state.userProfile = user || null;
+  } catch (e) {
+    state.userProfile = null;
+  }
+}
+
+/* fills any blank personal fields on a resume with the user's account profile,
+   so a resume that was never prefilled still shows a name/email/etc. */
+function withProfileFallback(personal) {
+  const p = personal || {};
+  const u = state.userProfile || {};
+  return {
+    name: p.name || u.name || '',
+    email: p.email || u.email || '',
+    phone: p.phone || u.phone || '',
+    location: p.location || u.location || '',
+    linkedin: p.linkedin || u.linkedin || '',
+    portfolio: p.portfolio || u.portfolio || ''
+  };
+}
+
 async function loadResumes() {
   try {
+    await loadUserProfile();
     const { resumes } = await api.get('/api/resumes');
     state.resumes = resumes || [];
     if (!state.selectedResumeId) state.selectedResumeId = state.resumes.find(r => r.isDefault)?._id || state.resumes[0]?._id;
-    const opts = state.resumes.map(r => `<option value="${r._id}" ${r._id === state.selectedResumeId ? 'selected' : ''}>${esc(r.name || 'Untitled resume')}${r.isDefault ? ' (Default)' : ''}</option>`).join('');
+    const opts = state.resumes.map(r => `<option value="${r._id}" ${r._id === state.selectedResumeId ? 'selected' : ''}>${esc(r.title || 'Untitled resume')}${r.isDefault ? ' (Default)' : ''}</option>`).join('');
     document.getElementById('tl-resume').innerHTML = opts;
     document.getElementById('qdResume').innerHTML = opts;
   } catch (e) {
@@ -428,7 +498,7 @@ async function runTailor(level) {
 }
 
 function renderReviewSheet() {
-  const diff = state.diff, p = state.resume.personal || {};
+  const diff = state.diff, p = withProfileFallback(state.resume.personal);
   const summaryChanged = diff.summary.old.trim() !== diff.summary.new.trim();
   const summaryHtml = !summaryChanged ? `<div class="tl-plain">${esc(diff.summary.new)}</div>` :
     `<div class="tl-old">${esc(diff.summary.old)}</div><div class="tl-new">${esc(diff.summary.new)}</div>`;
