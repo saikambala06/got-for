@@ -63,9 +63,23 @@
     state.job = null;
   }
 
+  // Bumped every time loadAndRender() starts. Each running call captures the
+  // token it started with and checks it again after every await — if a
+  // newer call has started in the meantime (user reloaded, clicked "Yes, I
+  // applied", or the SPA navigated to a different posting before the first
+  // call's network requests finished), the stale call stops immediately
+  // instead of writing its (now out-of-date) resumes/AI-analysis data into
+  // state.job. Without this guard, a slow response for job A landing after
+  // job B has already started loading would silently splice job A's
+  // skills/highlights/qualifications onto job B's card — the "merged data"
+  // bug where a posting shows a blend of two different jobs' details.
+  let loadToken = 0;
+
   async function loadAndRender() {
+    const myToken = ++loadToken;
     panel.renderLoading('Reading this job posting…');
     const parsed = parseJobFromPage();
+    if (myToken !== loadToken) return;
     if (!parsed) {
       panel.renderError("This doesn't look like a job posting page.", () => window.location.reload(), 'Refresh');
       return;
@@ -76,6 +90,7 @@
     state.applied = false;
 
     const authState = await send('auth:getState').catch(() => ({ loggedIn: false }));
+    if (myToken !== loadToken) return;
     panel.setProfile(authState.loggedIn ? authState.user : null, handleLogout, handleDashboard);
     if (!authState.loggedIn) {
       panel.renderLoginForm(handleLogin);
@@ -85,9 +100,11 @@
     try {
       state.resumes = await send('resumes:list');
     } catch (err) {
+      if (myToken !== loadToken) return;
       panel.renderError(`Could not load your resumes: ${err.message}`);
       return;
     }
+    if (myToken !== loadToken) return;
 
     if (!state.resumes.length) {
       panel.renderError('You don\u2019t have any resumes in SKVK yet. Create one in the dashboard, then reload this panel.');
@@ -107,11 +124,16 @@
     // the panel still works, just with a coarser read of the posting.
     panel.renderLoading('Analyzing job requirements with AI…');
     try {
+      const jobForAnalysis = state.job;
       const analysis = await send('job:analyze', {
-        jobTitle: state.job.title,
-        company: state.job.company,
-        jobDescription: state.job.description
+        jobTitle: jobForAnalysis.title,
+        company: jobForAnalysis.company,
+        jobDescription: jobForAnalysis.description
       });
+      // A newer load may have replaced state.job while this request was in
+      // flight. Only apply the result if it still belongs to the job that's
+      // actually on screen right now.
+      if (myToken !== loadToken || state.job !== jobForAnalysis) return;
       if (analysis) {
         if (analysis.skills?.length) state.job.skillsFound = analysis.skills;
         if (analysis.qualifications?.length) state.job.qualificationPhrases = analysis.qualifications;
@@ -125,8 +147,10 @@
       }
     } catch (_) {
       // Keep the regex-based baseline already on state.job.
+      if (myToken !== loadToken) return;
     }
 
+    if (myToken !== loadToken) return;
     renderCard();
   }
 
