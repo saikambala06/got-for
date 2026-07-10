@@ -37,6 +37,8 @@
     .jt-profile-menu.open { display: block; }
     .jt-profile-name { font-size: 12.5px; font-weight: 700; color: #eef0fb; padding: 4px 6px; }
     .jt-profile-email { font-size: 11px; color: #6a7196; padding: 0 6px 6px; border-bottom: 1px solid #262d49; margin-bottom: 6px; }
+    .jt-dashboard-btn { width: 100%; text-align: left; background: none; border: none; color: #d7dae8; font-size: 12.5px; padding: 6px; border-radius: 6px; cursor: pointer; }
+    .jt-dashboard-btn:hover { background: #262d49; }
     .jt-logout-btn { width: 100%; text-align: left; background: none; border: none; color: #ff8fa3; font-size: 12.5px; padding: 6px; border-radius: 6px; cursor: pointer; }
     .jt-logout-btn:hover { background: #262d49; }
     .jt-notice-toast { position: fixed; top: 20px; right: 20px; z-index: 2147483001; background: #1c2238; color: #eef0fb; border: 1px solid #262d49; border-radius: 10px; padding: 10px 14px; font-size: 12.5px; max-width: 280px; box-shadow: 0 10px 24px -8px rgba(0,0,0,0.6); }
@@ -143,6 +145,7 @@
               <div class="jt-profile-menu">
                 <div class="jt-profile-name"></div>
                 <div class="jt-profile-email"></div>
+                <button class="jt-dashboard-btn">Open SKVK dashboard</button>
                 <button class="jt-logout-btn">Log out</button>
               </div>
             </div>
@@ -176,18 +179,25 @@
 
     // Renders the signed-in user's initial as an avatar with a logout menu.
     // Passing null hides it (logged out / login screen).
-    setProfile(user, onLogout) {
+    setProfile(user, onLogout, onDashboard) {
       if (!user) { this.profileEl.style.display = 'none'; return; }
       this.profileEl.style.display = 'block';
       this.panel.querySelector('.jt-avatar').textContent = (user.name || user.email || '?')[0].toUpperCase();
       this.panel.querySelector('.jt-profile-name').textContent = user.name || 'Signed in';
       this.panel.querySelector('.jt-profile-email').textContent = user.email || '';
       const logoutBtn = this.panel.querySelector('.jt-logout-btn');
-      const freshBtn = logoutBtn.cloneNode(true);
-      logoutBtn.replaceWith(freshBtn);
-      freshBtn.addEventListener('click', () => {
+      const freshLogoutBtn = logoutBtn.cloneNode(true);
+      logoutBtn.replaceWith(freshLogoutBtn);
+      freshLogoutBtn.addEventListener('click', () => {
         this.panel.querySelector('.jt-profile-menu').classList.remove('open');
         onLogout();
+      });
+      const dashboardBtn = this.panel.querySelector('.jt-dashboard-btn');
+      const freshDashboardBtn = dashboardBtn.cloneNode(true);
+      dashboardBtn.replaceWith(freshDashboardBtn);
+      freshDashboardBtn.addEventListener('click', () => {
+        this.panel.querySelector('.jt-profile-menu').classList.remove('open');
+        if (onDashboard) onDashboard();
       });
     }
 

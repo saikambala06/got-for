@@ -99,6 +99,12 @@ const handlers = {
     return body.analysis;
   },
 
+  async 'tabs:openDashboard'() {
+    const { apiBase } = await getConfig();
+    await chrome.tabs.create({ url: apiBase });
+    return { ok: true };
+  },
+
   async 'tabs:openTailor'({ resumeId, jobTitle, company, jobDescription }) {
     const { apiBase } = await getConfig();
     const params = new URLSearchParams({

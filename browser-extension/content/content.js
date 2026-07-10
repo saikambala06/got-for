@@ -42,10 +42,14 @@
     return { ...state.job, ...state.manualOverrides };
   }
 
+  function handleDashboard() {
+    send('tabs:openDashboard').catch(() => {});
+  }
+
   async function handleLogin(email, password, onError) {
     try {
       const { user } = await send('auth:login', { email, password });
-      panel.setProfile(user, handleLogout);
+      panel.setProfile(user, handleLogout, handleDashboard);
       loadAndRender();
     } catch (err) {
       onError(err.message || 'Login failed');
@@ -54,7 +58,7 @@
 
   async function handleLogout() {
     await send('auth:logout').catch(() => {});
-    panel.setProfile(null, handleLogout);
+    panel.setProfile(null, handleLogout, handleDashboard);
     panel.renderLoginForm(handleLogin);
     state.job = null;
   }
@@ -72,7 +76,7 @@
     state.applied = false;
 
     const authState = await send('auth:getState').catch(() => ({ loggedIn: false }));
-    panel.setProfile(authState.loggedIn ? authState.user : null, handleLogout);
+    panel.setProfile(authState.loggedIn ? authState.user : null, handleLogout, handleDashboard);
     if (!authState.loggedIn) {
       panel.renderLoginForm(handleLogin);
       return;
