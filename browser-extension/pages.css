@@ -1,0 +1,67 @@
+* { box-sizing: border-box; }
+:root {
+  --accent: #16a34a;
+  --accent-dark: #0f7c39;
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --border: #e4e6ec;
+  --text: #1a1d29;
+  --text-dim: #6b7280;
+  --text-faint: #9aa0ab;
+}
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg); color: var(--text);
+}
+a { color: inherit; text-decoration: none; }
+
+.app-shell { display: flex; min-height: 100vh; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+.sidebar {
+  width: 232px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; padding: 20px 16px;
+}
+.sidebar .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 22px; }
+.sidebar .brand img { width: 30px; height: 30px; border-radius: 8px; }
+.sidebar .brand .name { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+.sidebar .brand .name span { color: var(--accent); }
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+.sidebar-nav .nav-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 9px;
+  font-size: 14px; font-weight: 600; color: var(--text-dim);
+}
+.sidebar-nav .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.sidebar-nav .nav-item.active { background: #f0fdf4; color: var(--accent-dark); }
+.sidebar-spacer { flex: 1; }
+.sidebar-plan {
+  border: 1px solid var(--border); border-radius: 12px; padding: 14px; font-size: 12px; color: var(--text-dim);
+}
+.sidebar-plan .plan-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--text-faint); margin-bottom: 4px; }
+.sidebar-plan .plan-name { font-size: 14px; font-weight: 800; color: var(--text); margin-bottom: 10px; }
+.sidebar-plan .plan-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.sidebar-plan .plan-bar { height: 5px; border-radius: 4px; background: var(--border); overflow: hidden; margin-bottom: 12px; }
+.sidebar-plan .plan-bar > div { height: 100%; background: var(--accent); }
+
+/* ── Top bar (page chrome, mimics the extension's own tab) ────────────── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; padding: 14px 28px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.topbar .title { font-size: 15px; font-weight: 700; }
+.need-help {
+  display: inline-flex; align-items: center; gap: 6px; background: #4f46e5; color: #fff; border: none;
+  border-radius: 999px; padding: 8px 16px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.main-body { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: 48px 24px; overflow-y: auto; }
+
+/* ── Loading (centered animated logo) ──────────────────────────────────  */
+.page-loading { flex: 1; display: flex; align-items: center; justify-content: center; }
+.page-loading-logo { width: 100px; height: 100px; object-fit: contain; display: block; margin: 0 auto 18px;
+  animation: logo-pulse 1.6s ease-in-out infinite; filter: drop-shadow(0 4px 14px rgba(0,0,0,0.12)); }
+@keyframes logo-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+.page-loading-text { text-align: center; font-size: 13.5px; color: var(--text-dim); font-weight: 500; }
