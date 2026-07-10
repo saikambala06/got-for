@@ -11,9 +11,25 @@ function send(type, payload) {
 
 const loginView = document.getElementById('login-view');
 const appView = document.getElementById('app-view');
+loginView.style.display = 'none';
+
+async function getAuthState(retried) {
+  try {
+    return await send('auth:getState');
+  } catch (err) {
+    // The background service worker can be briefly asleep/waking up when
+    // the popup first opens (MV3 behavior) — that transient failure should
+    // never be treated as "logged out". Retry once before giving up.
+    if (!retried) {
+      await new Promise((r) => setTimeout(r, 150));
+      return getAuthState(true);
+    }
+    return { loggedIn: false };
+  }
+}
 
 async function refresh() {
-  const state = await send('auth:getState').catch(() => ({ loggedIn: false }));
+  const state = await getAuthState();
 
   if (state.loggedIn && state.user) {
     loginView.style.display = 'none';

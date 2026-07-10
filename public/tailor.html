@@ -429,7 +429,7 @@ function projectedResume() {
 
 async function loadUserProfile() {
   try {
-    const { user } = await api.get('/api/auth/me');
+    const user = await requireSession();
     state.userProfile = user || null;
   } catch (e) {
     state.userProfile = null;

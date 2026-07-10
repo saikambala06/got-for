@@ -163,7 +163,15 @@
     }
 
     open() { this.isOpen = true; this.panel.style.display = 'flex'; this.launcher.style.display = 'none'; }
-    close() { this.isOpen = false; this.panel.style.display = 'none'; this.launcher.style.display = 'block'; }
+    close() {
+      this.isOpen = false;
+      // "Completely close" — remove the panel and its launcher tab from the
+      // page entirely, rather than just hiding them. Resetting the loaded
+      // flag means the next toolbar-icon click re-injects a fresh instance
+      // instead of toggling a hidden one back into view.
+      this.host.remove();
+      if (typeof window !== 'undefined') window.__skvkAssistantLoaded = false;
+    }
     toggle() { this.isOpen ? this.close() : this.open(); }
 
     // Renders the signed-in user's initial as an avatar with a logout menu.
@@ -239,11 +247,11 @@
       this.setBody(`<div class="jt-loading"><span class="jt-spinner" style="border-top-color:#ff9a4d"></span>${esc(message || 'Loading…')}</div>`);
     }
 
-    renderError(message, retryFn) {
+    renderError(message, retryFn, retryLabel) {
       this.clearFooter();
       this.setBody(`
-        <div class="jt-error">${esc(message)}</div>
-        ${retryFn ? '<div style="text-align:center"><button class="jt-btn small" id="jt-retry">Try again</button></div>' : ''}
+        <div class="jt-error" style="text-align:center">${esc(message)}</div>
+        ${retryFn ? `<div style="text-align:center"><button class="jt-btn small" id="jt-retry">${esc(retryLabel || 'Try again')}</button></div>` : ''}
       `);
       if (retryFn) this.panel.querySelector('#jt-retry').addEventListener('click', retryFn);
     }

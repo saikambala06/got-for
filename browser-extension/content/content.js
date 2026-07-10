@@ -63,7 +63,7 @@
     panel.renderLoading('Reading this job posting…');
     const parsed = parseJobFromPage();
     if (!parsed) {
-      panel.renderError("Couldn't find a job posting on this page. Try Enter manually below, or reload once the page finishes loading.");
+      panel.renderError("This doesn't look like a job posting page.", () => window.location.reload(), 'Refresh');
       return;
     }
     state.job = parsed;
