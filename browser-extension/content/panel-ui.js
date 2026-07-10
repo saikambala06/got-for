@@ -19,7 +19,7 @@
       z-index: 2147483000; background: #111526; color: #eef0fb;
       border: 1px solid #262d49; border-radius: 16px;
       box-shadow: 0 18px 40px -12px rgba(0,0,0,0.6);
-      display: flex; flex-direction: column; overflow: hidden; position: relative;
+      display: flex; flex-direction: column; overflow: hidden;
     }
     .jt-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -90,6 +90,38 @@
 
     .jt-empty, .jt-loading, .jt-error { font-size: 13px; color: #9aa1c3; text-align: center; padding: 30px 10px; }
     .jt-error { color: #ff8fa3; }
+
+    .jt-empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; height: 100%; min-height: 320px; padding: 24px 12px; gap: 16px;
+    }
+    .jt-empty-state .jt-empty-icon { font-size: 30px; opacity: 0.7; }
+    .jt-empty-state .jt-empty-msg { font-size: 13.5px; color: #d7dae8; line-height: 1.5; max-width: 260px; }
+    .jt-empty-state .jt-empty-sub { font-size: 11.5px; color: #6a7196; max-width: 260px; line-height: 1.4; }
+
+    .jt-modal-overlay {
+      position: fixed; z-index: 2147483002; background: rgba(8,10,20,0.55);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+      border-radius: 16px; overflow: hidden;
+    }
+    .jt-modal-card {
+      background: #ffffff; color: #16192b; border-radius: 14px; padding: 20px;
+      width: 100%; max-width: 300px; box-shadow: 0 20px 50px -12px rgba(0,0,0,0.5);
+      position: relative;
+    }
+    .jt-modal-card .jt-modal-close {
+      position: absolute; top: 14px; right: 14px; background: none; border: none;
+      font-size: 15px; color: #6a7196; cursor: pointer; line-height: 1;
+    }
+    .jt-modal-title { font-size: 15px; font-weight: 700; margin: 0 18px 10px 0; }
+    .jt-modal-body { font-size: 12.5px; color: #4c5270; line-height: 1.5; margin-bottom: 16px; }
+    .jt-modal-btn-row { display: flex; gap: 10px; }
+    .jt-modal-btn {
+      flex: 1; border-radius: 9px; padding: 9px 10px; font-size: 12.5px; font-weight: 700;
+      cursor: pointer; border: 1px solid #dfe1ec; background: #f4f5fa; color: #2b2f45;
+    }
+    .jt-modal-btn.primary { background: #17b06b; border-color: #17b06b; color: #ffffff; }
+    .jt-modal-btn:hover { filter: brightness(0.97); }
     .jt-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.25); border-top-color: #1a1326; border-radius: 50%; display: inline-block; animation: jt-spin 0.7s linear infinite; margin-right: 6px; vertical-align: -2px; }
     @keyframes jt-spin { to { transform: rotate(360deg); } }
 
@@ -97,16 +129,6 @@
     .jt-tag-new { font-size: 9.5px; background: #ff9a4d; color: #1a1326; border-radius: 5px; padding: 1px 4px; margin-left: 4px; font-weight: 700; }
     .jt-suggestions { font-size: 11.5px; color: #6a7196; margin-top: 8px; font-style: italic; }
     textarea.jt-cover { width: 100%; min-height: 220px; background: #0c0f1c; border: 1px solid #262d49; border-radius: 8px; color: #eef0fb; padding: 10px; font-size: 12px; line-height: 1.5; resize: vertical; }
-
-    .jt-nojob { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100%; min-height: 320px; gap: 16px; padding: 20px; }
-    .jt-nojob .jt-nojob-icon { font-size: 30px; }
-    .jt-nojob p { font-size: 13px; color: #9aa1c3; line-height: 1.55; margin: 0; max-width: 260px; }
-
-    .jt-confirm-overlay { position: absolute; inset: 0; background: rgba(8,10,18,0.78); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 20px; }
-    .jt-confirm-box { background: #1c2238; border: 1px solid #262d49; border-radius: 12px; padding: 18px; width: 100%; text-align: left; box-shadow: 0 18px 40px -12px rgba(0,0,0,0.6); }
-    .jt-confirm-box h3 { margin: 0 0 8px; font-size: 14px; color: #eef0fb; }
-    .jt-confirm-box p { margin: 0 0 14px; font-size: 12.5px; color: #9aa1c3; line-height: 1.45; }
-    .jt-confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
   `;
 
   function gaugeSvg(percent) {
@@ -265,6 +287,54 @@
     renderLoading(message) {
       this.clearFooter();
       this.setBody(`<div class="jt-loading"><span class="jt-spinner" style="border-top-color:#ff9a4d"></span>${esc(message || 'Loading…')}</div>`);
+    }
+
+    // Centered "not a job page" state: shown *inside* the open panel (the
+    // panel stays open as a docked sidebar until the user explicitly hits
+    // the ✕) rather than a self-dismissing toast. A Reload button sits
+    // below the message so the user can re-check the page after navigating
+    // without having to close/reopen the panel.
+    renderEmptyState(message, subMessage, onReload) {
+      this.clearFooter();
+      this.setBody(`
+        <div class="jt-empty-state">
+          <div class="jt-empty-icon">🔍</div>
+          <div class="jt-empty-msg">${esc(message)}</div>
+          ${subMessage ? `<div class="jt-empty-sub">${esc(subMessage)}</div>` : ''}
+          <button class="jt-btn ghost small" id="jt-empty-reload">Reload job details</button>
+        </div>
+      `);
+      this.panel.querySelector('#jt-empty-reload').addEventListener('click', onReload);
+    }
+
+    // "Did you apply for this job?" confirmation modal, shown before a
+    // reload actually re-parses the page. Mirrors the reference design:
+    // white card, centered, ✕ to dismiss, and two explicit choices.
+    showReloadConfirm({ onYes, onNo, onDismiss } = {}) {
+      const rect = this.panel.getBoundingClientRect();
+      const overlay = document.createElement('div');
+      overlay.className = 'jt-modal-overlay';
+      overlay.style.top = `${rect.top}px`;
+      overlay.style.left = `${rect.left}px`;
+      overlay.style.width = `${rect.width}px`;
+      overlay.style.height = `${rect.height}px`;
+      overlay.innerHTML = `
+        <div class="jt-modal-card">
+          <button class="jt-modal-close" title="Close">✕</button>
+          <div class="jt-modal-title">Did you apply for this job?</div>
+          <div class="jt-modal-body">If you have already applied for this job, mark it as applied. Otherwise, just reload the job details.</div>
+          <div class="jt-modal-btn-row">
+            <button class="jt-modal-btn" id="jt-modal-no">No, not yet</button>
+            <button class="jt-modal-btn primary" id="jt-modal-yes">Yes, I applied</button>
+          </div>
+        </div>
+      `;
+      const close = () => overlay.remove();
+      overlay.querySelector('.jt-modal-close').addEventListener('click', () => { close(); if (onDismiss) onDismiss(); });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) { close(); if (onDismiss) onDismiss(); } });
+      overlay.querySelector('#jt-modal-no').addEventListener('click', () => { close(); if (onNo) onNo(); });
+      overlay.querySelector('#jt-modal-yes').addEventListener('click', () => { close(); if (onYes) onYes(); });
+      this.shadow.appendChild(overlay);
     }
 
     renderError(message, retryFn, retryLabel) {
@@ -452,48 +522,6 @@
       footer.querySelector('#jt-tailor').addEventListener('click', onTailor);
       footer.querySelector('#jt-cover').addEventListener('click', onCoverLetter);
       footer.querySelector('#jt-reload').addEventListener('click', onReload);
-    }
-
-    // Shown when the panel is opened on a page that doesn't look like a job
-    // posting. Unlike the old flashNotice() toast, this keeps the panel
-    // open as a persistent sidebar (until the user explicitly closes it)
-    // with the message centered in the body and a Reload button beneath it,
-    // so the user can navigate to a job listing and retry without reopening
-    // the panel from the toolbar icon.
-    renderNoJobState(onReload) {
-      this.clearFooter();
-      this.setBody(`
-        <div class="jt-nojob">
-          <div class="jt-nojob-icon">🔍</div>
-          <p>This doesn't look like a job posting page. Open a job listing in this tab, then reload.</p>
-          <button class="jt-btn primary small" id="jt-nojob-reload">Reload job details</button>
-        </div>
-      `);
-      this.panel.querySelector('#jt-nojob-reload').addEventListener('click', onReload);
-    }
-
-    // Modal confirmation shown before reloading job details for a job
-    // that's already loaded, mirroring the "Did you apply for this job?"
-    // prompt: mark-as-applied on Yes, plain reload on No. Rendered as an
-    // overlay inside the panel so it stays anchored to the sidebar.
-    showApplyConfirm(onYes, onNo) {
-      this.shadow.querySelector('.jt-confirm-overlay')?.remove();
-      const overlay = document.createElement('div');
-      overlay.className = 'jt-confirm-overlay';
-      overlay.innerHTML = `
-        <div class="jt-confirm-box">
-          <h3>Did you apply for this job?</h3>
-          <p>If you've already applied, mark it as applied. Otherwise, just reload the job details.</p>
-          <div class="jt-confirm-actions">
-            <button class="jt-btn small" id="jt-confirm-no">No, not yet</button>
-            <button class="jt-btn primary small" id="jt-confirm-yes">Yes, I applied</button>
-          </div>
-        </div>
-      `;
-      this.panel.appendChild(overlay);
-      const cleanup = () => overlay.remove();
-      overlay.querySelector('#jt-confirm-yes').addEventListener('click', () => { cleanup(); onYes(); });
-      overlay.querySelector('#jt-confirm-no').addEventListener('click', () => { cleanup(); onNo(); });
     }
 
     setButtonBusy(id, busyLabel) {

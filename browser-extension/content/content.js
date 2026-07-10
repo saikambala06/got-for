@@ -130,6 +130,15 @@
     renderCard();
   }
 
+  // "Reload job details" always asks first whether the user already
+  // applied, so applied-state doesn't silently get lost on a re-parse.
+  function confirmReload() {
+    panel.showReloadConfirm({
+      onYes: async () => { await markApplied(); loadAndRender(); },
+      onNo: () => loadAndRender()
+    });
+  }
+
   function renderCard() {
     panel.renderJob({
       job: currentJob(),
@@ -146,27 +155,6 @@
       onReload: confirmReload,
       applied: state.applied
     });
-  }
-
-  // Before actually reloading job details for an already-loaded job, ask
-  // whether the user already applied — same UX as "Did you apply for this
-  // job?" — since a reload wipes the current match/highlights state.
-  function confirmReload() {
-    panel.showApplyConfirm(
-      async () => { await markApplied(); await loadAndRender(); },
-      () => loadAndRender()
-    );
-  }
-
-  // Used from the no-job-detected state: no job is loaded yet, so there's
-  // nothing to confirm "applied" for — just re-check the current page.
-  function attemptReloadFromNoJob() {
-    if (looksLikeJobPage()) {
-      loadAndRender();
-    } else {
-      panel.renderNoJobState(attemptReloadFromNoJob);
-      panel.flashNotice("Still doesn't look like a job posting page.");
-    }
   }
 
   function wireCardEvents() {
@@ -577,25 +565,42 @@
     return false;
   }
 
-  // The panel only appears in response to the user clicking the toolbar
-  // icon (see background.js). On a page that doesn't look like a job
-  // posting it still opens — as a persistent sidebar tab, staying open
-  // until the user closes it — but shows a centered message with a
-  // Reload button instead of trying to parse a job that isn't there.
+  // The panel never opens on its own. It only appears in response to the
+  // user clicking the toolbar icon (see background.js), and only if this
+  // particular page looks like a job posting — otherwise we tell them so
+  // and leave the page untouched.
+  // Shown when the assistant is opened on a page that doesn't look like a
+  // job posting: the panel opens and stays docked as a sidebar (it does NOT
+  // auto-close), with the notice centered in the body and a Reload button
+  // underneath so the user can re-check after navigating to a listing.
+  function renderNotJobPage() {
+    state.job = null;
+    panel.renderEmptyState(
+      "This doesn't look like a job posting page.",
+      'Open a job listing, then reload job details.',
+      recheckPage
+    );
+  }
+
+  function recheckPage() {
+    if (looksLikeJobPage()) {
+      loadAndRender();
+    } else {
+      renderNotJobPage();
+    }
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'panel:toggle') {
-      if (panel.isOpen) {
-        panel.close();
-        sendResponse({ ok: true });
-        return;
-      }
-      panel.open();
-      if (!looksLikeJobPage()) {
-        panel.renderNoJobState(attemptReloadFromNoJob);
-      } else if (!state.job) {
-        loadAndRender();
+      if (!panel.isOpen) {
+        panel.open();
+        if (looksLikeJobPage()) {
+          loadAndRender();
+        } else {
+          renderNotJobPage();
+        }
       } else {
-        renderCard();
+        panel.close();
       }
       sendResponse({ ok: true });
     }
