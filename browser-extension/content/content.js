@@ -178,6 +178,18 @@
   // ─── Tailor Studio (full review flow) ───────────────────────────────────
   const studioState = { diff: null, tailoringLevel: 'high', decisions: {}, resume: null, mode: 'review' };
 
+  // Persisted across quick-download sessions on this tab (mirrors "we'll
+  // remember" copy in the UI). A real deployment would save these to the
+  // user's account instead.
+  const quickDownloadOpts = {
+    template: 'Classic',
+    textColor: '#0f172a',
+    accent: '#16a34a',
+    format: 'pdf',
+    tailoringLevel: 'high',
+    noMetrics: false
+  };
+
   function matchScoreFor(skillsList, job) {
     const total = job.skillsFound?.length || 0;
     if (!total) return 0;
@@ -226,16 +238,15 @@
       });
       studioState.diff = result;
       studioState.decisions = {};
+      // Auto-apply every AI suggestion — Quick Download skips the manual
+      // accept/reject review and always starts from the fully-tailored draft.
+      studioState.decisions = { summary: true };
+      studioState.diff.experience.forEach((r) => r.bullets.forEach((b, bi) => {
+        studioState.decisions[`exp:${r.index}:${bi}`] = true;
+      }));
       if (studioState.mode === 'quick') {
-        // Auto-apply every suggestion, then download straight away with
-        // saved defaults instead of dropping into the review screen.
-        studioState.decisions = { summary: true };
-        studioState.diff.experience.forEach((r) => r.bullets.forEach((b, bi) => {
-          studioState.decisions[`exp:${r.index}:${bi}`] = true;
-        }));
-        const proj = projectedResume();
-        downloadTailoredResume(proj, { format: 'pdf', accent: '#16a34a', template: 'Classic' });
-        studio.unmount();
+        quickDownloadOpts.tailoringLevel = studioState.tailoringLevel;
+        renderQuickDownloadScreen(job);
         return;
       }
       renderStudio(job);
@@ -289,6 +300,46 @@
     );
   }
 
+  // ─── Quick Download (dark theme, live preview, editable) ────────────────
+
+  function renderQuickDownloadScreen(job) {
+    const proj = projectedResume();
+    studio.renderQuickDownload(
+      {
+        resumes: state.resumes,
+        selectedResumeId: state.selectedResumeId,
+        previewHtml: resumeToHtml(proj, quickDownloadOpts),
+        opts: quickDownloadOpts,
+        planUsage: null
+      },
+      {
+        onBack: () => studio.unmount(),
+        // Template / colors / format / no-metrics: no re-tailoring needed,
+        // just re-render the preview instantly with the new opts.
+        onChange: (nextOpts) => {
+          Object.assign(quickDownloadOpts, nextOpts);
+          renderQuickDownloadScreen(job);
+        },
+        // Tailoring level changes the actual AI content, so re-run the tailor
+        // call, then land back on this same screen once it resolves.
+        onLevelChange: (lv) => {
+          if (lv === studioState.tailoringLevel) return;
+          studioState.tailoringLevel = lv;
+          quickDownloadOpts.tailoringLevel = lv;
+          studio.renderLoading('Re-tailoring at ' + lv + ' intensity…');
+          fetchTailorDiff(job);
+        },
+        // Switching resumes re-fetches the diff against the new resume.
+        onResumeChange: (resumeId) => {
+          state.selectedResumeId = resumeId;
+          studio.renderLoading('Matching it against your resume…');
+          fetchTailorDiff(job);
+        },
+        onDownload: (opts) => downloadTailoredResume(projectedResume(), opts)
+      }
+    );
+  }
+
   function tailorResume() {
     studio.renderPicker(
       { resumes: state.resumes, selectedResumeId: state.selectedResumeId },
@@ -305,9 +356,47 @@
 
   // ─── Resume export (client-side, no server dependency) ─────────────────
 
+  // Removes injected numbers/percentages/dollar amounts from bullet text
+  // (used by the "No metrics" toggle). Heuristic, client-side, no AI call —
+  // safe to run on every keystroke of the live preview.
+  function stripMetrics(text) {
+    return String(text || '')
+      .replace(/\$[\d,]+(\.\d+)?\s*[kKmMbB]?\+?/g, '')
+      .replace(/\b\d[\d,]*(\.\d+)?\s*%/g, '')
+      .replace(/\b\d[\d,]*(\.\d+)?\s*(x|X)\b/g, '')
+      .replace(/\b\d[\d,]*(\.\d+)?\+?\s*(users?|customers?|clients?|engineers?|members?|teams?|hours?|days?|weeks?|months?|years?|projects?|releases?|deployments?|servers?|nodes?|requests?|incidents?|tickets?)\b/gi, '$1')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\s+([.,;])/g, '$1')
+      .replace(/\(\s*\)/g, '')
+      .trim();
+  }
+
+  // Per-template look: font stack, heading treatment, and whether the accent
+  // color is used as a rule under headings or as heading text color.
+  const TEMPLATE_STYLES = {
+    'Classic': { font: "Georgia, 'Times New Roman', serif", headingMode: 'rule', headingCase: 'uppercase', nameCase: 'none' },
+    'Harvard': { font: "'Times New Roman', Times, serif", headingMode: 'rule-bold', headingCase: 'uppercase', nameCase: 'none' },
+    "Jake's": { font: "Calibri, Arial, sans-serif", headingMode: 'rule-thin', headingCase: 'uppercase', nameCase: 'none' },
+    'Modern': { font: "'Segoe UI', Arial, sans-serif", headingMode: 'color', headingCase: 'none', nameCase: 'none' },
+    'Minimal': { font: "Helvetica, Arial, sans-serif", headingMode: 'plain', headingCase: 'uppercase', nameCase: 'none' }
+  };
+
   function resumeToHtml(resume, opts) {
     const p = resume.personal || {};
     const accent = opts.accent || '#16a34a';
+    const textColor = opts.textColor || '#0f172a';
+    const noMetrics = !!opts.noMetrics;
+    const tpl = TEMPLATE_STYLES[opts.template] || TEMPLATE_STYLES.Classic;
+    const clean = (s) => esc(noMetrics ? stripMetrics(s) : s);
+
+    const headingCss = {
+      rule: `border-bottom:2px solid ${accent}; padding-bottom:3px;`,
+      'rule-bold': `border-bottom:3px double ${accent}; padding-bottom:4px; font-weight:800;`,
+      'rule-thin': `border-bottom:1px solid ${accent}; padding-bottom:2px;`,
+      color: `color:${accent};`,
+      plain: `color:${textColor}; opacity:0.75;`
+    }[tpl.headingMode];
+
     const contact = [p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' &nbsp;|&nbsp; ');
     const skillsHtml = (resume.skills || []).map((s) => esc(s)).join(', ');
     const expHtml = (resume.experience || []).map((e) => `
@@ -317,7 +406,7 @@
         </div>
         <div style="font-style:italic;color:#444;margin-bottom:4px;">${esc(e.company || '')}</div>
         <ul style="margin:0;padding-left:18px;">
-          ${(e.description || '').split('\n').filter(Boolean).map((l) => `<li>${esc(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}
+          ${(e.description || '').split('\n').filter(Boolean).map((l) => `<li>${clean(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}
         </ul>
       </div>`).join('');
     const eduHtml = (resume.education || []).map((ed) => `
@@ -325,15 +414,15 @@
 
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${esc(p.name || 'Resume')}</title>
       <style>
-        body{ font-family: Georgia, 'Times New Roman', serif; color:#111; padding:40px; max-width:760px; margin:0 auto; }
-        h1{ text-align:center; margin-bottom:2px; }
+        body{ font-family: ${tpl.font}; color:${textColor}; padding:40px; max-width:760px; margin:0 auto; }
+        h1{ text-align:center; margin-bottom:2px; text-transform:${tpl.nameCase}; }
         .contact{ text-align:center; font-size:12px; color:#555; margin-bottom:18px; }
-        h2{ font-size:13px; text-transform:uppercase; letter-spacing:0.05em; border-bottom:2px solid ${accent}; padding-bottom:3px; margin-top:22px; }
+        h2{ font-size:13px; text-transform:${tpl.headingCase}; letter-spacing:0.05em; ${headingCss} margin-top:22px; }
         @media print { body{ padding:0; } }
       </style></head><body>
       <h1>${esc(p.name || '')}</h1>
       <div class="contact">${contact}</div>
-      <h2>Summary</h2><p>${esc(resume.summary || '')}</p>
+      <h2>Summary</h2><p>${clean(resume.summary || '')}</p>
       <h2>Skills</h2><p>${skillsHtml}</p>
       <h2>Experience</h2>${expHtml}
       <h2>Education</h2>${eduHtml}

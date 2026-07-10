@@ -138,6 +138,75 @@
     .ts-picker-continue:hover { filter: brightness(1.05); }
     .ts-picker-cancel { display: block; margin: 12px auto 0; background: none; border: none; color: #6b7280;
       font-size: 12.5px; cursor: pointer; }
+
+    /* ---- Quick Download (dark theme, matches the SKVK dashboard) ---- */
+    .ts-qd-overlay { position: fixed; inset: 0; z-index: 2147483647; background: #0d0f14;
+      display: flex; flex-direction: column; color: #e7e9ee; }
+    .ts-qd-topbar { display: flex; align-items: center; gap: 14px; padding: 14px 24px;
+      background: #14161d; border-bottom: 1px solid #262a35; flex-shrink: 0; }
+    .ts-qd-back { background: #1b1e27; border: 1px solid #2c303c; border-radius: 999px; padding: 7px 14px;
+      font-size: 13px; font-weight: 600; cursor: pointer; color: #e7e9ee; }
+    .ts-qd-back:hover { background: #23272f; }
+    .ts-qd-brand { font-size: 15px; font-weight: 700; }
+    .ts-qd-crumbs { font-size: 12.5px; color: #8b93a3; margin-left: auto; }
+    .ts-qd-crumbs b { color: #e7e9ee; }
+
+    .ts-qd-body { flex: 1; overflow-y: auto; display: flex; gap: 22px; padding: 22px 24px; }
+    .ts-qd-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .ts-qd-left-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .ts-qd-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; color: #8b93a3; }
+    .ts-qd-badge { font-size: 11px; font-weight: 700; color: #22c55e; display: flex; align-items: center; gap: 5px; }
+    .ts-qd-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #22c55e; display: inline-block; }
+    .ts-qd-preview-wrap { flex: 1; background: #14161d; border: 1px solid #262a35; border-radius: 14px;
+      display: flex; align-items: flex-start; justify-content: center; padding: 24px; overflow: auto; }
+    .ts-qd-page { width: 100%; max-width: 640px; background: #fff; border-radius: 4px; box-shadow: 0 8px 30px rgba(0,0,0,0.45); }
+    .ts-qd-page iframe { width: 100%; height: 780px; border: none; display: block; border-radius: 4px; }
+    .ts-qd-footcaption { text-align: center; font-size: 11.5px; color: #6c7484; margin-top: 10px; }
+
+    .ts-qd-right { width: 340px; flex-shrink: 0; background: #14161d; border: 1px solid #262a35;
+      border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+    .ts-qd-right-head { display: flex; align-items: center; gap: 7px; }
+    .ts-qd-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
+    .ts-qd-title { font-size: 15px; font-weight: 700; }
+    .ts-qd-sub { font-size: 11.5px; color: #8b93a3; margin-top: -8px; }
+
+    .ts-qd-field label { display: block; font-size: 11px; font-weight: 700; color: #8b93a3;
+      text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 7px; }
+    .ts-qd-field select { width: 100%; padding: 9px 10px; border: 1px solid #2c303c; border-radius: 9px;
+      font-size: 13px; background: #1b1e27; color: #e7e9ee; }
+    .ts-qd-row2 { display: flex; gap: 12px; }
+    .ts-qd-row2 > .ts-qd-field { flex: 1; min-width: 0; }
+
+    .ts-qd-swatches { display: flex; gap: 9px; flex-wrap: wrap; }
+    .ts-qd-swatch { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
+      display: flex; align-items: center; justify-content: center; }
+    .ts-qd-swatch.selected { border-color: #e7e9ee; }
+    .ts-qd-swatch .chk { color: #fff; font-size: 11px; font-weight: 900; display: none; text-shadow: 0 0 2px rgba(0,0,0,0.6); }
+    .ts-qd-swatch.selected .chk { display: block; }
+    .ts-qd-swatch.dark-check .chk { color: #14161d; }
+
+    .ts-qd-pillgroup { display: flex; border: 1px solid #2c303c; border-radius: 9px; overflow: hidden; }
+    .ts-qd-pill { flex: 1; border: none; background: #1b1e27; color: #c3c8d2; padding: 8px; font-size: 12.5px;
+      font-weight: 600; cursor: pointer; border-right: 1px solid #2c303c; }
+    .ts-qd-pill:last-child { border-right: none; }
+    .ts-qd-pill.active { background: #22c55e; color: #0d0f14; }
+
+    .ts-qd-toggle-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      background: #1b1e27; border: 1px solid #2c303c; border-radius: 10px; padding: 12px 14px; }
+    .ts-qd-toggle-copy .t1 { font-size: 13px; font-weight: 700; }
+    .ts-qd-toggle-copy .t2 { font-size: 11.5px; color: #8b93a3; margin-top: 3px; line-height: 1.4; }
+    .ts-qd-switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; }
+    .ts-qd-switch input { opacity: 0; width: 0; height: 0; }
+    .ts-qd-switch .slider { position: absolute; inset: 0; background: #2c303c; border-radius: 999px; cursor: pointer; transition: 0.15s; }
+    .ts-qd-switch .slider::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+      background: #fff; border-radius: 50%; transition: 0.15s; }
+    .ts-qd-switch input:checked + .slider { background: #22c55e; }
+    .ts-qd-switch input:checked + .slider::before { transform: translateX(16px); }
+
+    .ts-qd-download { width: 100%; background: #22c55e; color: #0d0f14; border: none; border-radius: 10px;
+      padding: 13px; font-size: 14px; font-weight: 800; cursor: pointer; }
+    .ts-qd-download:hover { filter: brightness(1.06); }
+    .ts-qd-note { display: flex; gap: 8px; font-size: 11px; color: #8b93a3; line-height: 1.5; }
   `;
 
   function esc(s) {
@@ -159,6 +228,7 @@
 
   const TEMPLATES = ['Classic', 'Harvard', "Jake's", 'Modern', 'Minimal'];
   const ACCENTS = ['#2563eb', '#16a34a', '#0ea5a4', '#dc2626', '#ec4899', '#d946ef', '#ea580c', '#f59e0b', '#0f172a', '#7c3aed'];
+  const TEXT_COLORS = ['#0f172a', '#000000'];
 
   class TailorStudio {
     constructor() {
@@ -450,6 +520,135 @@
       backdrop.querySelector('#ts-d-go').addEventListener('click', () => {
         handlers.onConfirmDownload({ format, accent, template });
         backdrop.remove();
+      });
+    }
+
+    // Dark "Quick Download" screen: live preview on the left, editable
+    // customizations on the right. Every control fires handlers.onChange
+    // with the full updated options object so the caller can re-render the
+    // preview instantly (or re-tailor, for tailoringLevel/resume changes)
+    // without losing the rest of the current selections.
+    // view = { resumes, selectedResumeId, previewHtml, opts: { template, textColor,
+    //          accent, format, tailoringLevel, noMetrics }, planUsage }
+    // handlers = { onBack, onChange(opts), onDownload(opts) }
+    renderQuickDownload(view, handlers) {
+      this.mount();
+      const { resumes, selectedResumeId, previewHtml, opts, planUsage } = view;
+
+      const resumeOpts = resumes.map((r) =>
+        `<option value="${r._id}" ${r._id === selectedResumeId ? 'selected' : ''}>${esc(r.name || 'Untitled resume')}${r.isDefault ? ' (Default)' : ''}</option>`
+      ).join('');
+
+      const templateOpts = TEMPLATES.map((t) => `<option ${t === opts.template ? 'selected' : ''}>${t}</option>`).join('');
+
+      const textSwatches = TEXT_COLORS.map((c) => `
+        <span class="ts-qd-swatch ${c === opts.textColor ? 'selected' : ''}" data-role="text" data-color="${c}" style="background:${c}">
+          <span class="chk">✓</span>
+        </span>`).join('');
+
+      const accentSwatches = ACCENTS.map((c) => `
+        <span class="ts-qd-swatch ${c === opts.accent ? 'selected' : ''}" data-role="accent" data-color="${c}" style="background:${c}">
+          <span class="chk">✓</span>
+        </span>`).join('');
+
+      const formatPills = ['pdf', 'docx'].map((f) =>
+        `<button class="ts-qd-pill ${f === opts.format ? 'active' : ''}" data-role="format" data-value="${f}">${f.toUpperCase()}</button>`
+      ).join('');
+
+      const levelPills = [['low', 'Low'], ['medium', 'Med'], ['high', 'High']].map(([v, label]) =>
+        `<button class="ts-qd-pill ${v === opts.tailoringLevel ? 'active' : ''}" data-role="level" data-value="${v}">${label}</button>`
+      ).join('');
+
+      this.root.innerHTML = `
+        <div class="ts-qd-overlay">
+          <div class="ts-qd-topbar">
+            <button class="ts-qd-back" id="ts-qd-back">← Back</button>
+            <span class="ts-qd-brand">LetMe<span style="color:#22c55e;">Apply</span></span>
+            <span class="ts-qd-crumbs">Tailor / <b>Quick Download</b></span>
+          </div>
+          <div class="ts-qd-body">
+            <div class="ts-qd-left">
+              <div class="ts-qd-left-head">
+                <span class="ts-qd-label">LIVE PREVIEW</span>
+                <span class="ts-qd-badge">AUTO-TAILORED</span>
+              </div>
+              <div class="ts-qd-preview-wrap">
+                <div class="ts-qd-page"><iframe id="ts-qd-frame" srcdoc="${esc(previewHtml)}"></iframe></div>
+              </div>
+              <div class="ts-qd-footcaption">${esc(opts.template)} · ${opts.format.toUpperCase()} · ${opts.tailoringLevel[0].toUpperCase()}${opts.tailoringLevel.slice(1)} tailoring</div>
+            </div>
+
+            <div class="ts-qd-right">
+              <div>
+                <div class="ts-qd-right-head"><span class="ts-qd-dot"></span><span class="ts-qd-title">Quick Download</span></div>
+                <div class="ts-qd-sub">Saved defaults applied to every quick download.</div>
+              </div>
+
+              <div class="ts-qd-row2">
+                <div class="ts-qd-field">
+                  <label>Resume</label>
+                  <select id="ts-qd-resume">${resumeOpts}</select>
+                </div>
+                <div class="ts-qd-field">
+                  <label>Template</label>
+                  <select id="ts-qd-template">${templateOpts}</select>
+                </div>
+              </div>
+
+              <div class="ts-qd-field">
+                <label>Text color</label>
+                <div class="ts-qd-swatches">${textSwatches}</div>
+              </div>
+
+              <div class="ts-qd-field">
+                <label>Accent color <span style="text-transform:none;font-weight:400;color:#5b6274;">(headings &amp; rules)</span></label>
+                <div class="ts-qd-swatches">${accentSwatches}</div>
+              </div>
+
+              <div class="ts-qd-row2">
+                <div class="ts-qd-field">
+                  <label>Format</label>
+                  <div class="ts-qd-pillgroup">${formatPills}</div>
+                </div>
+                <div class="ts-qd-field">
+                  <label>Tailoring level</label>
+                  <div class="ts-qd-pillgroup">${levelPills}</div>
+                </div>
+              </div>
+
+              <div class="ts-qd-toggle-row">
+                <div class="ts-qd-toggle-copy">
+                  <div class="t1">No metrics</div>
+                  <div class="t2">When off, AI adds numbers (like "20%" or "500 users") to bullet points. Toggle on to keep bullets number-free.</div>
+                </div>
+                <label class="ts-qd-switch">
+                  <input type="checkbox" id="ts-qd-nometrics" ${opts.noMetrics ? 'checked' : ''} />
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <button class="ts-qd-download" id="ts-qd-download">↓ Download ${opts.format.toUpperCase()}</button>
+              <div class="ts-qd-note">🐾 Every quick download uses these settings. Change them anytime — we'll remember.</div>
+              ${planUsage ? `<div class="ts-qd-note" style="border-top:1px solid #262a35;padding-top:12px;">📊 ${planUsage.tailoredResumes.used}/${planUsage.tailoredResumes.total} tailored resumes · ${planUsage.jobExtractions.used}/${planUsage.jobExtractions.total} job extractions used this period</div>` : ''}
+            </div>
+          </div>
+        </div>`;
+
+      const emitChange = (patch) => handlers.onChange({ ...opts, ...patch });
+
+      this.root.querySelector('#ts-qd-back').addEventListener('click', handlers.onBack);
+      this.root.querySelector('#ts-qd-download').addEventListener('click', () => handlers.onDownload(opts));
+      this.root.querySelector('#ts-qd-resume').addEventListener('change', (e) => handlers.onResumeChange(e.target.value));
+      this.root.querySelector('#ts-qd-template').addEventListener('change', (e) => emitChange({ template: e.target.value }));
+      this.root.querySelector('#ts-qd-nometrics').addEventListener('change', (e) => emitChange({ noMetrics: e.target.checked }));
+      this.root.querySelectorAll('.ts-qd-swatch').forEach((sw) => {
+        sw.addEventListener('click', () => emitChange(sw.dataset.role === 'text' ? { textColor: sw.dataset.color } : { accent: sw.dataset.color }));
+      });
+      this.root.querySelectorAll('[data-role="format"]').forEach((btn) => {
+        btn.addEventListener('click', () => emitChange({ format: btn.dataset.value }));
+      });
+      this.root.querySelectorAll('[data-role="level"]').forEach((btn) => {
+        btn.addEventListener('click', () => handlers.onLevelChange(btn.dataset.value));
       });
     }
   }
