@@ -1,4 +1,4 @@
-// JobTrail Assistant — Tailor Studio
+// SKVK Assistant — Tailor Studio
 // A full-screen, light-themed review UI (modeled on the "tailor & download"
 // flow of tools like LetMeApply): tailoring-level tabs, a live match-score
 // badge, per-bullet accept/reject diffs, "Apply all", and a download drawer
@@ -233,7 +233,7 @@
   class TailorStudio {
     constructor() {
       this.host = document.createElement('div');
-      this.host.id = 'jobtrail-tailor-studio-host';
+      this.host.id = 'skvk-tailor-studio-host';
       this.shadow = this.host.attachShadow({ mode: 'open' });
       const style = document.createElement('style');
       style.textContent = STYLES;
@@ -653,5 +653,5 @@
     }
   }
 
-  global.JobTrailTailorStudio = { TailorStudio };
+  global.SKVKTailorStudio = { TailorStudio };
 })(typeof window !== 'undefined' ? window : globalThis);

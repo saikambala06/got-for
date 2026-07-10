@@ -1,4 +1,4 @@
-// JobTrail Assistant — skills taxonomy
+// SKVK Assistant — skills taxonomy
 // A curated dictionary of skills/tools/certs we scan job descriptions for.
 // Kept as a flat list of { name, pattern } so content.js can regex-match
 // case-insensitively on word boundaries without pulling in a dependency.
@@ -152,5 +152,5 @@
     { label: 'Bonus eligible', test: /\bannual bonus\b|\bbonus eligible\b|\bperformance bonus\b/i }
   ];
 
-  global.JobTrailSkillsData = { SKILLS_TAXONOMY, HIGHLIGHT_RULES, cleanSkill, canonicalSkill, skillsMatch };
+  global.SKVKSkillsData = { SKILLS_TAXONOMY, HIGHLIGHT_RULES, cleanSkill, canonicalSkill, skillsMatch };
 })(typeof window !== 'undefined' ? window : globalThis);

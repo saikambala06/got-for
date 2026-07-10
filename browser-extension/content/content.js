@@ -1,17 +1,17 @@
-// JobTrail Assistant — content script
+// SKVK Assistant — content script
 // Orchestrates: parse the page -> load resumes -> render the panel -> wire
 // up Enter Manually / Mark as Applied / Tailor Resume / Cover Letter.
 
 (function () {
-  if (window.__jobtrailAssistantLoaded) return;
-  window.__jobtrailAssistantLoaded = true;
+  if (window.__skvkAssistantLoaded) return;
+  window.__skvkAssistantLoaded = true;
 
-  const { parseJobFromPage } = window.JobTrailParser;
-  const { JobTrailPanel } = window.JobTrailPanelUI;
-  const { TailorStudio } = window.JobTrailTailorStudio;
-  const { cleanSkill, skillsMatch } = window.JobTrailSkillsData;
+  const { parseJobFromPage } = window.SKVKParser;
+  const { SKVKPanel } = window.SKVKPanelUI;
+  const { TailorStudio } = window.SKVKTailorStudio;
+  const { cleanSkill, skillsMatch } = window.SKVKSkillsData;
 
-  const panel = new JobTrailPanel();
+  const panel = new SKVKPanel();
   const studio = new TailorStudio();
 
   function esc(s) {
@@ -42,6 +42,23 @@
     return { ...state.job, ...state.manualOverrides };
   }
 
+  async function handleLogin(email, password, onError) {
+    try {
+      const { user } = await send('auth:login', { email, password });
+      panel.setProfile(user, handleLogout);
+      loadAndRender();
+    } catch (err) {
+      onError(err.message || 'Login failed');
+    }
+  }
+
+  async function handleLogout() {
+    await send('auth:logout').catch(() => {});
+    panel.setProfile(null, handleLogout);
+    panel.renderLoginForm(handleLogin);
+    state.job = null;
+  }
+
   async function loadAndRender() {
     panel.renderLoading('Reading this job posting…');
     const parsed = parseJobFromPage();
@@ -55,8 +72,9 @@
     state.applied = false;
 
     const authState = await send('auth:getState').catch(() => ({ loggedIn: false }));
+    panel.setProfile(authState.loggedIn ? authState.user : null, handleLogout);
     if (!authState.loggedIn) {
-      panel.renderError('Log in to JobTrail from the extension icon in your toolbar to use resume matching, tailoring, and cover letters.');
+      panel.renderLoginForm(handleLogin);
       return;
     }
 
@@ -68,7 +86,7 @@
     }
 
     if (!state.resumes.length) {
-      panel.renderError('You don\u2019t have any resumes in JobTrail yet. Create one in the dashboard, then reload this panel.');
+      panel.renderError('You don\u2019t have any resumes in SKVK yet. Create one in the dashboard, then reload this panel.');
       return;
     }
 
@@ -163,7 +181,7 @@
         location: job.location,
         salary: job.salary,
         status: 'Applied',
-        source: 'JobTrail Assistant',
+        source: 'SKVK Assistant',
         jobUrl: job.url,
         skills: job.skillsFound
       });
@@ -483,16 +501,20 @@
     return false;
   }
 
+  // The panel never opens on its own. It only appears in response to the
+  // user clicking the toolbar icon (see background.js), and only if this
+  // particular page looks like a job posting — otherwise we tell them so
+  // and leave the page untouched.
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'panel:toggle') {
+      if (!panel.isOpen && !looksLikeJobPage()) {
+        panel.flashNotice("This doesn't look like a job posting page. Open SKVK Assistant while viewing a job listing.");
+        sendResponse({ ok: true });
+        return;
+      }
       panel.toggle();
       if (panel.isOpen && !state.job) loadAndRender();
       sendResponse({ ok: true });
     }
   });
-
-  if (looksLikeJobPage()) {
-    panel.open();
-    loadAndRender();
-  }
 })();

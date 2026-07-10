@@ -1,4 +1,4 @@
-// JobTrail Assistant — background service worker
+// SKVK Assistant — background service worker
 // Owns the session (JWT + API base URL) and proxies every backend call so
 // content scripts never need CORS access of their own.
 
@@ -123,8 +123,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true; // keep the message channel open for the async response
 });
 
-// Clicking the toolbar icon on a page where the content script hasn't run
-// yet (e.g. it was open before install/reload) — inject it now.
+// SKVK Assistant only ever runs on the single tab the user actively clicked
+// the toolbar icon on — there is no content script running in the background
+// on any other tab, and no page is read or has data loaded until this fires.
 chrome.action.onClicked?.addListener(async (tab) => {
   if (!tab?.id) return;
   try {
@@ -138,6 +139,6 @@ chrome.action.onClicked?.addListener(async (tab) => {
         'content/content.js'
       ]
     });
-  } catch (_) { /* already injected */ }
+  } catch (_) { /* already injected on this tab */ }
   chrome.tabs.sendMessage(tab.id, { type: 'panel:toggle' }).catch(() => {});
 });

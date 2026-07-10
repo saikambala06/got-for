@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "JobTrail Assistant",
+  "name": "SKVK Assistant",
   "version": "1.0.0",
   "description": "Parses the job posting you're viewing, scores it against your resume, and tailors your resume or drafts a cover letter in one click.",
   "icons": {
@@ -9,38 +9,22 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "JobTrail Assistant"
+    "default_title": "SKVK Assistant — click to open on a job posting page"
   },
   "background": {
     "service_worker": "background.js"
   },
   "permissions": ["storage", "scripting", "activeTab"],
-  "host_permissions": ["https://got-for.vercel.app/*", "https://*/*", "http://*/*"],
+  "host_permissions": ["https://got-for.vercel.app/*"],
   "web_accessible_resources": [
     {
       "resources": ["assets/tailor-loader.gif", "icons/icon128.png"],
       "matches": ["http://*/*", "https://*/*"]
-    }
-  ],
-  "content_scripts": [
-    {
-      "matches": ["http://*/*", "https://*/*"],
-      "exclude_matches": ["*://*.google.com/search*"],
-      "js": [
-        "content/skills-data.js",
-        "content/job-parser.js",
-        "content/panel-ui.js",
-        "content/tailor-studio.js",
-        "content/content.js"
-      ],
-      "run_at": "document_idle",
-      "all_frames": false
     }
   ]
 }

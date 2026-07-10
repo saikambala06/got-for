@@ -1,7 +1,7 @@
 {
-  "name": "jobtrail",
+  "name": "skvk",
   "version": "1.0.0",
-  "description": "JobTrail - free job application tracker dashboard with MongoDB backend",
+  "description": "SKVK - free job application tracker dashboard with MongoDB backend",
   "main": "api/index.js",
   "scripts": {
     "start": "node server.js",

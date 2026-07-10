@@ -1,4 +1,4 @@
-# JobTrail
+# SKVK
 
 A free job-application tracker dashboard — no paywalls, no upgrade prompts.
 Built with vanilla HTML/CSS/JavaScript on the frontend and Node.js (Express) + MongoDB on the backend. All application data, resumes, and account info live in MongoDB — nothing is stored in `localStorage`/`sessionStorage`. The login session is kept in a secure, httpOnly cookie.
@@ -26,7 +26,7 @@ Built with vanilla HTML/CSS/JavaScript on the frontend and Node.js (Express) + M
 ## Project structure
 
 ```
-jobtrail/
+skvk/
 ├── api/
 │   └── index.js           # Express app (Vercel serverless entry point)
 ├── routes/
@@ -53,7 +53,7 @@ jobtrail/
 2. Create a database user and password.
 3. Under Network Access, allow `0.0.0.0/0` so Vercel's serverless functions can connect.
 4. Copy your connection string:
-   `mongodb+srv://<user>:<password>@cluster0.xxxxx.mongodb.net/jobtrail?retryWrites=true&w=majority`
+   `mongodb+srv://<user>:<password>@cluster0.xxxxx.mongodb.net/skvk?retryWrites=true&w=majority`
 
 ## 2. Get a Gemini API key
 

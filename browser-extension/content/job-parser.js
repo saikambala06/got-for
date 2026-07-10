@@ -1,10 +1,10 @@
-// JobTrail Assistant — job posting parser
+// SKVK Assistant — job posting parser
 // Extracts title / company / location / employment type / salary / description
 // from the current page, then mines the description for skills, qualification
 // bullets, and benefit/sponsorship highlights.
 
 (function (global) {
-  const { SKILLS_TAXONOMY, HIGHLIGHT_RULES } = global.JobTrailSkillsData;
+  const { SKILLS_TAXONOMY, HIGHLIGHT_RULES } = global.SKVKSkillsData;
 
   function stripHtml(html) {
     const div = document.createElement('div');
@@ -172,5 +172,5 @@
     };
   }
 
-  global.JobTrailParser = { parseJobFromPage };
+  global.SKVKParser = { parseJobFromPage };
 })(typeof window !== 'undefined' ? window : globalThis);

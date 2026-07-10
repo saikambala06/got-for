@@ -1,11 +1,11 @@
-# JobTrail Assistant — browser extension
+# SKVK Assistant — browser extension
 
 A Chrome (Manifest V3) extension that adds a side panel to any job posting page: it
 parses the job's title, company, location, salary, employment type, skills, and
-qualifications directly from the page, scores it against your JobTrail resume, and
+qualifications directly from the page, scores it against your SKVK resume, and
 lets you tailor that resume or draft a cover letter without leaving the job page.
 
-It talks to the same backend as the JobTrail web dashboard (`../api`), reusing
+It talks to the same backend as the SKVK web dashboard (`../api`), reusing
 `/api/resumes/:id/tailor` and the accounts/resumes you already have there.
 
 ## What's included
@@ -18,7 +18,7 @@ browser-extension/
 ├── content/
 │   ├── skills-data.js     # skills taxonomy + benefit/sponsorship detection rules
 │   ├── job-parser.js      # JSON-LD + DOM heuristics -> structured job data
-│   ├── panel-ui.js        # shadow-DOM panel renderer (matches JobTrail's dark UI)
+│   ├── panel-ui.js        # shadow-DOM panel renderer (matches SKVK's dark UI)
 │   └── content.js         # wires parser + panel + background messaging together
 └── icons/                 # 16/48/128 toolbar icons
 ```
@@ -61,7 +61,7 @@ Clicking **Tailor resume**:
 endpoint, and gives you a copy-to-clipboard draft grounded only in your resume's
 real content.
 
-**Mark as applied** creates a row in your JobTrail Job Tracker
+**Mark as applied** creates a row in your SKVK Job Tracker
 (`POST /api/jobs`) with the parsed title/company/location/salary/skills and
 `status: "Applied"`.
 
@@ -83,16 +83,16 @@ No existing endpoint's behavior changed for the web dashboard.
 
 ## Install it (unpacked, for development)
 
-1. Make sure your JobTrail backend is running (`npm run dev` in the project
+1. Make sure your SKVK backend is running (`npm run dev` in the project
    root, default `http://localhost:4000`) — or note your deployed Vercel URL.
 2. In Chrome, go to `chrome://extensions`, enable **Developer mode** (top right).
 3. Click **Load unpacked** and select this `browser-extension/` folder.
-4. Click the JobTrail icon in your toolbar, enter your API URL (defaults to
-   `http://localhost:4000`) and log in with your JobTrail account.
+4. Click the SKVK icon in your toolbar, enter your API URL (defaults to
+   `http://localhost:4000`) and log in with your SKVK account.
 5. Visit any job posting (LinkedIn, Indeed, a company careers page, jobright.ai,
    etc.). On pages the extension recognizes as job postings, the panel opens
-   automatically; on any other page, click the JobTrail icon and **Show panel on
-   this page**, or use the slim "JOBTRAIL" tab docked to the right edge.
+   automatically; on any other page, click the SKVK icon and **Show panel on
+   this page**, or use the slim "SKVK" tab docked to the right edge.
 
 ## Notes / limitations
 

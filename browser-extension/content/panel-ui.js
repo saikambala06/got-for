@@ -1,4 +1,4 @@
-// JobTrail Assistant — side panel UI
+// SKVK Assistant — side panel UI
 // Renders inside a Shadow DOM so host-page CSS can never bleed in or out.
 
 (function (global) {
@@ -30,6 +30,16 @@
     .jt-brand .dot { width: 20px; height: 20px; border-radius: 6px; background: linear-gradient(135deg, #ff9a4d, #ff5d8f); flex-shrink:0; }
     .jt-header button.jt-close { background: none; border: none; color: #9aa1c3; font-size: 16px; cursor: pointer; padding: 4px; line-height: 1; }
     .jt-header button.jt-close:hover { color: #eef0fb; }
+    .jt-header-right { display: flex; align-items: center; gap: 10px; }
+    .jt-profile { position: relative; }
+    .jt-avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, #ff9a4d, #ff5d8f); color: #1a1326; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: none; }
+    .jt-profile-menu { position: absolute; top: 32px; right: 0; background: #1c2238; border: 1px solid #262d49; border-radius: 10px; padding: 8px; min-width: 160px; box-shadow: 0 10px 24px -8px rgba(0,0,0,0.6); z-index: 5; display: none; }
+    .jt-profile-menu.open { display: block; }
+    .jt-profile-name { font-size: 12.5px; font-weight: 700; color: #eef0fb; padding: 4px 6px; }
+    .jt-profile-email { font-size: 11px; color: #6a7196; padding: 0 6px 6px; border-bottom: 1px solid #262d49; margin-bottom: 6px; }
+    .jt-logout-btn { width: 100%; text-align: left; background: none; border: none; color: #ff8fa3; font-size: 12.5px; padding: 6px; border-radius: 6px; cursor: pointer; }
+    .jt-logout-btn:hover { background: #262d49; }
+    .jt-notice-toast { position: fixed; top: 20px; right: 20px; z-index: 2147483001; background: #1c2238; color: #eef0fb; border: 1px solid #262d49; border-radius: 10px; padding: 10px 14px; font-size: 12.5px; max-width: 280px; box-shadow: 0 10px 24px -8px rgba(0,0,0,0.6); }
     .jt-body { flex: 1; overflow-y: auto; padding: 16px; }
     .jt-body::-webkit-scrollbar { width: 6px; }
     .jt-body::-webkit-scrollbar-thumb { background: #1c2238; border-radius: 6px; }
@@ -105,10 +115,10 @@
     return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  class JobTrailPanel {
+  class SKVKPanel {
     constructor() {
       this.host = document.createElement('div');
-      this.host.id = 'jobtrail-assistant-host';
+      this.host.id = 'skvk-assistant-host';
       this.shadow = this.host.attachShadow({ mode: 'open' });
       const style = document.createElement('style');
       style.textContent = STYLES;
@@ -117,14 +127,37 @@
 
       this.launcher = document.createElement('button');
       this.launcher.className = 'jt-launcher';
-      this.launcher.textContent = 'JOBTRAIL';
+      this.launcher.textContent = 'SKVK';
       this.launcher.addEventListener('click', () => this.open());
       this.shadow.appendChild(this.launcher);
 
       this.panel = document.createElement('div');
       this.panel.className = 'jt-panel';
       this.panel.style.display = 'none';
+      this.panel.innerHTML = `
+        <div class="jt-header">
+          <div class="jt-brand"><span class="dot"></span> SKVK Assistant</div>
+          <div class="jt-header-right">
+            <div class="jt-profile" style="display:none;">
+              <button class="jt-avatar" title="Account"></button>
+              <div class="jt-profile-menu">
+                <div class="jt-profile-name"></div>
+                <div class="jt-profile-email"></div>
+                <button class="jt-logout-btn">Log out</button>
+              </div>
+            </div>
+            <button class="jt-close" title="Close">✕</button>
+          </div>
+        </div>
+        <div class="jt-body"></div>
+      `;
       this.shadow.appendChild(this.panel);
+      this.bodyEl = this.panel.querySelector('.jt-body');
+      this.profileEl = this.panel.querySelector('.jt-profile');
+      this.panel.querySelector('.jt-close').addEventListener('click', () => this.close());
+      this.panel.querySelector('.jt-avatar').addEventListener('click', () => {
+        this.panel.querySelector('.jt-profile-menu').classList.toggle('open');
+      });
 
       this.isOpen = false;
     }
@@ -133,22 +166,81 @@
     close() { this.isOpen = false; this.panel.style.display = 'none'; this.launcher.style.display = 'block'; }
     toggle() { this.isOpen ? this.close() : this.open(); }
 
-    setBody(html) {
-      this.panel.innerHTML = `
-        <div class="jt-header">
-          <div class="jt-brand"><span class="dot"></span> JobTrail Assistant</div>
-          <button class="jt-close" title="Close">✕</button>
+    // Renders the signed-in user's initial as an avatar with a logout menu.
+    // Passing null hides it (logged out / login screen).
+    setProfile(user, onLogout) {
+      if (!user) { this.profileEl.style.display = 'none'; return; }
+      this.profileEl.style.display = 'block';
+      this.panel.querySelector('.jt-avatar').textContent = (user.name || user.email || '?')[0].toUpperCase();
+      this.panel.querySelector('.jt-profile-name').textContent = user.name || 'Signed in';
+      this.panel.querySelector('.jt-profile-email').textContent = user.email || '';
+      const logoutBtn = this.panel.querySelector('.jt-logout-btn');
+      const freshBtn = logoutBtn.cloneNode(true);
+      logoutBtn.replaceWith(freshBtn);
+      freshBtn.addEventListener('click', () => {
+        this.panel.querySelector('.jt-profile-menu').classList.remove('open');
+        onLogout();
+      });
+    }
+
+    renderLoginForm(onLogin) {
+      this.clearFooter();
+      this.setBody(`
+        <div style="padding-top:8px;">
+          <div class="jt-section-title" style="margin-top:0;">Log in to SKVK</div>
+          <div class="jt-field"><label>Email</label><input id="jt-login-email" type="email"/></div>
+          <div class="jt-field"><label>Password</label><input id="jt-login-password" type="password"/></div>
+          <div class="jt-error" id="jt-login-error" style="display:none; padding:6px 0; text-align:left;"></div>
+          <button class="jt-btn primary" id="jt-login-submit" style="width:100%; margin-top:6px;">Log in</button>
         </div>
-        <div class="jt-body">${html}</div>
-      `;
-      this.panel.querySelector('.jt-close').addEventListener('click', () => this.close());
+      `);
+      const errorEl = this.panel.querySelector('#jt-login-error');
+      const submit = () => {
+        const email = this.panel.querySelector('#jt-login-email').value.trim();
+        const password = this.panel.querySelector('#jt-login-password').value;
+        errorEl.style.display = 'none';
+        if (!email || !password) {
+          errorEl.textContent = 'Enter your email and password.';
+          errorEl.style.display = 'block';
+          return;
+        }
+        const btn = this.panel.querySelector('#jt-login-submit');
+        btn.disabled = true; btn.textContent = 'Logging in…';
+        onLogin(email, password, (message) => {
+          btn.disabled = false; btn.textContent = 'Log in';
+          errorEl.textContent = message;
+          errorEl.style.display = 'block';
+        });
+      };
+      this.panel.querySelector('#jt-login-submit').addEventListener('click', submit);
+      this.panel.querySelector('#jt-login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    }
+
+    // Brief, non-blocking toast shown outside the panel (e.g. when the icon
+    // is clicked on a page that isn't a job posting). Auto-dismisses itself.
+    flashNotice(message) {
+      const toast = document.createElement('div');
+      toast.className = 'jt-notice-toast';
+      toast.textContent = message;
+      this.shadow.appendChild(toast);
+      setTimeout(() => toast.remove(), 3200);
+    }
+
+    setBody(html) {
+      this.bodyEl.innerHTML = html;
+    }
+
+    clearFooter() {
+      this.shadow.querySelector('.jt-footer')?.remove();
     }
 
     renderLoading(message) {
+      this.clearFooter();
       this.setBody(`<div class="jt-loading"><span class="jt-spinner" style="border-top-color:#ff9a4d"></span>${esc(message || 'Loading…')}</div>`);
     }
 
     renderError(message, retryFn) {
+      this.clearFooter();
       this.setBody(`
         <div class="jt-error">${esc(message)}</div>
         ${retryFn ? '<div style="text-align:center"><button class="jt-btn small" id="jt-retry">Try again</button></div>' : ''}
@@ -161,7 +253,7 @@
     renderJob(state) {
       const { job, resumes, selectedResumeId, extraSkillsChecked } = state;
       const resume = resumes.find((r) => r._id === selectedResumeId) || resumes[0];
-      const { cleanSkill, skillsMatch } = global.JobTrailSkillsData;
+      const { cleanSkill, skillsMatch } = global.SKVKSkillsData;
       // cleanSkill() strips any leftover "Category:" label from older/legacy
       // parsed data (see skillUtils.js) so matching isn't thrown off by it.
       const resumeSkills = (resume?.skills || []).map((s) => cleanSkill(s));
@@ -284,6 +376,7 @@
     }
 
     renderManualForm(job, onSave) {
+      this.clearFooter();
       this.setBody(`
         <div class="jt-section-title" style="margin-top:0;">Enter job details manually</div>
         <div class="jt-field"><label>Job title</label><input id="jt-m-title" value="${esc(job.title)}"/></div>
@@ -349,5 +442,5 @@
     }
   }
 
-  global.JobTrailPanelUI = { JobTrailPanel };
+  global.SKVKPanelUI = { SKVKPanel };
 })(typeof window !== 'undefined' ? window : globalThis);
