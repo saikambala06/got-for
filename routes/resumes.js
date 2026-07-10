@@ -3,7 +3,7 @@ const multer  = require('multer');
 const Resume  = require('../models/Resume');
 const User    = require('../models/User');
 const requireAuth = require('../middleware/auth');
-const { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI, enhanceResumeFieldWithAI } = require('../utils/aiResumeParser');
+const { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI } = require('../utils/aiResumeParser');
 const { normalizeDocxText } = require('../utils/resumeParser');
 const { getKeyPool } = require('../utils/geminiKeyPool');
 
@@ -185,28 +185,6 @@ router.post('/:id/cover-letter', async (req, res) => {
       return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
     }
     res.status(502).json({ error: `Cover letter generation failed: ${err.message}` });
-  }
-});
-
-// ─── Enhance a single field with AI (used by the "Edit & Tailor Resume with
-//     AI" editor — the ✨ Enhance/Improve with AI buttons on the summary and
-//     each experience entry) ────────────────────────────────────────────────
-
-router.post('/enhance-field', async (req, res) => {
-  try {
-    const { kind, text = '', jobTitle = '', jobDescription = '', role = '', company = '', currentRole = '' } = req.body;
-    if (!['summary', 'experience'].includes(kind)) {
-      return res.status(400).json({ error: 'kind must be "summary" or "experience"' });
-    }
-
-    const result = await enhanceResumeFieldWithAI(kind, text, { jobTitle, jobDescription, role, company, currentRole });
-    res.json({ result });
-  } catch (err) {
-    console.error('[/enhance-field]', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
-    }
-    res.status(502).json({ error: `AI enhance failed: ${err.message}` });
   }
 });
 

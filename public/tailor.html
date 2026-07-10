@@ -66,6 +66,27 @@
   .tl-skill.added{ border-color:var(--green); color:var(--green); }
   .tl-review-actions{ display:flex; justify-content:center; gap:12px; margin-top:22px; }
 
+  /* ---- match score + per-bullet accept/reject ---- */
+  .tl-score{ display:flex; align-items:center; gap:10px; }
+  .tl-score-copy{ font-size:11.5px; color:var(--text-faint); line-height:1.3; }
+  .tl-score-copy b{ color:var(--green); font-size:15px; }
+  .tl-diff-row{ display:flex; align-items:flex-start; gap:8px; background:rgba(54,211,153,0.08);
+    border-radius:6px; padding:4px 8px; margin-bottom:2px; }
+  .tl-diff-row .tl-new{ background:none; padding:0; flex:1; margin-bottom:0; }
+  .tl-diff-actions{ display:flex; gap:4px; flex-shrink:0; padding-top:1px; }
+  .tl-act{ width:24px; height:24px; border-radius:6px; border:1px solid var(--border); background:var(--surface-2);
+    cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); }
+  .tl-act:hover{ border-color:var(--accent); }
+  .tl-act.yes.active{ background:rgba(54,211,153,0.15); border-color:var(--green); color:var(--green); }
+  .tl-act.no.active{ background:rgba(255,107,129,0.15); border-color:#ff6b81; color:#ff6b81; }
+  .tl-removed-note{ font-size:11.5px; color:var(--text-faint); margin-bottom:6px; display:flex; align-items:center; gap:4px; }
+  .tl-bottombar{ position:sticky; bottom:14px; margin-top:20px; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:14px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    box-shadow:0 6px 24px rgba(0,0,0,.25); }
+  .tl-bottombar .link-btn{ background:none; border:none; color:var(--text-faint); font-size:12.5px; cursor:pointer; padding:0; }
+  .tl-bottombar .link-btn:hover{ color:var(--text); }
+  .tl-changes-note{ font-size:12px; color:var(--text-faint); }
+
   /* ---- quick download (live preview + customizations) ---- */
   .qd-body{ display:flex; gap:22px; align-items:flex-start; }
   .qd-left{ flex:1; min-width:0; }
@@ -165,8 +186,6 @@
           <button class="tl-continue" id="tl-continue">Continue →</button>
         </div>
 
-        <div id="editOut" style="display:none;"></div>
-
         <div id="reviewOut" style="display:none;">
           <div class="tl-review-top">
             <span class="field-label" style="margin:0;">Tailoring level</span>
@@ -175,9 +194,15 @@
               <button class="tl-level-btn" data-level="medium">Med</button>
               <button class="tl-level-btn active" data-level="high">High</button>
             </div>
+            <div style="flex:1;"></div>
+            <div class="tl-score" id="tl-score"></div>
           </div>
           <div class="tl-sheet" id="reviewSheet"></div>
-          <div class="tl-review-actions">
+          <div class="tl-bottombar">
+            <button class="btn btn-primary" id="tl-apply-all">Apply all changes</button>
+            <button class="link-btn" id="tl-reset-changes">Reset changes</button>
+            <span class="tl-changes-note" id="tl-changes-note"></span>
+            <div style="flex:1;"></div>
             <button class="btn" id="tl-back-to-picker">← Start over</button>
             <button class="btn btn-primary" id="tl-go-download">Download resume →</button>
           </div>
@@ -267,7 +292,6 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
-<script src="/js/resumeEditor.js"></script>
 <script>
 const qp = new URLSearchParams(location.search);
 const job = {
@@ -291,8 +315,53 @@ const state = {
   mode: 'review',
   diff: null,
   resume: null,
+  decisions: {},
   qd: { template: 'Classic', textColor: TEXT_COLORS[0], accent: '#16a34a', format: 'pdf', tailoringLevel: 'high', noMetrics: false }
 };
+
+function scoreRing(percent, size = 46) {
+  const r = (size - 8) / 2, c = 2 * Math.PI * r;
+  const p = Math.max(0, Math.min(100, percent));
+  const offset = c - (p / 100) * c;
+  const color = p >= 70 ? 'var(--green)' : p >= 40 ? '#d97706' : '#ff6b81';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="var(--border)" stroke-width="5" fill="none"/>
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${color}" stroke-width="5" fill="none"
+      stroke-dasharray="${c}" stroke-dashoffset="${offset}" stroke-linecap="round" transform="rotate(-90 ${size / 2} ${size / 2})"/>
+    <text x="${size / 2}" y="${size / 2 + 4}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text)">${Math.round(p)}</text>
+  </svg>`;
+}
+
+function matchScoreFor(skillsList) {
+  const target = (state.diff && state.diff.skills) || [];
+  if (!target.length) return 0;
+  const cur = new Set((skillsList || []).map(s => s.toLowerCase()));
+  const matched = target.filter(s => cur.has(s.toLowerCase()));
+  return Math.round((matched.length / target.length) * 100);
+}
+
+function resetDecisions() {
+  state.decisions = { summary: true };
+  (state.diff.experience || []).forEach(role => {
+    role.bullets.forEach((b, bi) => { state.decisions[`exp:${role.index}:${bi}`] = true; });
+  });
+}
+
+function countChanges(diff) {
+  let n = diff.summary.old.trim() !== diff.summary.new.trim() ? 1 : 0;
+  diff.experience.forEach(r => r.bullets.forEach(b => { if (b.action !== 'keep') n++; }));
+  return n;
+}
+
+function countAccepted(diff, decisions) {
+  let n = 0;
+  if (diff.summary.old.trim() !== diff.summary.new.trim() && decisions.summary !== false) n++;
+  diff.experience.forEach(r => r.bullets.forEach((b, bi) => {
+    if (b.action === 'keep') return;
+    if (decisions[`exp:${r.index}:${bi}`] !== false) n++;
+  }));
+  return n;
+}
 
 function esc(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -421,13 +490,21 @@ async function downloadHtmlAsPdf(html, fileBase) {
 }
 
 function projectedResume() {
-  const { diff, resume } = state;
+  const { diff, resume, decisions } = state;
+  const summary = decisions.summary !== false ? diff.summary.new : diff.summary.old;
   const experience = diff.experience.map((role, ri) => {
     const original = resume.experience[ri] || {};
-    const lines = role.bullets.map(b => (b.action === 'remove' ? null : b.new)).filter(Boolean);
+    const lines = [];
+    role.bullets.forEach((b, bi) => {
+      const key = `exp:${role.index}:${bi}`;
+      const accepted = decisions[key] !== false;
+      if (b.action === 'remove') { if (!accepted) lines.push(b.old); return; }
+      if (b.action === 'keep') { lines.push(b.new); return; }
+      lines.push(accepted ? b.new : (b.old || b.new));
+    });
     return { ...original, description: lines.join('\n') };
   });
-  return { ...resume, summary: diff.summary.new, skills: diff.skills, experience };
+  return { ...resume, summary, skills: diff.skills, experience };
 }
 
 async function loadUserProfile() {
@@ -501,27 +578,72 @@ async function runTailor(level) {
 }
 
 function renderReviewSheet() {
-  const diff = state.diff, p = withProfileFallback(state.resume.personal);
+  const diff = state.diff, decisions = state.decisions, p = withProfileFallback(state.resume.personal);
+
   const summaryChanged = diff.summary.old.trim() !== diff.summary.new.trim();
-  const summaryHtml = !summaryChanged ? `<div class="tl-plain">${esc(diff.summary.new)}</div>` :
-    `<div class="tl-old">${esc(diff.summary.old)}</div><div class="tl-new">${esc(diff.summary.new)}</div>`;
+  const sumAccepted = decisions.summary !== false;
+  const summaryHtml = !summaryChanged ? `<div class="tl-plain">${esc(diff.summary.new)}</div>` : `
+    ${sumAccepted ? `<div class="tl-old">${esc(diff.summary.old)}</div>` : ''}
+    <div class="tl-diff-row">
+      <div class="tl-new">${esc(sumAccepted ? diff.summary.new : diff.summary.old)}</div>
+      <div class="tl-diff-actions">
+        <button class="tl-act yes ${sumAccepted ? 'active' : ''}" data-kind="summary" data-value="true">✓</button>
+        <button class="tl-act no ${!sumAccepted ? 'active' : ''}" data-kind="summary" data-value="false">✗</button>
+      </div>
+    </div>`;
+
   const origSkills = new Set((state.resume.skills || []).map(s => s.toLowerCase()));
   const skillsHtml = diff.skills.map(s => `<span class="tl-skill ${origSkills.has(s.toLowerCase()) ? '' : 'added'}">${esc(s)}</span>`).join('');
+
   const expHtml = diff.experience.map(role => {
-    const bullets = role.bullets.map(b => {
+    const bullets = role.bullets.map((b, bi) => {
+      const key = `exp:${role.index}:${bi}`;
+      const accepted = decisions[key] !== false;
       if (b.action === 'keep') return `<div class="tl-plain">${esc(b.new)}</div>`;
-      if (b.action === 'remove') return `<div class="tl-old">${esc(b.old)}</div>`;
-      return (b.old ? `<div class="tl-old">${esc(b.old)}</div>` : '') + `<div class="tl-new">${esc(b.new)}</div>`;
+      if (b.action === 'remove') {
+        return accepted
+          ? `<div class="tl-old">${esc(b.old)}</div><div class="tl-removed-note">Suggested removal
+              <button class="tl-act no active" style="display:inline-flex;" data-kind="${key}" data-value="false">✗ keep</button></div>`
+          : `<div class="tl-plain">${esc(b.old)} <button class="tl-act yes" style="display:inline-flex;" data-kind="${key}" data-value="true">✓ remove</button></div>`;
+      }
+      return `
+        ${accepted && b.old ? `<div class="tl-old">${esc(b.old)}</div>` : ''}
+        <div class="tl-diff-row">
+          <div class="tl-new">${esc(accepted ? b.new : (b.old || b.new))}</div>
+          <div class="tl-diff-actions">
+            <button class="tl-act yes ${accepted ? 'active' : ''}" data-kind="${key}" data-value="true">✓</button>
+            <button class="tl-act no ${!accepted ? 'active' : ''}" data-kind="${key}" data-value="false">✗</button>
+          </div>
+        </div>`;
     }).join('');
     return `<div class="tl-heading" style="margin-bottom:2px;">${esc(role.role)}</div>
       <div style="font-size:12px;color:var(--text-faint);margin-bottom:6px;">${esc(role.company)}</div>${bullets}`;
   }).join('');
+
   document.getElementById('reviewSheet').innerHTML = `
     <h2>${esc(p.name || 'Your Name')}</h2>
     <div class="contact">${[p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' | ')}</div>
     <div class="tl-heading">Summary</div>${summaryHtml}
     <div class="tl-heading">Skills</div><div>${skillsHtml}</div>
     <div class="tl-heading">Experience</div>${expHtml}`;
+
+  document.getElementById('reviewSheet').querySelectorAll('[data-kind]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.decisions[btn.dataset.kind] = btn.dataset.value === 'true';
+      renderReviewSheet();
+    });
+  });
+
+  const currentScore = matchScoreFor(state.resume.skills);
+  const projectedScore = matchScoreFor(projectedResume().skills);
+  document.getElementById('tl-score').innerHTML = `
+    <div>${scoreRing(currentScore)}</div>
+    <div class="tl-score-copy">MATCH SCORE<br/><b>${currentScore}</b> → ~${projectedScore} if you accept all</div>`;
+
+  const total = countChanges(diff);
+  const accepted = countAccepted(diff, decisions);
+  document.getElementById('tl-apply-all').textContent = `Apply all ${total} changes → ~${projectedScore}`;
+  document.getElementById('tl-changes-note').textContent = `${accepted} of ${total} changes accepted`;
 }
 
 document.getElementById('tl-continue').addEventListener('click', async () => {
@@ -534,65 +656,19 @@ document.getElementById('tl-continue').addEventListener('click', async () => {
       renderQuickDownload();
       document.querySelector('[data-tab="quick"]').click();
     } else {
-      const resume = state.resumes.find(r => r._id === state.selectedResumeId);
-      if (!resume) { showToast('Pick a resume first', 'error'); btn.disabled = false; btn.textContent = 'Continue →'; return; }
-      state.resume = resume;
-      showResumeEditStep(resume);
+      await runTailor('high');
+      resetDecisions();
+      document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.toggle('active', b.dataset.level === 'high'));
+      renderReviewSheet();
+      document.getElementById('pickerCard').style.display = 'none';
+      document.getElementById('reviewOut').style.display = 'block';
+      document.getElementById('qdTabBtn').disabled = false;
     }
   } catch (e) {
     showToast(e.message || 'Tailoring failed', 'error');
   }
   btn.disabled = false; btn.textContent = 'Continue →';
 });
-
-/* ---- edit & tailor with AI step (shown before the AI diff review) ---- */
-function showResumeEditStep(resume) {
-  document.getElementById('pickerCard').style.display = 'none';
-  const editOut = document.getElementById('editOut');
-  editOut.style.display = 'block';
-  ResumeEditor.mount(editOut, resume, {
-    title: 'Edit & Tailor Resume with AI',
-    subtitle: 'Fix anything that needs updating, then continue — the AI will tailor this against the job description next.',
-    cancelLabel: '← Start over',
-    saveLabel: 'Continue to tailoring →',
-    onCancel: () => {
-      editOut.style.display = 'none';
-      editOut.innerHTML = '';
-      document.getElementById('pickerCard').style.display = 'block';
-    },
-    onSave: async (edited) => {
-      // merge the user's edits into the working resume before running the AI tailoring pass
-      state.resume = { ...state.resume, ...edited };
-      editOut.style.display = 'none';
-      editOut.innerHTML = '';
-      const btn = document.getElementById('tl-continue');
-      btn.disabled = true; btn.textContent = 'Matching against your resume…';
-      try {
-        await runTailor('high');
-        document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.toggle('active', b.dataset.level === 'high'));
-        renderReviewSheet();
-        document.getElementById('reviewOut').style.display = 'block';
-        document.getElementById('qdTabBtn').disabled = false;
-      } catch (e) {
-        showToast(e.message || 'Tailoring failed', 'error');
-        document.getElementById('pickerCard').style.display = 'block';
-      }
-      btn.disabled = false; btn.textContent = 'Continue →';
-    },
-    onAiEnhance: async (kind, text, data, entry) => {
-      const { result } = await api.post('/api/resumes/enhance-field', {
-        kind,
-        text,
-        jobTitle: job.title,
-        jobDescription: job.description,
-        role: entry?.role || '',
-        company: entry?.company || '',
-        currentRole: data.experience?.[0]?.role || ''
-      });
-      return result;
-    }
-  });
-}
 
 document.getElementById('tl-back-to-picker').addEventListener('click', () => {
   document.getElementById('pickerCard').style.display = 'block';
@@ -605,6 +681,17 @@ document.getElementById('reviewLevels').addEventListener('click', async (e) => {
   document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   await runTailor(btn.dataset.level);
+  resetDecisions();
+  renderReviewSheet();
+});
+
+document.getElementById('tl-apply-all').addEventListener('click', () => {
+  resetDecisions();
+  renderReviewSheet();
+});
+
+document.getElementById('tl-reset-changes').addEventListener('click', () => {
+  state.decisions = {};
   renderReviewSheet();
 });
 

@@ -141,14 +141,13 @@
         </div>
         <div id="parseStatus"></div>
         <div id="parseError"></div>
-        <div id="dossierOut" style="margin-top:18px;"></div>
+        <div id="dossierOut"></div>
         <div id="saveRow" style="display:none; margin-top:18px;">
-          <div class="row-2" style="align-items:flex-end; grid-template-columns:1fr auto auto;">
+          <div class="row-2" style="align-items:flex-end; grid-template-columns:1fr auto;">
             <div>
               <div class="field-label">Resume name</div>
               <input type="text" id="saveTitleInput" placeholder="e.g. Frontend Engineer resume" style="width:100%; padding:11px 14px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:13.5px;" />
             </div>
-            <button class="btn" id="clearParseBtn">Clear</button>
             <button class="btn btn-primary" id="saveResumeBtn">Save resume</button>
           </div>
         </div>
@@ -160,7 +159,6 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
-<script src="/js/resumeEditor.js"></script>
 <script>
 const rtState = { resumeText: '', parsed: null, parsedTab: 'summary' };
 
@@ -293,7 +291,6 @@ document.getElementById('saveResumeBtn').addEventListener('click', async () => {
   const titleInput = document.getElementById('saveTitleInput');
   const title = titleInput.value.trim();
   if (!title) { showToast('Give the resume a name first', 'error'); return; }
-  if (rtEditor) rtState.parsed = { ...rtState.parsed, ...rtEditor.getData() };
 
   const btn = document.getElementById('saveResumeBtn');
   const originalLabel = btn.textContent;
@@ -313,49 +310,42 @@ document.getElementById('saveResumeBtn').addEventListener('click', async () => {
   btn.disabled = false; btn.textContent = originalLabel;
 });
 
-let rtEditor = null;
-
 function renderDossier() {
   const p = rtState.parsed;
   const out = document.getElementById('dossierOut');
-  if (!p) { out.innerHTML = ''; rtEditor = null; return; }
-  rtEditor = ResumeEditor.mount(out, p, {
-    title: 'Edit & Tailor Resume with AI',
-    subtitle: "Review what we pulled from your resume, fix anything that's off, then save it to your account.",
-    cancelLabel: 'Clear',
-    saveLabel: 'Apply changes',
-    onCancel: clearParse,
-    onSave: (updated) => {
-      rtState.parsed = { ...rtState.parsed, ...updated };
-      showToast('Changes applied — hit "Save resume" below to store it');
-    },
-    onAiEnhance: async (kind, text, data, entry) => {
-      const { result } = await api.post('/api/resumes/enhance-field', {
-        kind,
-        text,
-        role: entry?.role || '',
-        company: entry?.company || '',
-        currentRole: data.experience?.[0]?.role || ''
-      });
-      return result;
-    }
+  if (!p) { out.innerHTML = ''; return; }
+  const tabs = ['summary', 'experience', 'education'];
+  let content = '';
+  if (rtState.parsedTab === 'summary') {
+    content = `
+      <div class="field-label">Name</div><div class="field-value">${p.personal?.name || '—'}</div>
+      <div class="field-label">Contact</div><div class="field-value">${p.personal?.email || '—'}${p.personal?.phone ? ' · ' + p.personal.phone : ''}${p.personal?.location ? ' · ' + p.personal.location : ''}</div>
+      <div class="field-label">Summary</div><div class="field-value">${p.summary || '—'}</div>
+      <div class="field-label">Skills</div>
+      <div>${(p.skills || []).map(s => `<span class="skill-chip">${s}</span>`).join('') || '—'}</div>`;
+  } else if (rtState.parsedTab === 'experience') {
+    content = (p.experience || []).map(e => `
+      <div class="exp-entry">
+        <div class="role">${e.role || ''}</div>
+        <div class="org">${e.company || ''}${e.startDate ? ' · ' + e.startDate + (e.endDate ? ' – ' + e.endDate : '') : ''}</div>
+        <ul>${(e.description || '').split('\n').filter(Boolean).map(b => `<li>${b}</li>`).join('')}</ul>
+      </div>`).join('') || '<div class="rt-hint">No experience entries found.</div>';
+  } else {
+    content = (p.education || []).map(ed => `
+      <div class="exp-entry">
+        <div class="role">${ed.degree || ''}${ed.field ? ' · ' + ed.field : ''}</div>
+        <div class="org">${ed.school || ''}${ed.startDate ? ' · ' + ed.startDate + (ed.endDate ? ' – ' + ed.endDate : '') : ''}</div>
+      </div>`).join('') || '<div class="rt-hint">No education entries found.</div>';
+  }
+  out.innerHTML = `
+    <div class="dossier">
+      <div class="dtabs">${tabs.map(t => `<button data-dtab="${t}" class="${rtState.parsedTab === t ? 'active' : ''}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>
+      <div class="dcontent">${content}</div>
+    </div>`;
+  document.querySelectorAll('[data-dtab]').forEach(b => {
+    b.addEventListener('click', () => { rtState.parsedTab = b.dataset.dtab; renderDossier(); });
   });
 }
-
-/* ---- clear / cancel parse ---- */
-function clearParse() {
-  rtState.resumeText = '';
-  rtState.parsed = null;
-  rtEditor = null;
-  document.getElementById('resumeInput').value = '';
-  document.getElementById('dossierOut').innerHTML = '';
-  document.getElementById('parseError').innerHTML = '';
-  document.getElementById('parseStatus').innerHTML = '';
-  document.getElementById('saveRow').style.display = 'none';
-  document.getElementById('saveTitleInput').value = '';
-  showToast('Cleared');
-}
-document.getElementById('clearParseBtn').addEventListener('click', clearParse);
 
 
 
