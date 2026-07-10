@@ -517,8 +517,14 @@
       });
       backdrop.querySelector('#ts-d-template').addEventListener('change', (e) => { template = e.target.value; });
       backdrop.querySelector('#ts-d-cancel').addEventListener('click', () => backdrop.remove());
-      backdrop.querySelector('#ts-d-go').addEventListener('click', () => {
-        handlers.onConfirmDownload({ format, accent, template });
+      backdrop.querySelector('#ts-d-go').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        // Keep the drawer open (with a busy button) until the PDF/DOCX has
+        // actually been generated, instead of closing immediately — closing
+        // right away is what made the file-preparation state invisible and
+        // left the resume view looking like it was still "mid-animation"
+        // when the (blank) download landed.
+        await handlers.onConfirmDownload({ format, accent, template }, btn);
         backdrop.remove();
       });
     }
@@ -637,7 +643,7 @@
       const emitChange = (patch) => handlers.onChange({ ...opts, ...patch });
 
       this.root.querySelector('#ts-qd-back').addEventListener('click', handlers.onBack);
-      this.root.querySelector('#ts-qd-download').addEventListener('click', () => handlers.onDownload(opts));
+      this.root.querySelector('#ts-qd-download').addEventListener('click', (e) => handlers.onDownload(opts, e.currentTarget));
       this.root.querySelector('#ts-qd-resume').addEventListener('change', (e) => handlers.onResumeChange(e.target.value));
       this.root.querySelector('#ts-qd-template').addEventListener('change', (e) => emitChange({ template: e.target.value }));
       this.root.querySelector('#ts-qd-nometrics').addEventListener('change', (e) => emitChange({ noMetrics: e.target.checked }));

@@ -311,7 +311,7 @@
         },
         onDownload: () => {
           studio.renderDownloadDrawer({}, {
-            onConfirmDownload: (opts) => downloadTailoredResume(proj, opts)
+            onConfirmDownload: (opts, btn) => downloadTailoredResume(proj, opts, btn)
           });
         }
       }
@@ -353,7 +353,7 @@
           studio.renderLoading('Matching it against your resume…');
           fetchTailorDiff(job);
         },
-        onDownload: (opts) => downloadTailoredResume(projectedResume(), opts)
+        onDownload: (opts, btn) => downloadTailoredResume(projectedResume(), opts, btn)
       }
     );
   }
@@ -443,8 +443,55 @@
       </body></html>`;
   }
 
-  function downloadTailoredResume(resume, opts) {
+  // Lazily loads html2pdf.js (html2canvas + jsPDF) into the *host page*,
+  // same technique used by public/tailor.html. Cached on window so repeated
+  // downloads don't re-fetch it.
+  let _html2pdfLoading = null;
+  function loadHtml2Pdf() {
+    if (window.html2pdf) return Promise.resolve();
+    if (_html2pdfLoading) return _html2pdfLoading;
+    _html2pdfLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      s.onload = resolve;
+      s.onerror = () => { _html2pdfLoading = null; reject(new Error('Could not load PDF generator')); };
+      document.head.appendChild(s);
+    });
+    return _html2pdfLoading;
+  }
+
+  // Renders the resume HTML off-screen and saves it as an actual PDF file.
+  // Replaces the old window.open()+print() flow, which produced blank PDFs
+  // whenever the popup was blocked or print() fired before the new window
+  // had finished laying out its content.
+  async function renderHtmlToPdf(html, fileBase) {
+    await loadHtml2Pdf();
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-99999px';
+    container.style.top = '0';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    try {
+      const bodyEl = container.querySelector('body') || container;
+      await window.html2pdf()
+        .set({
+          margin: 0,
+          filename: `${fileBase}.pdf`,
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'] }
+        })
+        .from(bodyEl)
+        .save();
+    } finally {
+      document.body.removeChild(container);
+    }
+  }
+
+  async function downloadTailoredResume(resume, opts, btn) {
     const html = resumeToHtml(resume, opts);
+    const fileBase = (resume.personal?.name || 'resume').replace(/\s+/g, '_');
     if (opts.format === 'docx') {
       // Lightweight Word-compatible export: Word opens HTML saved with a
       // .doc extension and the right MIME/header just fine.
@@ -452,15 +499,19 @@
       const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `${(resume.personal?.name || 'resume').replace(/\s+/g, '_')}.doc`;
+      a.download = `${fileBase}.doc`;
       a.click();
       URL.revokeObjectURL(a.href);
-    } else {
-      const win = window.open('', '_blank');
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      setTimeout(() => win.print(), 300);
+      return;
+    }
+    const prevText = btn ? btn.textContent : null;
+    if (btn) { btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
+    try {
+      await renderHtmlToPdf(html, fileBase);
+    } catch (err) {
+      alert(`Could not generate PDF: ${err.message}`);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = prevText; }
     }
   }
 
