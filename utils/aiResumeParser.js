@@ -763,15 +763,12 @@ function sanitizeTailorResult(result, resume) {
   return out;
 }
 
-async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills = [], tailoringLevel = 'high', opts = {}) {
+async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills = [], tailoringLevel = 'high') {
   if (!getKeyPool().hasKeys()) {
     throw new Error('AI tailoring requires GEMINI_API_KEY to be configured');
   }
 
   const level = TAILOR_LEVEL_INSTRUCTIONS[tailoringLevel] ? tailoringLevel : 'high';
-  const noMetricsNote = opts.noMetrics
-    ? '\n\nIMPORTANT: Do not add or invent any new numbers, percentages, or metrics ("20%", "500 users", etc.) that are not already present in the original resume. Keep bullet points number-free unless a number already existed in that bullet.'
-    : '';
 
   const snapshot = JSON.stringify(
     {
@@ -800,7 +797,7 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
       { role: 'system', content: TAILOR_SYSTEM_PROMPT },
       {
         role: 'user',
-        content: `${TAILOR_LEVEL_INSTRUCTIONS[level]}${noMetricsNote}\n\nJob Title: ${jobTitle || 'Not specified'}\n\nJob Description:\n${jobDescription.slice(0, 4000)}\n\nCurrent Resume:\n${snapshot}${extrasBlock}`
+        content: `${TAILOR_LEVEL_INSTRUCTIONS[level]}\n\nJob Title: ${jobTitle || 'Not specified'}\n\nJob Description:\n${jobDescription.slice(0, 4000)}\n\nCurrent Resume:\n${snapshot}${extrasBlock}`
       }
     ],
     // The bullet-level diff duplicates every bullet as both "old" and "new",

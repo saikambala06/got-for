@@ -113,7 +113,6 @@ router.post('/', async (req, res) => {
       source: body.source || '',
       jobUrl: body.jobUrl || '',
       notes: body.notes || '',
-      description: body.description || '',
       skills: Array.isArray(body.skills) ? body.skills : [],
       appliedOn: body.appliedOn ? new Date(body.appliedOn) : new Date()
     });

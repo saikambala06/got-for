@@ -150,10 +150,10 @@ router.post('/:id/tailor', async (req, res) => {
     const resume = await Resume.findOne({ _id: req.params.id, user: req.userId });
     if (!resume) return res.status(404).json({ error: 'Resume not found' });
 
-    const { jobTitle = '', jobDescription = '', emphasizeSkills = [], tailoringLevel = 'high', noMetrics = false } = req.body;
+    const { jobTitle = '', jobDescription = '', emphasizeSkills = [], tailoringLevel = 'high' } = req.body;
     if (!jobDescription.trim()) return res.status(400).json({ error: 'Job description is required' });
 
-    const tailored = await tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills, tailoringLevel, { noMetrics });
+    const tailored = await tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills, tailoringLevel);
     res.json({ tailored });
   } catch (err) {
     console.error('[/tailor]', err.message);

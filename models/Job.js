@@ -16,7 +16,6 @@ const JobSchema = new mongoose.Schema(
     source: { type: String, default: '' },
     jobUrl: { type: String, default: '' },
     notes: { type: String, default: '' },
-    description: { type: String, default: '' },
     skills: [{ type: String }],
     appliedOn: { type: Date, default: Date.now }
   },
