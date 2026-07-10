@@ -19,7 +19,7 @@
       z-index: 2147483000; background: #111526; color: #eef0fb;
       border: 1px solid #262d49; border-radius: 16px;
       box-shadow: 0 18px 40px -12px rgba(0,0,0,0.6);
-      display: flex; flex-direction: column; overflow: hidden;
+      display: flex; flex-direction: column; overflow: hidden; position: relative;
     }
     .jt-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -97,6 +97,16 @@
     .jt-tag-new { font-size: 9.5px; background: #ff9a4d; color: #1a1326; border-radius: 5px; padding: 1px 4px; margin-left: 4px; font-weight: 700; }
     .jt-suggestions { font-size: 11.5px; color: #6a7196; margin-top: 8px; font-style: italic; }
     textarea.jt-cover { width: 100%; min-height: 220px; background: #0c0f1c; border: 1px solid #262d49; border-radius: 8px; color: #eef0fb; padding: 10px; font-size: 12px; line-height: 1.5; resize: vertical; }
+
+    .jt-nojob { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100%; min-height: 320px; gap: 16px; padding: 20px; }
+    .jt-nojob .jt-nojob-icon { font-size: 30px; }
+    .jt-nojob p { font-size: 13px; color: #9aa1c3; line-height: 1.55; margin: 0; max-width: 260px; }
+
+    .jt-confirm-overlay { position: absolute; inset: 0; background: rgba(8,10,18,0.78); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 20px; }
+    .jt-confirm-box { background: #1c2238; border: 1px solid #262d49; border-radius: 12px; padding: 18px; width: 100%; text-align: left; box-shadow: 0 18px 40px -12px rgba(0,0,0,0.6); }
+    .jt-confirm-box h3 { margin: 0 0 8px; font-size: 14px; color: #eef0fb; }
+    .jt-confirm-box p { margin: 0 0 14px; font-size: 12.5px; color: #9aa1c3; line-height: 1.45; }
+    .jt-confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
   `;
 
   function gaugeSvg(percent) {
@@ -442,6 +452,48 @@
       footer.querySelector('#jt-tailor').addEventListener('click', onTailor);
       footer.querySelector('#jt-cover').addEventListener('click', onCoverLetter);
       footer.querySelector('#jt-reload').addEventListener('click', onReload);
+    }
+
+    // Shown when the panel is opened on a page that doesn't look like a job
+    // posting. Unlike the old flashNotice() toast, this keeps the panel
+    // open as a persistent sidebar (until the user explicitly closes it)
+    // with the message centered in the body and a Reload button beneath it,
+    // so the user can navigate to a job listing and retry without reopening
+    // the panel from the toolbar icon.
+    renderNoJobState(onReload) {
+      this.clearFooter();
+      this.setBody(`
+        <div class="jt-nojob">
+          <div class="jt-nojob-icon">🔍</div>
+          <p>This doesn't look like a job posting page. Open a job listing in this tab, then reload.</p>
+          <button class="jt-btn primary small" id="jt-nojob-reload">Reload job details</button>
+        </div>
+      `);
+      this.panel.querySelector('#jt-nojob-reload').addEventListener('click', onReload);
+    }
+
+    // Modal confirmation shown before reloading job details for a job
+    // that's already loaded, mirroring the "Did you apply for this job?"
+    // prompt: mark-as-applied on Yes, plain reload on No. Rendered as an
+    // overlay inside the panel so it stays anchored to the sidebar.
+    showApplyConfirm(onYes, onNo) {
+      this.shadow.querySelector('.jt-confirm-overlay')?.remove();
+      const overlay = document.createElement('div');
+      overlay.className = 'jt-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="jt-confirm-box">
+          <h3>Did you apply for this job?</h3>
+          <p>If you've already applied, mark it as applied. Otherwise, just reload the job details.</p>
+          <div class="jt-confirm-actions">
+            <button class="jt-btn small" id="jt-confirm-no">No, not yet</button>
+            <button class="jt-btn primary small" id="jt-confirm-yes">Yes, I applied</button>
+          </div>
+        </div>
+      `;
+      this.panel.appendChild(overlay);
+      const cleanup = () => overlay.remove();
+      overlay.querySelector('#jt-confirm-yes').addEventListener('click', () => { cleanup(); onYes(); });
+      overlay.querySelector('#jt-confirm-no').addEventListener('click', () => { cleanup(); onNo(); });
     }
 
     setButtonBusy(id, busyLabel) {

@@ -143,9 +143,30 @@
       onMarkApplied: markApplied,
       onTailor: tailorResume,
       onCoverLetter: draftCoverLetter,
-      onReload: loadAndRender,
+      onReload: confirmReload,
       applied: state.applied
     });
+  }
+
+  // Before actually reloading job details for an already-loaded job, ask
+  // whether the user already applied — same UX as "Did you apply for this
+  // job?" — since a reload wipes the current match/highlights state.
+  function confirmReload() {
+    panel.showApplyConfirm(
+      async () => { await markApplied(); await loadAndRender(); },
+      () => loadAndRender()
+    );
+  }
+
+  // Used from the no-job-detected state: no job is loaded yet, so there's
+  // nothing to confirm "applied" for — just re-check the current page.
+  function attemptReloadFromNoJob() {
+    if (looksLikeJobPage()) {
+      loadAndRender();
+    } else {
+      panel.renderNoJobState(attemptReloadFromNoJob);
+      panel.flashNotice("Still doesn't look like a job posting page.");
+    }
   }
 
   function wireCardEvents() {
@@ -556,19 +577,26 @@
     return false;
   }
 
-  // The panel never opens on its own. It only appears in response to the
-  // user clicking the toolbar icon (see background.js), and only if this
-  // particular page looks like a job posting — otherwise we tell them so
-  // and leave the page untouched.
+  // The panel only appears in response to the user clicking the toolbar
+  // icon (see background.js). On a page that doesn't look like a job
+  // posting it still opens — as a persistent sidebar tab, staying open
+  // until the user closes it — but shows a centered message with a
+  // Reload button instead of trying to parse a job that isn't there.
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'panel:toggle') {
-      if (!panel.isOpen && !looksLikeJobPage()) {
-        panel.flashNotice("This doesn't look like a job posting page. Open SKVK Assistant while viewing a job listing.");
+      if (panel.isOpen) {
+        panel.close();
         sendResponse({ ok: true });
         return;
       }
-      panel.toggle();
-      if (panel.isOpen && !state.job) loadAndRender();
+      panel.open();
+      if (!looksLikeJobPage()) {
+        panel.renderNoJobState(attemptReloadFromNoJob);
+      } else if (!state.job) {
+        loadAndRender();
+      } else {
+        renderCard();
+      }
       sendResponse({ ok: true });
     }
   });
