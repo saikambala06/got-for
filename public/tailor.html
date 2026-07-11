@@ -51,8 +51,16 @@
     font-weight:600; cursor:pointer; border-right:1px solid var(--border); }
   .tl-level-btn:last-child{ border-right:none; }
   .tl-level-btn.active{ background:var(--green); color:#04140d; }
+  .tl-level-btn:disabled{ opacity:.6; cursor:default; }
   .tl-sheet{ max-width:720px; margin:0 auto; background:var(--surface); border:1px solid var(--border);
-    border-radius:var(--radius); padding:30px 36px; }
+    border-radius:var(--radius); padding:30px 36px; position:relative; min-height:160px; }
+  .tl-tailor-loading{ position:absolute; inset:0; background:var(--surface); border-radius:var(--radius);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:5; }
+  .tl-tailor-spinner{ width:34px; height:34px; border-radius:50%; border:3px solid var(--border);
+    border-top-color:var(--green); animation:tlSpin .8s linear infinite; }
+  .tl-tailor-loading-text{ font-size:13px; font-weight:600; color:var(--text-dim); }
+  @keyframes tlSpin{ to{ transform:rotate(360deg); } }
+  .qd-pill:disabled{ opacity:.6; cursor:default; }
   .tl-sheet h2{ text-align:center; font-size:20px; margin-bottom:4px; }
   .tl-sheet .contact{ text-align:center; font-size:12px; color:var(--text-faint); margin-bottom:16px; }
   .tl-heading{ font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent-2);
@@ -94,7 +102,7 @@
   .qd-badge{ font-size:11px; font-weight:700; color:var(--green); display:flex; align-items:center; gap:5px; }
   .qd-badge::before{ content:''; width:7px; height:7px; border-radius:50%; background:var(--green); display:inline-block; }
   .qd-preview-wrap{ background:var(--bg-soft); border:1px solid var(--border); border-radius:var(--radius);
-    display:flex; justify-content:center; padding:22px; }
+    display:flex; justify-content:center; padding:22px; position:relative; }
   .qd-page{ width:100%; max-width:640px; background:#fff; border-radius:4px; box-shadow:0 8px 30px rgba(0,0,0,.4); }
   .qd-page iframe{ width:100%; height:760px; border:none; display:block; border-radius:4px; }
   .qd-foot{ text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px; }
@@ -238,7 +246,13 @@
             <div style="flex:1;"></div>
             <div class="tl-score" id="tl-score"></div>
           </div>
-          <div class="tl-sheet" id="reviewSheet"></div>
+          <div class="tl-sheet-wrap" style="position:relative;">
+            <div class="tl-sheet" id="reviewSheet"></div>
+            <div class="tl-tailor-loading" id="reviewTailorLoading" style="display:none;">
+              <div class="tl-tailor-spinner"></div>
+              <div class="tl-tailor-loading-text" id="reviewTailorLoadingText">Tailoring in progress…</div>
+            </div>
+          </div>
           <div class="tl-bottombar">
             <button class="btn btn-primary" id="tl-apply-all">Apply all changes</button>
             <button class="link-btn" id="tl-reset-changes">Reset</button>
@@ -259,6 +273,10 @@
             </div>
             <div class="qd-preview-wrap">
               <div class="qd-page"><iframe id="qdFrame"></iframe></div>
+              <div class="tl-tailor-loading" id="qdTailorLoading" style="display:none;">
+                <div class="tl-tailor-spinner"></div>
+                <div class="tl-tailor-loading-text" id="qdTailorLoadingText">Tailoring in progress…</div>
+              </div>
             </div>
             <div class="qd-foot" id="qdFoot"></div>
           </div>
@@ -1072,6 +1090,24 @@ document.querySelectorAll('.tl-mode').forEach(opt => {
   });
 });
 
+const LEVEL_LABELS = { low: 'Low', medium: 'Medium', high: 'High' };
+
+function showTailorLoading(scope, level) {
+  const loadingEl = document.getElementById(scope === 'quick' ? 'qdTailorLoading' : 'reviewTailorLoading');
+  const textEl = document.getElementById(scope === 'quick' ? 'qdTailorLoadingText' : 'reviewTailorLoadingText');
+  if (textEl) textEl.textContent = `${LEVEL_LABELS[level] || 'High'} tailoring in progress…`;
+  if (loadingEl) loadingEl.style.display = 'flex';
+  const group = document.getElementById(scope === 'quick' ? 'qdLevel' : 'reviewLevels');
+  if (group) group.querySelectorAll('button').forEach(b => b.disabled = true);
+}
+
+function hideTailorLoading(scope) {
+  const loadingEl = document.getElementById(scope === 'quick' ? 'qdTailorLoading' : 'reviewTailorLoading');
+  if (loadingEl) loadingEl.style.display = 'none';
+  const group = document.getElementById(scope === 'quick' ? 'qdLevel' : 'reviewLevels');
+  if (group) group.querySelectorAll('button').forEach(b => b.disabled = false);
+}
+
 async function runTailor(level) {
   const resume = state.resumes.find(r => r._id === state.selectedResumeId);
   if (!resume) { showToast('Pick a resume first', 'error'); return null; }
@@ -1174,8 +1210,8 @@ document.getElementById('tl-continue').addEventListener('click', async () => {
     if (state.mode === 'quick') {
       await runTailor(state.qd.tailoringLevel);
       document.getElementById('qdTabBtn').disabled = false;
-      renderQuickDownload();
       document.querySelector('[data-tab="quick"]').click();
+      renderQuickDownload();
     } else {
       await runTailor('high');
       rejectAllDecisions(); // nothing accepted yet — badge should reflect the real, untailored ATS score
@@ -1194,12 +1230,19 @@ document.getElementById('tl-continue').addEventListener('click', async () => {
 
 document.getElementById('reviewLevels').addEventListener('click', async (e) => {
   const btn = e.target.closest('.tl-level-btn');
-  if (!btn) return;
+  if (!btn || btn.disabled) return;
   document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  await runTailor(btn.dataset.level);
-  rejectAllDecisions();
-  renderReviewSheet({ animateScore: true });
+  showTailorLoading('review', btn.dataset.level);
+  try {
+    await runTailor(btn.dataset.level);
+    rejectAllDecisions();
+    renderReviewSheet({ animateScore: true });
+  } catch (e2) {
+    showToast(e2.message || 'Tailoring failed', 'error');
+  } finally {
+    hideTailorLoading('review');
+  }
 });
 
 // "Apply all changes" is the moment the person actually opts into the AI's
@@ -1251,11 +1294,18 @@ document.getElementById('qdFormat').addEventListener('click', e => {
   state.qd.format = btn.dataset.value; renderQuickDownload();
 });
 document.getElementById('qdLevel').addEventListener('click', async (e) => {
-  const btn = e.target.closest('.qd-pill'); if (!btn) return;
+  const btn = e.target.closest('.qd-pill'); if (!btn || btn.disabled) return;
   if (btn.dataset.value === state.qd.tailoringLevel) return;
   state.qd.tailoringLevel = btn.dataset.value;
-  await runTailor(state.qd.tailoringLevel);
-  renderQuickDownload();
+  showTailorLoading('quick', state.qd.tailoringLevel);
+  try {
+    await runTailor(state.qd.tailoringLevel);
+    renderQuickDownload();
+  } catch (e2) {
+    showToast(e2.message || 'Tailoring failed', 'error');
+  } finally {
+    hideTailorLoading('quick');
+  }
 });
 document.getElementById('qdDownload').addEventListener('click', () => openTemplateChooser());
 
