@@ -140,19 +140,34 @@
 
   @media (max-width:900px){ .qd-body{ flex-direction:column; } .qd-right{ width:100%; } }
 
-  /* ---- template chooser overlay ---- */
-  .tpl-overlay{ position:fixed; inset:0; background:var(--bg); z-index:200; overflow-y:auto; }
-  .tpl-overlay-inner{ max-width:1100px; margin:0 auto; padding:28px 32px 60px; }
-  .tpl-overlay h1{ font-size:24px; margin:20px 0 4px; }
-  .tpl-overlay .sub{ font-size:13.5px; color:var(--text-faint); margin-bottom:26px; }
-  .tpl-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:22px; }
-  .tpl-card{ cursor:pointer; border:1.5px solid var(--border); border-radius:var(--radius); overflow:hidden;
-    background:var(--surface); transition:.15s; }
-  .tpl-card:hover{ border-color:var(--green); transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.25); }
-  .tpl-thumb{ width:100%; height:280px; overflow:hidden; position:relative; background:#fff; }
-  .tpl-thumb iframe{ position:absolute; top:0; left:0; width:800px; height:1035px; border:none;
-    transform:scale(0.275); transform-origin:top left; pointer-events:none; }
-  .tpl-card-label{ padding:11px 14px; font-size:13.5px; font-weight:700; text-align:center; }
+  /* ---- template chooser overlay (design provided by user) ---- */
+  .tpl-overlay{ position:fixed; inset:0; z-index:200; overflow-y:auto; background:#f8fafc; padding:50px; font-family:Inter, sans-serif; }
+  .tpl-overlay .template-page{ max-width:1400px; margin:auto; }
+  .tpl-overlay .back-btn{ padding:14px 28px; border-radius:40px; border:1px solid #d7dce5; background:white;
+    font-size:16px; cursor:pointer; transition:.3s; color:#0f172a; }
+  .tpl-overlay .back-btn:hover{ transform:translateY(-2px); box-shadow:0 10px 25px rgba(0,0,0,.08); }
+  .tpl-overlay .heading{ margin:40px 0; }
+  .tpl-overlay .heading h1{ font-size:42px; font-weight:700; margin-bottom:10px; color:#0f172a; }
+  .tpl-overlay .heading p{ font-size:19px; color:#64748b; }
+  .tpl-overlay .template-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(270px, 1fr)); gap:35px; }
+  .tpl-overlay .template-card{ background:white; border-radius:22px; overflow:hidden; cursor:pointer;
+    border:2px solid transparent; transition:.35s; position:relative; }
+  .tpl-overlay .template-card:hover{ transform:translateY(-10px); box-shadow:0 30px 60px rgba(0,0,0,.08); }
+  .tpl-overlay .preview{ height:520px; background:#f3f5f9; display:flex; justify-content:center; align-items:center;
+    overflow:hidden; position:relative; }
+  .tpl-overlay .preview iframe{ position:absolute; top:0; left:0; border:none; pointer-events:none; }
+  .tpl-overlay .template-card h3{ padding:20px; font-size:24px; font-weight:600; color:#0f172a; }
+  .tpl-overlay .template-card.active{ border:3px solid #22c55e; }
+  .tpl-overlay .selected{ position:absolute; right:18px; top:18px; width:42px; height:42px; border-radius:50%;
+    background:#22c55e; display:flex; justify-content:center; align-items:center; color:white; font-size:22px;
+    font-weight:700; box-shadow:0 15px 35px rgba(34,197,94,.4); z-index:2; }
+  .tpl-overlay .coming{ height:520px; border:3px dashed #cfd8e3; border-radius:22px; display:flex;
+    justify-content:center; align-items:center; flex-direction:column; color:#64748b; background:white; transition:.3s; }
+  .tpl-overlay .coming:hover{ background:#f8fbff; }
+  .tpl-overlay .icon{ font-size:70px; margin-bottom:20px; }
+  .tpl-overlay .coming h3{ font-size:28px; margin-bottom:8px; }
+  .tpl-overlay .coming p{ font-size:18px; }
+  @media (max-width:900px){ .tpl-overlay .preview{ height:420px; } .tpl-overlay .heading h1{ font-size:32px; } }
 
   /* ---- document editor overlay ---- */
   .doc-overlay{ position:fixed; inset:0; background:var(--bg); z-index:210; display:flex; flex-direction:column; }
@@ -332,11 +347,13 @@
 
 <!-- Template chooser overlay -->
 <div id="templateChooserOverlay" class="tpl-overlay" style="display:none;">
-  <div class="tpl-overlay-inner">
-    <button class="btn" id="tplBackBtn">← Back to tailor resume</button>
-    <h1>Choose your resume template</h1>
-    <p class="sub">Select a design that fits your professional style. You can preview and download in PDF or Word.</p>
-    <div class="tpl-grid" id="tplGrid"></div>
+  <div class="template-page">
+    <button class="back-btn" id="tplBackBtn">← Back to tailor resume</button>
+    <div class="heading">
+      <h1>Choose your resume template</h1>
+      <p>Select a design that fits your professional style. You can preview and download in PDF or Word.</p>
+    </div>
+    <div class="template-grid" id="tplGrid"></div>
   </div>
 </div>
 
@@ -910,13 +927,47 @@ function openTemplateChooser() {
   const resume = projectedResume();
   const grid = document.getElementById('tplGrid');
   grid.innerHTML = TEMPLATES.map(t => `
-    <div class="tpl-card" data-template="${esc(t)}">
-      <div class="tpl-thumb"><iframe srcdoc="${esc(resumeToHtml(resume, { ...state.qd, template: t }))}"></iframe></div>
-      <div class="tpl-card-label">${esc(t)}</div>
-    </div>`).join('');
-  grid.querySelectorAll('.tpl-card').forEach(card => {
-    card.addEventListener('click', () => selectTemplateAndOpenEditor(card.dataset.template));
+    <div class="template-card${t === state.qd.template ? ' active' : ''}" data-template="${esc(t)}">
+      ${t === state.qd.template ? '<div class="selected">✓</div>' : ''}
+      <div class="preview"><iframe scrolling="no" srcdoc="${esc(resumeToHtml(resume, { ...state.qd, template: t }))}"></iframe></div>
+      <h3>${esc(t)}</h3>
+    </div>`).join('') + `
+    <div class="coming">
+      <div class="icon">📄</div>
+      <h3>More Templates</h3>
+      <p>Coming Soon</p>
+    </div>`;
+
+  // Scale each live-preview iframe to fill its card's actual width (cards are
+  // responsive via CSS grid, so this is computed after layout rather than
+  // hardcoded) — the iframe renders a full A4-width page which we then scale
+  // down and top-crop to fit the fixed-height preview window.
+  grid.querySelectorAll('.preview').forEach(preview => {
+    const iframe = preview.querySelector('iframe');
+    const pageWidth = 800;
+    const scale = preview.clientWidth / pageWidth;
+    iframe.style.width = `${pageWidth}px`;
+    iframe.style.height = `${preview.clientHeight / scale}px`;
+    iframe.style.transform = `scale(${scale})`;
+    iframe.style.transformOrigin = 'top left';
   });
+
+  grid.querySelectorAll('.template-card').forEach(card => {
+    card.addEventListener('click', () => {
+      grid.querySelectorAll('.template-card').forEach(c => {
+        c.classList.remove('active');
+        const check = c.querySelector('.selected');
+        if (check) check.remove();
+      });
+      card.classList.add('active');
+      const check = document.createElement('div');
+      check.className = 'selected';
+      check.innerHTML = '✓';
+      card.appendChild(check);
+      selectTemplateAndOpenEditor(card.dataset.template);
+    });
+  });
+
   document.getElementById('templateChooserOverlay').style.display = 'block';
 }
 
