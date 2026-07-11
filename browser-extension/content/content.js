@@ -97,15 +97,6 @@
       return;
     }
 
-    // Log the view once we know this is a real job posting being shown to a
-    // logged-in user — fire-and-forget so a slow/failed network call never
-    // blocks or breaks rendering of the panel itself.
-    send('jobs:trackView', {
-      title: state.job.title,
-      company: state.job.company,
-      jobUrl: window.location.href
-    }).catch(() => {});
-
     try {
       state.resumes = await send('resumes:list');
     } catch (err) {
@@ -184,7 +175,7 @@
     panel.renderFooter({
       onManual: openManualForm,
       onMarkApplied: markApplied,
-      onTailor: openTailorPicker,
+      onTailor: tailorResume,
       onCoverLetter: draftCoverLetter,
       onReload: confirmReload,
       applied: state.applied
@@ -282,23 +273,6 @@
       return { ...original, description: lines.join('\n') };
     });
     return { ...resume, summary, skills, experience };
-  }
-
-  // "Tailor resume" opens the picker first — "Tailor your resume" — where the
-  // person picks a resume and a mode (Review & edit vs Quick Download).
-  // Picking "Review & edit" and continuing lands on the full AI review studio.
-  function openTailorPicker() {
-    studio.renderPicker(
-      { resumes: state.resumes, selectedResumeId: state.selectedResumeId },
-      {
-        onCancel: () => studio.unmount(),
-        onContinue: (resumeId, mode) => {
-          state.selectedResumeId = resumeId;
-          studioState.mode = mode;
-          openStudio();
-        }
-      }
-    );
   }
 
   function openStudio() {
