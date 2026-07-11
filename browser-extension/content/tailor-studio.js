@@ -98,6 +98,31 @@
     .ts-drawer-cancel { display: block; margin: 10px auto 0; background: none; border: none; color: #6b7280;
       font-size: 12.5px; cursor: pointer; }
 
+    /* ---- Apply-all animation ---- */
+    .ts-diff, .ts-plain[data-key] { transition: background 0.25s ease; border-radius: 6px; }
+    .ts-anim-flash { animation: ts-flash-glow 0.9s ease; }
+    @keyframes ts-flash-glow {
+      0%   { background: #fffbe6; box-shadow: 0 0 0 0 rgba(22,163,74,0); }
+      35%  { background: #dcfce7; box-shadow: 0 0 0 4px rgba(22,163,74,0.18); }
+      100% { background: transparent; box-shadow: 0 0 0 0 rgba(22,163,74,0); }
+    }
+    .ts-anim-old-collapse { animation: ts-old-collapse 0.5s ease forwards; transform-origin: top; }
+    @keyframes ts-old-collapse {
+      0%   { opacity: 1; max-height: 60px; margin-bottom: 2px; }
+      60%  { opacity: 0; }
+      100% { opacity: 0; max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; }
+    }
+    .ts-anim-pop { animation: ts-pop 0.45s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes ts-pop { 0% { transform: scale(0.4); opacity: 0.2; } 60% { transform: scale(1.25); } 100% { transform: scale(1); opacity: 1; } }
+    .ts-score-ring.ts-ring-pulse svg circle:nth-child(2) { transition: stroke 0.3s ease; }
+    .ts-apply-busy { opacity: 0.75; cursor: wait !important; }
+    .ts-confetti-piece { position: fixed; top: 0; left: 0; width: 7px; height: 7px; border-radius: 1px; pointer-events: none;
+      z-index: 2147483647; animation: ts-confetti-fall linear forwards; }
+    @keyframes ts-confetti-fall {
+      0%   { transform: translate(0,0) rotate(0deg); opacity: 1; }
+      100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
+    }
+
     .ts-loading { text-align: center; padding: 60px 20px; color: #6b7280; font-size: 13px; }
     .ts-spinner { width: 18px; height: 18px; border: 2px solid #d9dce4; border-top-color: #16a34a; border-radius: 50%;
       display: inline-block; animation: ts-spin 0.7s linear infinite; margin-bottom: 8px; }
@@ -347,7 +372,7 @@
       const summaryOldChanged = diff.summary.old.trim() !== diff.summary.new.trim();
       const sumAccepted = decisions.summary !== false;
       const summaryHtml = !summaryOldChanged ? `<div class="ts-plain">${esc(diff.summary.new)}</div>` : `
-        <div class="ts-diff">
+        <div class="ts-diff" data-key="summary">
           ${sumAccepted ? `<div class="ts-diff-old">${esc(diff.summary.old)}</div>` : ''}
           <div class="ts-diff-row">
             <div class="ts-diff-new">${esc(sumAccepted ? diff.summary.new : diff.summary.old)}</div>
@@ -373,12 +398,12 @@
           }
           if (b.action === 'remove') {
             return accepted
-              ? `<div class="ts-diff-old">${esc(b.old)}</div><div class="ts-removed-note">Suggested removal
+              ? `<div class="ts-diff-old" data-key="${key}">${esc(b.old)}</div><div class="ts-removed-note">Suggested removal
                   <button class="ts-act no active" style="display:inline-flex;margin-left:6px;" data-kind="${key}" data-value="false">✗ keep</button></div>`
-              : `<div class="ts-plain">${esc(b.old)} <button class="ts-act yes" style="display:inline-flex;margin-left:6px;" data-kind="${key}" data-value="true">✓ remove</button></div>`;
+              : `<div class="ts-plain" data-key="${key}">${esc(b.old)} <button class="ts-act yes" style="display:inline-flex;margin-left:6px;" data-kind="${key}" data-value="true">✓ remove</button></div>`;
           }
           // modify / add
-          return `<div class="ts-diff">
+          return `<div class="ts-diff" data-key="${key}">
             ${accepted && b.old ? `<div class="ts-diff-old">${esc(b.old)}</div>` : ''}
             <div class="ts-diff-row">
               <div class="ts-diff-new ${b.action === 'add' ? 'added' : ''}">${esc(accepted ? b.new : (b.old || b.new))}</div>
@@ -404,8 +429,8 @@
             <button class="ts-back" id="ts-back">← Back</button>
             <span class="ts-brand">Tailor resume</span>
             <div class="ts-score">
-              <div class="ts-score-ring">${scoreRing(currentScore)}</div>
-              <div class="ts-score-copy">MATCH SCORE<br/><b>${currentScore}</b> → ~${projectedScore} if you accept all</div>
+              <div class="ts-score-ring" id="ts-score-ring">${scoreRing(currentScore)}</div>
+              <div class="ts-score-copy">MATCH SCORE<br/><b id="ts-score-num">${currentScore}</b> → ~${projectedScore} if you accept all</div>
             </div>
           </div>
           <div class="ts-controlbar">
@@ -438,7 +463,10 @@
 
       this.root.querySelector('#ts-back').addEventListener('click', handlers.onBack);
       this.root.querySelector('#ts-reset').addEventListener('click', handlers.onResetChanges);
-      this.root.querySelector('#ts-apply-all').addEventListener('click', handlers.onApplyAll);
+      this.root.querySelector('#ts-apply-all').addEventListener('click', async () => {
+        await this.playApplyAllAnimation({ diff, decisions, currentScore, projectedScore });
+        handlers.onApplyAll();
+      });
       this.root.querySelector('#ts-download').addEventListener('click', handlers.onDownload);
       this.root.querySelector('#ts-download-2').addEventListener('click', handlers.onDownload);
       this.root.querySelectorAll('.ts-level-btn').forEach((btn) => {
@@ -463,6 +491,109 @@
         if (decisions[key] !== false) n++;
       }));
       return n;
+    }
+
+    // Animates the score ring + number counting up (or down) from `from` to
+    // `to` over `duration` ms using an ease-out curve, redrawing the SVG ring
+    // on every frame so the stroke sweeps smoothly instead of jumping.
+    animateScoreTo(from, to, duration = 900) {
+      const ring = this.root.querySelector('#ts-score-ring');
+      const num = this.root.querySelector('#ts-score-num');
+      if (!ring || !num) return Promise.resolve();
+      const start = performance.now();
+      const ease = (t) => 1 - Math.pow(1 - t, 3); // easeOutCubic
+      return new Promise((resolve) => {
+        const step = (now) => {
+          const t = Math.min(1, (now - start) / duration);
+          const eased = ease(t);
+          const val = from + (to - from) * eased;
+          ring.innerHTML = scoreRing(val);
+          num.textContent = Math.round(val);
+          if (t < 1) requestAnimationFrame(step);
+          else resolve();
+        };
+        requestAnimationFrame(step);
+      });
+    }
+
+    // Small celebratory confetti burst around the score badge — used when
+    // "Apply all" lands the projected score at a strong match (>= 80).
+    launchConfetti(anchorEl) {
+      if (!anchorEl) return;
+      const rect = anchorEl.getBoundingClientRect();
+      const colors = ['#16a34a', '#22c55e', '#f59e0b', '#2563eb', '#dc2626'];
+      const originX = rect.left + rect.width / 2;
+      const originY = rect.top + rect.height / 2;
+      for (let i = 0; i < 22; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'ts-confetti-piece';
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 60 + Math.random() * 90;
+        piece.style.left = `${originX}px`;
+        piece.style.top = `${originY}px`;
+        piece.style.background = colors[i % colors.length];
+        piece.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+        piece.style.setProperty('--dy', `${Math.sin(angle) * dist - 40}px`);
+        piece.style.setProperty('--rot', `${(Math.random() * 720 - 360)}deg`);
+        piece.style.animationDuration = `${700 + Math.random() * 500}ms`;
+        document.body.appendChild(piece);
+        piece.addEventListener('animationend', () => piece.remove());
+      }
+    }
+
+    // Plays the full "Apply all" sequence in-place on the currently rendered
+    // studio DOM: staggers each pending suggestion collapsing its old text
+    // and flashing its new text in as accepted, while the score ring counts
+    // up in parallel. Resolves once everything has settled, so the caller
+    // can then commit the underlying decisions/state and (optionally)
+    // re-render normally — the re-render will match what's already on
+    // screen, so there's no visible jump.
+    async playApplyAllAnimation({ diff, decisions, currentScore, projectedScore }) {
+      const applyBtn = this.root.querySelector('#ts-apply-all');
+      const scoreAnchor = this.root.querySelector('.ts-score');
+      if (applyBtn) {
+        applyBtn.disabled = true;
+        applyBtn.classList.add('ts-apply-busy');
+        applyBtn.textContent = 'Applying changes…';
+      }
+
+      // Collect every diff node that is currently NOT accepted (decisions[key] === false)
+      // — those are the ones about to flip to accepted and need the animation.
+      const pendingKeys = [];
+      if (diff.summary.old.trim() !== diff.summary.new.trim() && decisions.summary === false) pendingKeys.push('summary');
+      diff.experience.forEach((r) => r.bullets.forEach((b, bi) => {
+        if (b.action === 'keep') return;
+        const key = `exp:${r.index}:${bi}`;
+        if (decisions[key] === false) pendingKeys.push(key);
+      }));
+
+      const stagger = 90;
+      const perItemDuration = 550;
+      const nodeAnimations = pendingKeys.map((key, i) => new Promise((resolve) => {
+        setTimeout(() => {
+          const node = this.root.querySelector(`[data-key="${CSS.escape(key)}"]`);
+          if (!node) return resolve();
+          const oldEl = node.querySelector('.ts-diff-old');
+          if (oldEl) oldEl.classList.add('ts-anim-old-collapse');
+          node.classList.add('ts-anim-flash');
+          const yesBtn = node.querySelector('.ts-act.yes');
+          if (yesBtn) { yesBtn.classList.add('active', 'ts-anim-pop'); }
+          const noBtn = node.querySelector('.ts-act.no');
+          if (noBtn) noBtn.classList.remove('active');
+          setTimeout(resolve, perItemDuration);
+        }, i * stagger);
+      }));
+
+      const totalNodeTime = pendingKeys.length ? (pendingKeys.length - 1) * stagger + perItemDuration : 0;
+      const scoreAnimation = this.animateScoreTo(currentScore, projectedScore, Math.max(700, Math.min(1400, totalNodeTime || 900)));
+
+      await Promise.all([...nodeAnimations, scoreAnimation]);
+
+      if (projectedScore >= 80 && scoreAnchor) this.launchConfetti(scoreAnchor);
+      if (applyBtn) {
+        applyBtn.disabled = false;
+        applyBtn.classList.remove('ts-apply-busy');
+      }
     }
 
     renderDownloadDrawer(view, handlers) {

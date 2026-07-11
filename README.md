@@ -19,7 +19,7 @@ Built with vanilla HTML/CSS/JavaScript on the frontend and Node.js (Express) + M
 - Frontend: HTML, CSS, vanilla JavaScript, Chart.js (CDN) for the trend chart
 - Backend: Node.js, Express
 - Database: MongoDB via Mongoose — use a free MongoDB Atlas cluster
-- AI: Google Gemini (`gemini-flash-latest`, Google's current-gen Flash alias) for resume parsing and tailoring, with a regex fallback if the key is absent
+- AI: Google Gemini (`gemini-2.5-flash`) for resume parsing and tailoring, with a regex fallback if the key is absent
 - Auth: JWT in an httpOnly cookie, bcrypt-hashed passwords
 - Deployment: Vercel (serverless function + static hosting)
 
