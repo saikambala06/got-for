@@ -798,25 +798,25 @@ async function downloadHtmlAsPdf(html, fileBase) {
   const btn = document.getElementById('docDownloadBtn') || document.getElementById('qdDownload') || document.getElementById('tl-go-download');
   const prevText = btn ? btn.textContent : null;
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
-  // A4 width in CSS px at 96dpi — giving html2canvas an explicit, normal-flow
-  // element to measure avoids the "blank page" bug that happens when it's
-  // asked to rasterize an element that is itself position:fixed / far off-screen.
+  // A4 width in CSS px at 96dpi.
   const PAGE_WIDTH_PX = 794;
   let outer = null;
   try {
     await loadHtml2Pdf();
 
-    // Outer wrapper does the "keep it off-screen" trick. It must NOT clip
-    // (no width:0/overflow:hidden) — that was clipping the rendered content
-    // and causing the cut-off/truncated PDF output.
+    // IMPORTANT: don't hide this off-screen with a huge negative offset
+    // (e.g. left:-99999px) — that's a known source of clipped/corrupted
+    // captures in html2canvas. Instead render it on-screen at (0,0), on
+    // top of everything, behind an opaque backdrop so it's not disruptive —
+    // this keeps the element in a normal, well-behaved viewport position.
     outer = document.createElement('div');
     outer.style.position = 'fixed';
     outer.style.top = '0';
-    outer.style.left = '-99999px';
+    outer.style.left = '0';
+    outer.style.zIndex = '999999';
+    outer.style.background = '#ffffff';
     outer.style.overflow = 'visible';
 
-    // ...but the element handed to html2canvas is a plain, normally-positioned
-    // child with a fixed width, so it always lays out and measures correctly.
     const inner = document.createElement('div');
     inner.style.position = 'static';
     inner.style.width = `${PAGE_WIDTH_PX}px`;
@@ -835,7 +835,7 @@ async function downloadHtmlAsPdf(html, fileBase) {
       .set({
         margin: 0,
         filename: `${fileBase}.pdf`,
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: PAGE_WIDTH_PX },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: PAGE_WIDTH_PX, x: 0, y: 0 },
         jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'] }
       })
@@ -1165,6 +1165,7 @@ function renderDocEditor() {
   const frame = document.getElementById('docFrame');
   frame.onload = fitDocFrameToContent;
   frame.srcdoc = html;
+  updateDownloadBtnLabel();
 }
 
 // Measures the actual rendered height of the resume document inside the
@@ -1233,6 +1234,11 @@ document.getElementById('docFilename').addEventListener('input', e => {
   state.editor.filename = e.target.value;
 });
 
+function updateDownloadBtnLabel() {
+  const fmt = (state.qd.format || 'pdf').toUpperCase();
+  document.getElementById('docDownloadBtn').textContent = `⬇ Download ${fmt}`;
+}
+
 document.getElementById('docDownloadCaret').addEventListener('click', (e) => {
   e.stopPropagation();
   const menu = document.getElementById('docDownloadMenu');
@@ -1242,17 +1248,15 @@ document.addEventListener('click', (e) => {
   const menu = document.getElementById('docDownloadMenu');
   if (menu.style.display === 'block' && !e.target.closest('.doc-download-split')) menu.style.display = 'none';
 });
+// Clicking a format in the menu only SELECTS it (updates the main button's
+// label) — it does not download. The actual download happens when the
+// main "Download" button is clicked, using whichever format was selected.
 document.getElementById('docDownloadMenu').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-format]');
   if (!btn) return;
   document.getElementById('docDownloadMenu').style.display = 'none';
   state.qd.format = btn.dataset.format;
-  downloadResume(projectedResume(), {
-    ...state.qd,
-    fontFamily: state.editor.fontFamily,
-    fontSize: state.editor.fontSize,
-    lineHeight: state.editor.lineHeight
-  }, state.editor.filename);
+  updateDownloadBtnLabel();
 });
 document.getElementById('docDownloadBtn').addEventListener('click', () => {
   downloadResume(projectedResume(), {
@@ -1262,6 +1266,7 @@ document.getElementById('docDownloadBtn').addEventListener('click', () => {
     lineHeight: state.editor.lineHeight
   }, state.editor.filename);
 });
+updateDownloadBtnLabel();
 
 loadResumes().then(() => {
   if (qp.get('mode') === 'quick') {
