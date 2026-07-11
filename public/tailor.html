@@ -424,6 +424,75 @@ function scoreRing(percent, size = 46) {
   </svg>`;
 }
 
+/* ---- animated ATS match-score badge ----
+   Same ring+number as scoreRing(), but keeps the SVG node persistent
+   across re-renders so the score can smoothly count up/down between
+   values instead of jumping instantly. Used so the badge starts at the
+   resume's real "before any AI changes" score and only animates to the
+   tailored score once the person actually applies changes. */
+let _scoreAnimFrame = null;
+function _setScoreRingValue(fillEl, textEl, numEl, val, c) {
+  const p = Math.max(0, Math.min(100, val));
+  const offset = c - (p / 100) * c;
+  const color = p >= 70 ? 'var(--green)' : p >= 40 ? '#d97706' : '#ff6b81';
+  fillEl.setAttribute('stroke-dashoffset', offset);
+  fillEl.setAttribute('stroke', color);
+  const rounded = Math.round(p);
+  textEl.textContent = rounded;
+  numEl.textContent = rounded;
+}
+
+function updateScoreBadge(currentScore, baselineScore, allAcceptedScore, animate) {
+  const container = document.getElementById('tl-score');
+  const size = 46, r = (size - 8) / 2, c = 2 * Math.PI * r;
+  let fill = document.getElementById('tl-score-fill');
+
+  if (!fill) {
+    container.innerHTML = `
+      <div><svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="var(--border)" stroke-width="5" fill="none"/>
+        <circle id="tl-score-fill" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="var(--green)" stroke-width="5" fill="none"
+          stroke-dasharray="${c}" stroke-dashoffset="${c}" stroke-linecap="round" transform="rotate(-90 ${size / 2} ${size / 2})"/>
+        <text id="tl-score-text" x="${size / 2}" y="${size / 2 + 4}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text)">0</text>
+      </svg></div>
+      <div class="tl-score-copy">MATCH SCORE<br/><b id="tl-score-num">0</b><span id="tl-score-extra"></span></div>`;
+    fill = document.getElementById('tl-score-fill');
+    state.badgeDisplayedScore = 0;
+  }
+
+  const textEl = document.getElementById('tl-score-text');
+  const numEl = document.getElementById('tl-score-num');
+  const extraEl = document.getElementById('tl-score-extra');
+  extraEl.innerHTML = `
+    ${currentScore !== baselineScore ? ` <span style="color:var(--text-faint);font-weight:400;">(was ${baselineScore})</span>` : ''}
+    ${allAcceptedScore > currentScore ? ` → ~${allAcceptedScore} if you accept all` : ''}`;
+
+  const startScore = state.badgeDisplayedScore ?? currentScore;
+  if (_scoreAnimFrame) cancelAnimationFrame(_scoreAnimFrame);
+
+  if (!animate || startScore === currentScore) {
+    _setScoreRingValue(fill, textEl, numEl, currentScore, c);
+    state.badgeDisplayedScore = currentScore;
+    return;
+  }
+
+  const duration = 700;
+  const t0 = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    const val = startScore + (currentScore - startScore) * eased;
+    _setScoreRingValue(fill, textEl, numEl, val, c);
+    if (t < 1) {
+      _scoreAnimFrame = requestAnimationFrame(step);
+    } else {
+      state.badgeDisplayedScore = currentScore;
+      _scoreAnimFrame = null;
+    }
+  };
+  _scoreAnimFrame = requestAnimationFrame(step);
+}
+
 /* ---- real ATS-style match score ----
    Extracts significant keywords straight from the job description, then
    measures how many actually show up anywhere in the resume's text
@@ -779,18 +848,41 @@ function downloadResume(resume, opts, filenameOverride) {
 
 /* Renders the resume HTML off-screen and saves it as an actual PDF file
    (instead of opening the browser print dialog). Uses html2pdf.js (html2canvas + jsPDF),
-   loaded lazily from CDN on first use. */
+   loaded lazily from CDN on first use. Falls back across multiple CDNs and
+   times out cleanly instead of hanging, since a single blocked/unreachable
+   host (ad-blockers and some corporate networks block cdnjs.cloudflare.com)
+   used to leave PDF download permanently broken with a generic error. */
+const HTML2PDF_SOURCES = [
+  'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js',
+  'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js',
+  'https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js'
+];
 let _html2pdfLoading = null;
+function loadScriptWithTimeout(src, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    const timer = setTimeout(() => { s.remove(); reject(new Error(`Timed out loading ${src}`)); }, timeoutMs);
+    s.src = src;
+    s.onload = () => { clearTimeout(timer); resolve(); };
+    s.onerror = () => { clearTimeout(timer); s.remove(); reject(new Error(`Could not load ${src}`)); };
+    document.head.appendChild(s);
+  });
+}
 function loadHtml2Pdf() {
   if (window.html2pdf) return Promise.resolve();
   if (_html2pdfLoading) return _html2pdfLoading;
-  _html2pdfLoading = new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('Could not load PDF generator'));
-    document.head.appendChild(s);
-  });
+
+  _html2pdfLoading = (async () => {
+    for (const src of HTML2PDF_SOURCES) {
+      try {
+        await loadScriptWithTimeout(src);
+        if (window.html2pdf) return;
+      } catch (e) { /* try the next source */ }
+    }
+    _html2pdfLoading = null; // allow a later retry once the network recovers
+    throw new Error('Could not load the PDF generator — check your connection and try again.');
+  })();
+
   return _html2pdfLoading;
 }
 
@@ -831,16 +923,25 @@ async function downloadHtmlAsPdf(html, fileBase) {
 
     const target = inner.querySelector('body') || inner;
 
-    await window.html2pdf()
-      .set({
-        margin: 0,
-        filename: `${fileBase}.pdf`,
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: PAGE_WIDTH_PX, x: 0, y: 0 },
-        jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'] }
-      })
-      .from(target)
-      .save();
+    try {
+      await window.html2pdf()
+        .set({
+          margin: 0,
+          filename: `${fileBase}.pdf`,
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: PAGE_WIDTH_PX, x: 0, y: 0 },
+          jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'] }
+        })
+        .from(target)
+        .save();
+    } catch (captureErr) {
+      // A tainted/blocked canvas (e.g. a cross-origin profile photo) throws a
+      // cryptic SecurityError here — surface something the person can act on.
+      const msg = /tainted|cross-origin|SecurityError/i.test(String(captureErr?.message || captureErr))
+        ? 'Could not generate the PDF because an image on the resume blocked capture. Try removing or re-uploading it.'
+        : (captureErr?.message || 'Could not generate the PDF. Please try again.');
+      throw new Error(msg);
+    }
   } catch (e) {
     showToast(e.message || 'Could not generate PDF', 'error');
   } finally {
@@ -942,7 +1043,7 @@ async function runTailor(level) {
   return tailored;
 }
 
-function renderReviewSheet() {
+function renderReviewSheet(opts = {}) {
   const diff = state.diff, decisions = state.decisions, p = withProfileFallback(state.resume.personal);
 
   const summaryChanged = diff.summary.old.trim() !== diff.summary.new.trim();
@@ -1005,7 +1106,7 @@ function renderReviewSheet() {
   document.getElementById('reviewSheet').querySelectorAll('[data-kind]').forEach(btn => {
     btn.addEventListener('click', () => {
       state.decisions[btn.dataset.kind] = btn.dataset.value === 'true';
-      renderReviewSheet();
+      renderReviewSheet({ animateScore: true });
     });
   });
 
@@ -1017,11 +1118,7 @@ function renderReviewSheet() {
   const currentScore = computeAtsScore(projectedResume());
   const allAcceptedResume = projectedResume({ acceptAll: true });
   const allAcceptedScore = computeAtsScore(allAcceptedResume);
-  document.getElementById('tl-score').innerHTML = `
-    <div>${scoreRing(currentScore)}</div>
-    <div class="tl-score-copy">MATCH SCORE<br/><b>${currentScore}</b>
-      ${currentScore !== baselineScore ? `<span style="color:var(--text-faint);font-weight:400;">(was ${baselineScore})</span>` : ''}
-      ${allAcceptedScore > currentScore ? ` → ~${allAcceptedScore} if you accept all` : ''}</div>`;
+  updateScoreBadge(currentScore, baselineScore, allAcceptedScore, !!opts.animateScore);
 
   const total = countChanges(diff);
   const accepted = countAccepted(diff, decisions);
@@ -1040,9 +1137,10 @@ document.getElementById('tl-continue').addEventListener('click', async () => {
       document.querySelector('[data-tab="quick"]').click();
     } else {
       await runTailor('high');
-      resetDecisions();
+      rejectAllDecisions(); // nothing accepted yet — badge should reflect the real, untailored ATS score
       document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.toggle('active', b.dataset.level === 'high'));
-      renderReviewSheet();
+      state.badgeDisplayedScore = undefined; // force the very first paint to snap in, not animate from a stale 0
+      renderReviewSheet({ animateScore: false });
       document.getElementById('pickerCard').style.display = 'none';
       document.getElementById('reviewOut').style.display = 'block';
       document.getElementById('qdTabBtn').disabled = false;
@@ -1059,18 +1157,21 @@ document.getElementById('reviewLevels').addEventListener('click', async (e) => {
   document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   await runTailor(btn.dataset.level);
-  resetDecisions();
-  renderReviewSheet();
+  rejectAllDecisions();
+  renderReviewSheet({ animateScore: true });
 });
 
+// "Apply all changes" is the moment the person actually opts into the AI's
+// suggestions — this is when the badge should animate from the real,
+// untailored ATS score up to the real recomputed score with every change applied.
 document.getElementById('tl-apply-all').addEventListener('click', () => {
   resetDecisions();
-  renderReviewSheet();
+  renderReviewSheet({ animateScore: true });
 });
 
 document.getElementById('tl-reset-changes').addEventListener('click', () => {
   rejectAllDecisions();
-  renderReviewSheet();
+  renderReviewSheet({ animateScore: true });
 });
 
 document.getElementById('tl-go-download').addEventListener('click', () => {
