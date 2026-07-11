@@ -165,8 +165,8 @@
     background:var(--surface-2); color:var(--text); cursor:pointer; font-size:14px; }
   .doc-tool-group input[type="range"]{ width:110px; }
   .doc-preview-wrap{ flex:1; overflow:auto; display:flex; justify-content:center; padding:30px; background:var(--bg-soft); }
-  .doc-page{ background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.4); height:fit-content; }
-  .doc-page iframe{ width:794px; height:1123px; border:none; display:block; transform-origin:top center; }
+  .doc-page{ background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.4); overflow:hidden; }
+  .doc-page iframe{ width:794px; height:1123px; border:none; display:block; transform-origin:top left; }
   .doc-bottombar{ display:flex; align-items:center; gap:12px; padding:14px 20px; border-top:1px solid var(--border);
     background:var(--surface); }
   .doc-filename-input{ flex:0 0 auto; width:280px; padding:9px 12px; border-radius:8px; border:1px solid var(--border);
@@ -363,7 +363,7 @@
     <button class="btn" id="docBackBtn">← Templates</button>
   </div>
   <div class="doc-preview-wrap">
-    <div class="doc-page"><iframe id="docFrame"></iframe></div>
+    <div class="doc-page"><iframe id="docFrame" scrolling="no"></iframe></div>
   </div>
   <div class="doc-bottombar">
     <input type="text" id="docFilename" class="doc-filename-input" />
@@ -806,14 +806,14 @@ async function downloadHtmlAsPdf(html, fileBase) {
   try {
     await loadHtml2Pdf();
 
-    // Outer wrapper does the "keep it off-screen" trick...
+    // Outer wrapper does the "keep it off-screen" trick. It must NOT clip
+    // (no width:0/overflow:hidden) — that was clipping the rendered content
+    // and causing the cut-off/truncated PDF output.
     outer = document.createElement('div');
     outer.style.position = 'fixed';
     outer.style.top = '0';
-    outer.style.left = '0';
-    outer.style.width = '0';
-    outer.style.height = '0';
-    outer.style.overflow = 'hidden';
+    outer.style.left = '-99999px';
+    outer.style.overflow = 'visible';
 
     // ...but the element handed to html2canvas is a plain, normally-positioned
     // child with a fixed width, so it always lays out and measures correctly.
@@ -1162,8 +1162,35 @@ function renderDocEditor() {
     fontSize: state.editor.fontSize,
     lineHeight: state.editor.lineHeight
   });
-  document.getElementById('docFrame').srcdoc = html;
-  document.getElementById('docFrame').style.transform = `scale(${state.editor.zoom / 100})`;
+  const frame = document.getElementById('docFrame');
+  frame.onload = fitDocFrameToContent;
+  frame.srcdoc = html;
+}
+
+// Measures the actual rendered height of the resume document inside the
+// iframe (it may be taller than one A4 page) and sizes both the iframe and
+// its .doc-page wrapper to match — so there's no internal iframe scrollbar
+// ("scroll bar in white sheet"), and zooming resizes the real layout box
+// instead of just visually stretching past the container's edges.
+function fitDocFrameToContent() {
+  const frame = document.getElementById('docFrame');
+  const page = frame.closest('.doc-page');
+  let contentHeight = 1123;
+  try {
+    const doc = frame.contentDocument;
+    if (doc && doc.documentElement) {
+      contentHeight = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight, 1123);
+    }
+  } catch (e) { /* cross-origin safety net, keep default */ }
+
+  const zoom = state.editor.zoom / 100;
+  frame.style.width = '794px';
+  frame.style.height = `${contentHeight}px`;
+  frame.style.transform = `scale(${zoom})`;
+  if (page) {
+    page.style.width = `${794 * zoom}px`;
+    page.style.height = `${contentHeight * zoom}px`;
+  }
 }
 
 document.getElementById('docBackBtn').addEventListener('click', () => {
@@ -1199,7 +1226,7 @@ document.getElementById('docLineHeight').addEventListener('input', e => {
 document.getElementById('docZoom').addEventListener('input', e => {
   state.editor.zoom = parseInt(e.target.value, 10);
   document.getElementById('docZoomLabel').textContent = `${state.editor.zoom}%`;
-  document.getElementById('docFrame').style.transform = `scale(${state.editor.zoom / 100})`;
+  fitDocFrameToContent();
 });
 
 document.getElementById('docFilename').addEventListener('input', e => {
