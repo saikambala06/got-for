@@ -55,6 +55,7 @@ router.get('/stats', async (req, res) => {
 
     const monthly = jobs.filter((j) => new Date(j.appliedOn) >= startOfMonth).length;
     const last7 = jobs.filter((j) => new Date(j.appliedOn) >= sevenDaysAgo).length;
+    const rejectedMonthly = jobs.filter((j) => j.status === 'Rejected' && new Date(j.updatedAt || j.appliedOn) >= startOfMonth).length;
 
     // Build a 30-day trend series
     const days = [];
@@ -69,13 +70,23 @@ router.get('/stats', async (req, res) => {
         const ad = new Date(j.appliedOn);
         return ad >= d && ad < next;
       }).length;
-      return { date: d.toISOString().slice(0, 10), count };
+      // Rejections are tracked by when the job's status was last touched
+      // (updatedAt) — there's no dedicated "rejectedOn" field, so a job
+      // counts as "rejected that day" if it's currently Rejected and was
+      // last updated within that day's window.
+      const rejected = jobs.filter((j) => {
+        if (j.status !== 'Rejected') return false;
+        const ud = new Date(j.updatedAt || j.appliedOn);
+        return ud >= d && ud < next;
+      }).length;
+      return { date: d.toISOString().slice(0, 10), count, rejected };
     });
 
     res.json({
       total: jobs.length,
       monthly,
       last7,
+      rejectedMonthly,
       counts,
       favorites,
       trend
