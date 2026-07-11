@@ -91,14 +91,6 @@ const handlers = {
     return body.job;
   },
 
-  async 'jobs:trackView'({ title, company, jobUrl }) {
-    const body = await apiFetch('/api/jobs/track-view', {
-      method: 'POST',
-      body: JSON.stringify({ title, company, jobUrl })
-    });
-    return body.view;
-  },
-
   async 'job:analyze'({ jobTitle, company, jobDescription }) {
     const body = await apiFetch('/api/jobs/analyze', {
       method: 'POST',
