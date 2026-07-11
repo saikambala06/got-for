@@ -43,26 +43,15 @@
       </div>
     </div>
 
-    <div class="grid" style="grid-template-columns: 2fr 1fr; align-items:start;">
-      <div class="card section-card">
-        <div class="section-head">
-          <div>
-            <h3>Application trend</h3>
-            <p>Daily applications submitted over the selected period.</p>
-          </div>
+    <div class="card section-card">
+      <div class="section-head">
+        <div>
+          <h3>Application trend</h3>
+          <p>Applications submitted vs. rejections received over the selected period. Hover a point to see that day's breakdown.</p>
         </div>
-        <canvas id="trendChart" height="110"></canvas>
+        <div id="trendBadge" style="font-size:12.5px;color:var(--text-dim);white-space:nowrap;"></div>
       </div>
-
-      <div class="card section-card">
-        <div class="section-head">
-          <div>
-            <h3>Pipeline breakdown</h3>
-            <p>Where things stand right now.</p>
-          </div>
-        </div>
-        <div id="pipelineList" style="display:flex; flex-direction:column; gap:14px;"></div>
-      </div>
+      <canvas id="trendChart" height="95"></canvas>
     </div>
 
     <div class="card section-card" style="margin-top:20px;">
@@ -82,13 +71,6 @@
 <script src="/js/sidebar.js"></script>
 <script>
 let chart;
-const STATUS_META = {
-  Applied: { color: '#6f8dff' },
-  Interviewing: { color: '#ff9a4d' },
-  Offer: { color: '#36d399' },
-  Rejected: { color: '#ff6b81' },
-  Archived: { color: '#9aa1c3' }
-};
 
 async function loadDashboard() {
   await requireSession();
@@ -100,59 +82,96 @@ async function loadDashboard() {
     document.getElementById('statMonthly').textContent = stats.monthly;
     document.getElementById('statWeekly').textContent = stats.last7;
 
-    // Trend chart
+    // Trend chart — Applied vs Rejected, animated, with a rich hover tooltip
+    // per point/month so pointing at a day (or a month, when the 30-day view
+    // is bucketed) reveals the applied/rejected breakdown for that spot.
     const trend = period === '7' ? stats.trend.slice(-7) : stats.trend;
     const labels = trend.map((p) => new Date(p.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
-    const data = trend.map((p) => p.count);
+    const appliedData = trend.map((p) => p.count);
+    const rejectedData = trend.map((p) => p.rejected || 0);
+
+    document.getElementById('trendBadge').textContent = `📉 ${stats.rejectedMonthly || 0} rejected this month`;
 
     const ctx = document.getElementById('trendChart').getContext('2d');
     if (chart) chart.destroy();
-    const gradient = ctx.createLinearGradient(0, 0, 0, 220);
-    gradient.addColorStop(0, 'rgba(255,154,77,0.35)');
-    gradient.addColorStop(1, 'rgba(255,154,77,0)');
+    const appliedGradient = ctx.createLinearGradient(0, 0, 0, 220);
+    appliedGradient.addColorStop(0, 'rgba(111,141,255,0.35)');
+    appliedGradient.addColorStop(1, 'rgba(111,141,255,0)');
+    const rejectedGradient = ctx.createLinearGradient(0, 0, 0, 220);
+    rejectedGradient.addColorStop(0, 'rgba(255,107,129,0.28)');
+    rejectedGradient.addColorStop(1, 'rgba(255,107,129,0)');
 
     chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels,
-        datasets: [{
-          data,
-          borderColor: '#ff9a4d',
-          backgroundColor: gradient,
-          fill: true,
-          tension: 0.35,
-          pointRadius: 2.5,
-          pointBackgroundColor: '#ff9a4d',
-          borderWidth: 2.5
-        }]
+        datasets: [
+          {
+            label: 'Applied',
+            data: appliedData,
+            borderColor: '#6f8dff',
+            backgroundColor: appliedGradient,
+            fill: true,
+            tension: 0.35,
+            pointRadius: 3,
+            pointHoverRadius: 7,
+            pointHoverBorderWidth: 3,
+            pointBackgroundColor: '#6f8dff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: '#6f8dff',
+            borderWidth: 2.5
+          },
+          {
+            label: 'Rejected',
+            data: rejectedData,
+            borderColor: '#ff6b81',
+            backgroundColor: rejectedGradient,
+            fill: true,
+            tension: 0.35,
+            pointRadius: 3,
+            pointHoverRadius: 7,
+            pointHoverBorderWidth: 3,
+            pointBackgroundColor: '#ff6b81',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: '#ff6b81',
+            borderWidth: 2.5
+          }
+        ]
       },
       options: {
-        plugins: { legend: { display: false } },
+        animation: { duration: 900, easing: 'easeOutQuart' },
+        interaction: { mode: 'index', intersect: false },
+        hover: { mode: 'index', intersect: false, animationDuration: 200 },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            align: 'end',
+            labels: { color: '#9aa1c3', usePointStyle: true, boxWidth: 8, font: { size: 12 } }
+          },
+          tooltip: {
+            enabled: true,
+            backgroundColor: 'rgba(20,22,34,0.95)',
+            titleColor: '#fff',
+            bodyColor: '#d7dae8',
+            borderColor: 'rgba(255,255,255,0.08)',
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 10,
+            displayColors: true,
+            usePointStyle: true,
+            callbacks: {
+              title: (items) => items[0]?.label || '',
+              label: (item) => `${item.dataset.label}: ${item.raw}`
+            }
+          }
+        },
         scales: {
           x: { grid: { display: false }, ticks: { color: '#6a7196', maxTicksLimit: 8, font: { size: 11 } } },
           y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6a7196', precision: 0, font: { size: 11 } } }
         }
       }
     });
-
-    // Pipeline breakdown
-    const pipelineEl = document.getElementById('pipelineList');
-    const order = ['Applied', 'Interviewing', 'Offer', 'Rejected', 'Archived'];
-    const max = Math.max(1, ...order.map((s) => stats.counts[s] || 0));
-    pipelineEl.innerHTML = order.map((s) => {
-      const count = stats.counts[s] || 0;
-      const pct = Math.round((count / max) * 100);
-      return `
-        <div>
-          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
-            <span class="pill pill-${s}"><span class="pill-dot"></span>${s}</span>
-            <span style="color:var(--text-dim)">${count}</span>
-          </div>
-          <div style="height:6px;background:var(--surface-2);border-radius:6px;overflow:hidden;">
-            <div style="height:100%;width:${pct}%;background:${STATUS_META[s].color};border-radius:6px;"></div>
-          </div>
-        </div>`;
-    }).join('');
   } catch (err) {
     showToast(err.message, 'error');
   }
