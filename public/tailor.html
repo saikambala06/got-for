@@ -54,8 +54,9 @@
   .tl-level-btn:disabled{ opacity:.6; cursor:default; }
   .tl-sheet{ max-width:720px; margin:0 auto; background:var(--surface); border:1px solid var(--border);
     border-radius:var(--radius); padding:30px 36px; position:relative; min-height:160px; }
-  .tl-tailor-loading{ position:absolute; inset:0; background:var(--surface); border-radius:var(--radius);
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:5; }
+  .tl-tailor-loading{ position:absolute; inset:0; background:rgba(10,14,12,0.55); backdrop-filter:blur(4px);
+    -webkit-backdrop-filter:blur(4px); border-radius:var(--radius);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:50; }
   .tl-tailor-spinner{ width:34px; height:34px; border-radius:50%; border:3px solid var(--border);
     border-top-color:var(--green); animation:tlSpin .8s linear infinite; }
   .tl-tailor-loading-text{ font-size:13px; font-weight:600; color:var(--text-dim); }
@@ -235,7 +236,7 @@
           <button class="tl-continue" id="tl-continue">Continue →</button>
         </div>
 
-        <div id="reviewOut" style="display:none;">
+        <div id="reviewOut" style="display:none;position:relative;">
           <div class="tl-review-top">
             <span class="field-label" style="margin:0;">Tailoring level</span>
             <div class="tl-level-group" id="reviewLevels">
@@ -246,13 +247,7 @@
             <div style="flex:1;"></div>
             <div class="tl-score" id="tl-score"></div>
           </div>
-          <div class="tl-sheet-wrap" style="position:relative;">
-            <div class="tl-sheet" id="reviewSheet"></div>
-            <div class="tl-tailor-loading" id="reviewTailorLoading" style="display:none;">
-              <div class="tl-tailor-spinner"></div>
-              <div class="tl-tailor-loading-text" id="reviewTailorLoadingText">Tailoring in progress…</div>
-            </div>
-          </div>
+          <div class="tl-sheet" id="reviewSheet"></div>
           <div class="tl-bottombar">
             <button class="btn btn-primary" id="tl-apply-all">Apply all changes</button>
             <button class="link-btn" id="tl-reset-changes">Reset</button>
@@ -260,11 +255,15 @@
             <div style="flex:1;"></div>
             <button class="btn btn-primary" id="tl-go-download">Download resume →</button>
           </div>
+          <div class="tl-tailor-loading" id="reviewTailorLoading" style="display:none;">
+            <div class="tl-tailor-spinner"></div>
+            <div class="tl-tailor-loading-text" id="reviewTailorLoadingText">Tailoring in progress…</div>
+          </div>
         </div>
       </div>
 
       <!-- TAB 2: quick download -->
-      <div class="tl-panel" id="panel-quick">
+      <div class="tl-panel" id="panel-quick" style="position:relative;">
         <div class="qd-body">
           <div class="qd-left">
             <div class="qd-left-head">
@@ -273,10 +272,6 @@
             </div>
             <div class="qd-preview-wrap">
               <div class="qd-page"><iframe id="qdFrame"></iframe></div>
-              <div class="tl-tailor-loading" id="qdTailorLoading" style="display:none;">
-                <div class="tl-tailor-spinner"></div>
-                <div class="tl-tailor-loading-text" id="qdTailorLoadingText">Tailoring in progress…</div>
-              </div>
             </div>
             <div class="qd-foot" id="qdFoot"></div>
           </div>
@@ -342,6 +337,10 @@
             <button class="qd-download" id="qdDownload">↓ Download PDF</button>
             <div class="qd-note">Every quick download uses these settings. Change them anytime — we'll remember.</div>
           </div>
+        </div>
+        <div class="tl-tailor-loading" id="qdTailorLoading" style="display:none;">
+          <div class="tl-tailor-spinner"></div>
+          <div class="tl-tailor-loading-text" id="qdTailorLoadingText">Tailoring in progress…</div>
         </div>
       </div>
     </div>
