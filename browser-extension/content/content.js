@@ -263,56 +263,6 @@
     return Math.round((matched.length / total) * 100);
   }
 
-  // Full ATS-style match analysis: skills coverage, requirement-phrase
-  // (keyword) coverage, seniority/experience-level fit, and resume section
-  // completeness — combined into one weighted "overall" score. Used to
-  // drive both the headline match-score badge and the expandable
-  // "Match analysis" breakdown card in the Tailor Studio.
-  function computeAtsAnalysis(resumeLike, job) {
-    const total = job.skillsFound?.length || 0;
-    const clean = (resumeLike.skills || []).map((s) => cleanSkill(s));
-    const matchedSkills = total ? job.skillsFound.filter((s) => clean.some((rs) => skillsMatch(s, rs))) : [];
-    const missingSkills = total ? job.skillsFound.filter((s) => !matchedSkills.includes(s)) : [];
-    const skillsScore = total ? Math.round((matchedSkills.length / total) * 100) : 100;
-
-    const resumeText = [
-      resumeLike.summary || '',
-      (resumeLike.skills || []).join(' '),
-      (resumeLike.experience || []).map((e) => e.description || '').join(' ')
-    ].join(' ').toLowerCase();
-
-    const phrases = job.qualificationPhrases || [];
-    const matchedPhrases = phrases.filter((p) => {
-      const words = p.toLowerCase().split(/\W+/).filter((w) => w.length > 3);
-      if (!words.length) return false;
-      const hits = words.filter((w) => resumeText.includes(w));
-      return hits.length / words.length >= 0.4;
-    });
-    const keywordScore = phrases.length ? Math.round((matchedPhrases.length / phrases.length) * 100) : 100;
-
-    const seniority = ((job.experience && job.experience.seniority) || '').toLowerCase();
-    const experienceScore = !seniority ? 100 : (resumeText.includes(seniority) ? 100 : 60);
-
-    const hasSummary = !!(resumeLike.summary && resumeLike.summary.trim().length > 20);
-    const hasSkills = (resumeLike.skills || []).length >= 5;
-    const hasExperience = (resumeLike.experience || []).some((e) => (e.description || '').trim().length > 20);
-    const sectionsScore = Math.round(((hasSummary ? 1 : 0) + (hasSkills ? 1 : 0) + (hasExperience ? 1 : 0)) / 3 * 100);
-
-    const overall = Math.round(skillsScore * 0.5 + keywordScore * 0.25 + experienceScore * 0.15 + sectionsScore * 0.10);
-
-    return {
-      overall,
-      breakdown: [
-        { key: 'skills', label: 'Skills match', score: skillsScore, detail: total ? `${matchedSkills.length}/${total} JD skills found` : 'No skills detected in JD' },
-        { key: 'keywords', label: 'Keyword coverage', score: keywordScore, detail: phrases.length ? `${matchedPhrases.length}/${phrases.length} requirement phrases covered` : 'No requirement phrases detected' },
-        { key: 'experience', label: 'Experience level', score: experienceScore, detail: seniority ? `Target seniority: ${seniority}` : 'No seniority requirement detected' },
-        { key: 'sections', label: 'Resume completeness', score: sectionsScore, detail: 'Summary, skills & experience sections' }
-      ],
-      matchedSkills,
-      missingSkills
-    };
-  }
-
   // Builds the skills/summary/experience the person would end up with if
   // they accepted exactly the changes currently marked "accepted".
   function projectedResume() {
@@ -389,18 +339,16 @@
 
   function renderStudio(job) {
     const proj = projectedResume();
-    const currentAnalysis = computeAtsAnalysis(studioState.resume, job);
-    const projectedAnalysis = computeAtsAnalysis(proj, job);
+    const currentScore = matchScoreFor(studioState.resume.skills, job);
+    const projectedScore = matchScoreFor(proj.skills, job);
     studio.render(
       {
         resume: studioState.resume,
         diff: studioState.diff,
         tailoringLevel: studioState.tailoringLevel,
         decisions: studioState.decisions,
-        currentScore: currentAnalysis.overall,
-        projectedScore: projectedAnalysis.overall,
-        currentAnalysis,
-        projectedAnalysis
+        currentScore,
+        projectedScore
       },
       {
         onBack: () => studio.unmount(),
