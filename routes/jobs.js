@@ -1,5 +1,6 @@
 const express = require('express');
 const Job = require('../models/Job');
+const JobView = require('../models/JobView');
 const requireAuth = require('../middleware/auth');
 const { analyzeJobWithAI } = require('../utils/aiResumeParser');
 
@@ -36,11 +37,43 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Log a "job viewed" event — called once by the browser extension each time
+// it successfully parses a job posting page for a logged-in user. Deduped
+// per user+URL+day so re-opening the panel or reloading the same posting
+// doesn't inflate the count.
+router.post('/track-view', async (req, res) => {
+  try {
+    const { title, company, jobUrl } = req.body || {};
+    const userId = req.userId;
+
+    if (jobUrl) {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const existing = await JobView.findOne({ user: userId, jobUrl, viewedOn: { $gte: startOfDay } });
+      if (existing) {
+        return res.json({ view: existing, deduped: true });
+      }
+    }
+
+    const view = await JobView.create({
+      user: userId,
+      title: title || '',
+      company: company || '',
+      jobUrl: jobUrl || ''
+    });
+    res.status(201).json({ view });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not log job view' });
+  }
+});
+
 // Stats for dashboard overview
 router.get('/stats', async (req, res) => {
   try {
     const userId = req.userId;
     const jobs = await Job.find({ user: userId });
+    const views = await JobView.find({ user: userId });
 
     const counts = { Applied: 0, Interviewing: 0, Offer: 0, Rejected: 0, Archived: 0 };
     let favorites = 0;
@@ -55,7 +88,7 @@ router.get('/stats', async (req, res) => {
 
     const monthly = jobs.filter((j) => new Date(j.appliedOn) >= startOfMonth).length;
     const last7 = jobs.filter((j) => new Date(j.appliedOn) >= sevenDaysAgo).length;
-    const rejectedMonthly = jobs.filter((j) => j.status === 'Rejected' && new Date(j.updatedAt || j.appliedOn) >= startOfMonth).length;
+    const viewedMonthly = views.filter((v) => new Date(v.viewedOn) >= startOfMonth).length;
 
     // Build a 30-day trend series
     const days = [];
@@ -66,27 +99,25 @@ router.get('/stats', async (req, res) => {
     }
     const trend = days.map((d) => {
       const next = new Date(d.getTime() + 24 * 60 * 60 * 1000);
+      // Applied — jobs whose application date falls on this day.
       const count = jobs.filter((j) => {
         const ad = new Date(j.appliedOn);
         return ad >= d && ad < next;
       }).length;
-      // Rejections are tracked by when the job's status was last touched
-      // (updatedAt) — there's no dedicated "rejectedOn" field, so a job
-      // counts as "rejected that day" if it's currently Rejected and was
-      // last updated within that day's window.
-      const rejected = jobs.filter((j) => {
-        if (j.status !== 'Rejected') return false;
-        const ud = new Date(j.updatedAt || j.appliedOn);
-        return ud >= d && ud < next;
+      // Viewed — real job-view events logged by the browser extension each
+      // time a posting was opened (see POST /track-view).
+      const viewed = views.filter((v) => {
+        const vd = new Date(v.viewedOn);
+        return vd >= d && vd < next;
       }).length;
-      return { date: d.toISOString().slice(0, 10), count, rejected };
+      return { date: d.toISOString().slice(0, 10), count, viewed };
     });
 
     res.json({
       total: jobs.length,
       monthly,
       last7,
-      rejectedMonthly,
+      viewedMonthly,
       counts,
       favorites,
       trend

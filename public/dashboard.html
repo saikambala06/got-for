@@ -46,8 +46,8 @@
     <div class="card section-card">
       <div class="section-head">
         <div>
-          <h3>Application trend</h3>
-          <p>Applications submitted vs. rejections received over the selected period. Hover a point to see that day's breakdown.</p>
+          <h3>Application Trends</h3>
+          <p>Track the number of jobs viewed and jobs applied over time. Hover a point to see that day's breakdown.</p>
         </div>
         <div id="trendBadge" style="font-size:12.5px;color:var(--text-dim);white-space:nowrap;"></div>
       </div>
@@ -82,24 +82,23 @@ async function loadDashboard() {
     document.getElementById('statMonthly').textContent = stats.monthly;
     document.getElementById('statWeekly').textContent = stats.last7;
 
-    // Trend chart — Applied vs Rejected, animated, with a rich hover tooltip
-    // per point/month so pointing at a day (or a month, when the 30-day view
-    // is bucketed) reveals the applied/rejected breakdown for that spot.
+    // Trend chart — Jobs Viewed vs Jobs Applied, animated, with a rich hover
+    // tooltip per point so pointing at a day reveals both figures for that spot.
     const trend = period === '7' ? stats.trend.slice(-7) : stats.trend;
     const labels = trend.map((p) => new Date(p.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
     const appliedData = trend.map((p) => p.count);
-    const rejectedData = trend.map((p) => p.rejected || 0);
+    const viewedData = trend.map((p) => p.viewed || 0);
 
-    document.getElementById('trendBadge').textContent = `📉 ${stats.rejectedMonthly || 0} rejected this month`;
+    document.getElementById('trendBadge').textContent = `👁️ ${stats.viewedMonthly || 0} viewed this month`;
 
     const ctx = document.getElementById('trendChart').getContext('2d');
     if (chart) chart.destroy();
     const appliedGradient = ctx.createLinearGradient(0, 0, 0, 220);
-    appliedGradient.addColorStop(0, 'rgba(111,141,255,0.35)');
-    appliedGradient.addColorStop(1, 'rgba(111,141,255,0)');
-    const rejectedGradient = ctx.createLinearGradient(0, 0, 0, 220);
-    rejectedGradient.addColorStop(0, 'rgba(255,107,129,0.28)');
-    rejectedGradient.addColorStop(1, 'rgba(255,107,129,0)');
+    appliedGradient.addColorStop(0, 'rgba(46,139,87,0.30)');
+    appliedGradient.addColorStop(1, 'rgba(46,139,87,0)');
+    const viewedGradient = ctx.createLinearGradient(0, 0, 0, 220);
+    viewedGradient.addColorStop(0, 'rgba(230,145,56,0.28)');
+    viewedGradient.addColorStop(1, 'rgba(230,145,56,0)');
 
     chart = new Chart(ctx, {
       type: 'line',
@@ -107,33 +106,33 @@ async function loadDashboard() {
         labels,
         datasets: [
           {
-            label: 'Applied',
+            label: 'Jobs Applied',
             data: appliedData,
-            borderColor: '#6f8dff',
+            borderColor: '#2e8b57',
             backgroundColor: appliedGradient,
             fill: true,
             tension: 0.35,
             pointRadius: 3,
             pointHoverRadius: 7,
             pointHoverBorderWidth: 3,
-            pointBackgroundColor: '#6f8dff',
+            pointBackgroundColor: '#2e8b57',
             pointHoverBackgroundColor: '#fff',
-            pointHoverBorderColor: '#6f8dff',
+            pointHoverBorderColor: '#2e8b57',
             borderWidth: 2.5
           },
           {
-            label: 'Rejected',
-            data: rejectedData,
-            borderColor: '#ff6b81',
-            backgroundColor: rejectedGradient,
+            label: 'Jobs Viewed',
+            data: viewedData,
+            borderColor: '#e69138',
+            backgroundColor: viewedGradient,
             fill: true,
             tension: 0.35,
             pointRadius: 3,
             pointHoverRadius: 7,
             pointHoverBorderWidth: 3,
-            pointBackgroundColor: '#ff6b81',
+            pointBackgroundColor: '#e69138',
             pointHoverBackgroundColor: '#fff',
-            pointHoverBorderColor: '#ff6b81',
+            pointHoverBorderColor: '#e69138',
             borderWidth: 2.5
           }
         ]
@@ -145,8 +144,8 @@ async function loadDashboard() {
         plugins: {
           legend: {
             display: true,
-            position: 'top',
-            align: 'end',
+            position: 'bottom',
+            align: 'center',
             labels: { color: '#9aa1c3', usePointStyle: true, boxWidth: 8, font: { size: 12 } }
           },
           tooltip: {

@@ -97,6 +97,15 @@
       return;
     }
 
+    // Log the view once we know this is a real job posting being shown to a
+    // logged-in user — fire-and-forget so a slow/failed network call never
+    // blocks or breaks rendering of the panel itself.
+    send('jobs:trackView', {
+      title: state.job.title,
+      company: state.job.company,
+      jobUrl: window.location.href
+    }).catch(() => {});
+
     try {
       state.resumes = await send('resumes:list');
     } catch (err) {
