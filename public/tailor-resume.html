@@ -71,7 +71,7 @@
           </div>
         </div>
 
-        <button class="continue-btn" id="continueBtn">Continue →</button>
+        <button class="continue-btn" id="continueBtn" disabled>Continue →</button>
         <button class="cancel-link" id="cancelBtn">Cancel</button>
       </div>
     </div>
@@ -111,15 +111,22 @@ async function init() {
       sel.innerHTML = resumes.map(r =>
         `<option value="${r._id}" ${r._id === presetResumeId || (!presetResumeId && r.isDefault) ? 'selected' : ''}>${escapeHtml(r.title)}${r.isDefault ? ' (Default)' : ''}</option>`
       ).join('');
+      // Resumes have finished loading and at least one is selected — safe to enable Continue.
+      document.getElementById('continueBtn').disabled = !sel.value;
     }
   } catch (err) {
     showToast(err.message, 'error');
+    document.getElementById('continueBtn').disabled = true;
   }
 }
 
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
+document.getElementById('resumeSelect').addEventListener('change', (e) => {
+  document.getElementById('continueBtn').disabled = !e.target.value;
+});
 
 document.querySelectorAll('.mode-option').forEach(opt => {
   opt.addEventListener('click', () => {

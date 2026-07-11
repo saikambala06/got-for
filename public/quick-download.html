@@ -97,13 +97,6 @@
 
         <div class="cust-row">
           <div class="cust-field">
-            <label>Format</label>
-            <div class="seg-group" id="formatGroup">
-              <button class="seg-btn" data-format="pdf">PDF</button>
-              <button class="seg-btn active" data-format="docx">DOCX</button>
-            </div>
-          </div>
-          <div class="cust-field">
             <label>Tailoring level</label>
             <div class="seg-group" id="levelGroup">
               <button class="seg-btn active" data-level="low">Low</button>
@@ -126,8 +119,8 @@
           </div>
         </div>
 
-        <button class="dl-btn" id="downloadBtn">↓ Download DOCX</button>
-        <div class="dl-foot">🐨 Every quick download uses these settings. Change them anytime — we'll remember.</div>
+        <button class="dl-btn" id="downloadBtn">↓ Download PDF &amp; DOCX</button>
+        <div class="dl-foot">🐨 Every quick download saves both a PDF and a DOCX using this template and these settings. Change them anytime — we'll remember.</div>
       </div>
     </div>
   </main>
@@ -135,6 +128,7 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/resumeTemplates.js"></script>
 <script>
 const ACCENTS = ['#2563eb', '#16a34a', '#0ea5a4', '#dc2626', '#ec4899', '#d946ef', '#ea580c', '#f59e0b', '#0f172a', '#7c3aed'];
 const TEXT_COLORS = ['#1a1d29', '#000000', '#33363f', '#0f172a'];
@@ -152,7 +146,6 @@ const settings = {
   template: 'Classic',
   textColor: '#1a1d29',
   accentColor: '#0ea5a4',
-  format: 'docx',
   tailoringLevel: 'low',
   noMetrics: true
 };
@@ -200,10 +193,8 @@ async function init() {
   }
 
   document.getElementById('templateSelect').value = settings.template;
-  document.getElementById('formatGroup').querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.format === settings.format));
   document.getElementById('levelGroup').querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.level === settings.tailoringLevel));
   document.getElementById('noMetricsToggle').checked = !!settings.noMetrics;
-  updateDownloadLabel();
 
   renderSwatchRow(document.getElementById('textColorRow'), TEXT_COLORS, settings.textColor, (c) => { settings.textColor = c; renderPreview(); });
   renderSwatchRow(document.getElementById('accentRow'), ACCENTS, settings.accentColor, (c) => { settings.accentColor = c; renderPreview(); });
@@ -221,12 +212,6 @@ function wireControls() {
     settings.template = e.target.value;
     renderPreview();
   });
-  document.getElementById('formatGroup').addEventListener('click', (e) => {
-    const btn = e.target.closest('.seg-btn'); if (!btn) return;
-    settings.format = btn.dataset.format;
-    document.getElementById('formatGroup').querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
-    updateDownloadLabel();
-  });
   document.getElementById('levelGroup').addEventListener('click', (e) => {
     const btn = e.target.closest('.seg-btn'); if (!btn) return;
     settings.tailoringLevel = btn.dataset.level;
@@ -238,10 +223,6 @@ function wireControls() {
     loadResumeAndTailor();
   });
   document.getElementById('downloadBtn').addEventListener('click', doDownload);
-}
-
-function updateDownloadLabel() {
-  document.getElementById('downloadBtn').textContent = settings.format === 'pdf' ? '↓ Download PDF' : '↓ Download DOCX';
 }
 
 function synthesizedJobDescription() {
@@ -293,61 +274,49 @@ function projectAllAccepted(resume, diff) {
 
 function renderPreview() {
   if (!previewResume) return;
-  const r = previewResume;
-  const p = r.personal || {};
-  const contact = [p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' &nbsp;|&nbsp; ');
-  const expHtml = (r.experience || []).map(e => `
-    <div class="p-role">${esc(e.role || '')}</div>
-    <div class="p-company">${esc(e.company || '')}${e.dates ? ' — ' + esc(e.dates) : ''}</div>
-    <ul>${(e.description || '').split('\n').filter(Boolean).map(l => `<li>${esc(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}</ul>`).join('');
-
-  document.getElementById('previewMount').innerHTML = `
-    <div style="color:${settings.textColor}">
-      <h1 style="color:${settings.textColor}">${esc(p.name || 'Your Name')}</h1>
-      <div class="p-title" style="color:${settings.accentColor}">${esc(r.title || '')}</div>
-      <div class="p-contact">${contact}</div>
-      <hr style="border-top:2px solid ${settings.accentColor}" />
-      <div class="p-heading" style="color:${settings.accentColor}">Summary</div>
-      <div style="font-size:12.8px;line-height:1.6;">${esc(r.summary || '')}</div>
-      <div class="p-heading" style="color:${settings.accentColor}">Experience</div>
-      ${expHtml}
-    </div>`;
+  // Same shared renderer used for the actual export, so the preview always matches
+  // what gets downloaded — for every template style.
+  document.getElementById('previewMount').innerHTML =
+    ResumeTemplates.renderResumePreviewFragment(previewResume, settings);
 }
 
 function resumeToExportHtml(resume) {
-  const p = resume.personal || {};
-  const accent = settings.accentColor;
-  const textColor = settings.textColor;
-  const contact = [p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' &nbsp;|&nbsp; ');
-  const skillsHtml = (resume.skills || []).map(esc).join(', ');
-  const expHtml = (resume.experience || []).map(e => `
-    <div style="margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;font-weight:700;">
-        <span>${esc(e.role || '')}</span><span>${esc(e.dates || '')}</span>
-      </div>
-      <div style="font-style:italic;color:#444;margin-bottom:4px;">${esc(e.company || '')}</div>
-      <ul style="margin:0;padding-left:18px;">
-        ${(e.description || '').split('\n').filter(Boolean).map(l => `<li>${esc(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}
-      </ul>
-    </div>`).join('');
-  const eduHtml = (resume.education || []).map(ed => `
-    <div style="margin-bottom:8px;"><strong>${esc(ed.school || '')}</strong> — ${esc(ed.degree || '')} ${esc(ed.field || '')}</div>`).join('');
+  return ResumeTemplates.renderResumeHTML(resume, settings);
+}
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${esc(p.name || 'Resume')}</title>
-    <style>
-      body{ font-family: Georgia, 'Times New Roman', serif; color:${textColor}; padding:40px; max-width:760px; margin:0 auto; }
-      h1{ text-align:center; margin-bottom:2px; }
-      .contact{ text-align:center; font-size:12px; color:#555; margin-bottom:18px; }
-      h2{ font-size:13px; text-transform:uppercase; letter-spacing:0.05em; border-bottom:2px solid ${accent}; padding-bottom:3px; margin-top:22px; }
-      @media print { body{ padding:0; } }
-    </style></head><body>
-    <h1>${esc(p.name || '')}</h1>
-    <div class="contact">${contact}</div>
-    <h2>Summary</h2><p>${esc(resume.summary || '')}</p>
-    <h2>Skills</h2><p>${skillsHtml}</p>
-    <h2>Experience</h2>${expHtml}
-    <h2>Education</h2>${eduHtml}
-    </body></html>`;
+function downloadDocx(html, filenameBase) {
+  const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
+  const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${filenameBase}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+function downloadPdf(html, filenameBase) {
+  // Print-to-PDF via a hidden iframe so it never navigates/redirects the current page
+  // and isn't blocked as a popup.
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  iframe.contentWindow.document.title = filenameBase;
+  setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  }, 300);
 }
 
 async function doDownload() {
@@ -356,28 +325,22 @@ async function doDownload() {
   const original = btn.textContent;
   btn.disabled = true; btn.textContent = 'Preparing…';
 
-  // Remember these settings for next time.
-  try { await api.put('/api/account/quick-download-defaults', settings); } catch (e) { /* non-fatal */ }
+  try {
+    // Remember these settings (including chosen template) for next time.
+    try { await api.put('/api/account/quick-download-defaults', settings); } catch (e) { /* non-fatal */ }
 
-  const html = resumeToExportHtml(previewResume);
-  if (settings.format === 'docx') {
-    const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
-    const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${(previewResume.personal?.name || 'resume').replace(/\s+/g, '_')}.doc`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  } else {
-    const win = window.open('', '_blank');
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 300);
+    const html = resumeToExportHtml(previewResume);
+    const filenameBase = (previewResume.personal?.name || 'resume').replace(/\s+/g, '_');
+
+    // Quick Download always produces BOTH files immediately — no extra template-choice
+    // screen, no redirect. The template/colors picked here are exactly what's applied.
+    downloadDocx(html, filenameBase);
+    downloadPdf(html, filenameBase);
+
+    showToast('Resume ready — PDF and DOCX downloading now');
+  } finally {
+    btn.disabled = false; btn.textContent = original;
   }
-
-  btn.disabled = false; btn.textContent = original;
-  showToast('Resume ready — check your downloads');
 }
 
 init();
