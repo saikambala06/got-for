@@ -175,7 +175,7 @@
     panel.renderFooter({
       onManual: openManualForm,
       onMarkApplied: markApplied,
-      onTailor: openTailorPicker,
+      onTailor: tailorResume,
       onCoverLetter: draftCoverLetter,
       onReload: confirmReload,
       applied: state.applied
@@ -273,23 +273,6 @@
       return { ...original, description: lines.join('\n') };
     });
     return { ...resume, summary, skills, experience };
-  }
-
-  // "Tailor resume" opens the picker first — "Tailor your resume" — where the
-  // person picks a resume and a mode (Review & edit vs Quick Download).
-  // Picking "Review & edit" and continuing lands on the full AI review studio.
-  function openTailorPicker() {
-    studio.renderPicker(
-      { resumes: state.resumes, selectedResumeId: state.selectedResumeId },
-      {
-        onCancel: () => studio.unmount(),
-        onContinue: (resumeId, mode) => {
-          state.selectedResumeId = resumeId;
-          studioState.mode = mode;
-          openStudio();
-        }
-      }
-    );
   }
 
   function openStudio() {

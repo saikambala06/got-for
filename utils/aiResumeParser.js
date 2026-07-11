@@ -7,13 +7,13 @@ const { cleanSkill } = require('./skillUtils');
 
 // ─── Shared Gemini caller ────────────────────────────────────────────────────
 //
-// NOTE ON MODEL NAME: defaults to 'gemini-2.5-flash' — Google's current
-// generally-available Flash model, chosen for its price/performance on
-// extraction and rewriting tasks like these, and because it fully supports
-// disabling "thinking" (see thinkingConfig below) for a fast, deterministic
-// response. The model can be overridden via GEMINI_MODEL without a code
-// change if Google renames/retires it later.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+// NOTE ON MODEL NAME: 'gemini-2.5-flash' is no longer available to new API
+// keys/projects (Google returns a 404 "no longer available to new users").
+// We now default to 'gemini-flash-latest', Google's auto-updated alias that
+// always points at their current-generation Flash model (as of this change,
+// Gemini 3.5 Flash), so we don't have to keep chasing renames/retirements.
+// The model can still be overridden via GEMINI_MODEL without a code change.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
 const { getKeyPool } = require('./geminiKeyPool');
 
