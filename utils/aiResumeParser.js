@@ -425,8 +425,12 @@ function extractJSON(raw) {
     const candidate = s.slice(start, end + 1);
     try {
       return JSON.parse(candidate);
-    } catch {
-      // Fall through and try the wider/truncation-repair path below.
+    } catch (e) {
+      try {
+        return repairTruncatedJSON(candidate, extractErrorPosition(e));
+      } catch {
+        // Fall through and try the wider/truncation-repair path below.
+      }
     }
   }
 
@@ -444,11 +448,20 @@ function extractJSON(raw) {
     return JSON.parse(s);
   } catch (e) {
     try {
-      return repairTruncatedJSON(s);
+      return repairTruncatedJSON(s, extractErrorPosition(e));
     } catch {
       throw new Error(`JSON parse failed: ${e.message}`);
     }
   }
+}
+
+// JSON.parse's error message includes the character offset where parsing
+// broke, e.g. "Unexpected token x in JSON at position 123" or "Expected ','
+// or ']' after array element in JSON at position 123". Pull that number out
+// so repairTruncatedJSON can bound its scan to it.
+function extractErrorPosition(err) {
+  const m = /position (\d+)/.exec(err?.message || '');
+  return m ? parseInt(m[1], 10) : undefined;
 }
 
 /**
@@ -471,13 +484,25 @@ function extractJSON(raw) {
  * of a truncated array, which is exactly what happens when maxOutputTokens
  * is hit mid-way through a long bullet list.
  */
-function repairTruncatedJSON(s) {
+function repairTruncatedJSON(s, errorPosition) {
+  // Bound the scan to where JSON.parse actually broke (if we know it). This
+  // matters for more than just true end-of-response truncation: if the
+  // model emitted a subtly malformed value mid-document (e.g. a stray
+  // unescaped character inside a string), the *rest* of the string can
+  // still contain well-formed-looking brackets that make it past a naive
+  // full-string scan as a "safe" cut point — even though it sits after the
+  // actual corruption. That produces a "repaired" string which still
+  // contains the bad content and fails to parse again. Stopping the walk at
+  // errorPosition guarantees the repaired result never includes anything
+  // past the point parsing is known to have gone wrong.
+  const limit = Number.isFinite(errorPosition) ? Math.min(errorPosition, s.length) : s.length;
+
   const stack = [];
   let inString = false;
   let escape = false;
   let lastSafeCut = null;
 
-  for (let i = 0; i < s.length; i++) {
+  for (let i = 0; i < limit; i++) {
     const c = s[i];
     if (inString) {
       if (escape) escape = false;
