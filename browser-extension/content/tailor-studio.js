@@ -20,10 +20,38 @@
       font-size: 13px; font-weight: 600; cursor: pointer; color: #1a1d29; }
     .ts-back:hover { background: #f4f5f7; }
     .ts-brand { font-size: 15px; font-weight: 700; }
-    .ts-score { display: flex; align-items: center; gap: 10px; }
-    .ts-score-ring { position: relative; width: 46px; height: 46px; flex-shrink: 0; }
+    .ts-score { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 4px 8px; border-radius: 10px;
+      transition: background 0.15s ease; }
+    .ts-score:hover { background: #f4f5f7; }
+    .ts-score-ring { position: relative; width: 46px; height: 46px; flex-shrink: 0; transition: transform 0.2s ease; }
     .ts-score-copy { font-size: 11.5px; color: #6b7280; line-height: 1.3; }
     .ts-score-copy b { color: #16a34a; font-size: 15px; }
+    .ts-score-chevron { font-size: 10px; color: #9aa0ab; transition: transform 0.2s ease; margin-left: 2px; }
+    .ts-score.open .ts-score-chevron { transform: rotate(180deg); }
+
+    /* ---- Match analysis card ---- */
+    .ts-analysis-wrap { max-height: 0; overflow: hidden; transition: max-height 0.32s cubic-bezier(.4,0,.2,1); background: #fff;
+      border-bottom: 1px solid #e4e6ec; flex-shrink: 0; }
+    .ts-analysis-wrap.open { max-height: 340px; }
+    .ts-analysis-inner { padding: 16px 22px 18px; }
+    .ts-analysis-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .ts-analysis-title { font-size: 13px; font-weight: 700; }
+    .ts-analysis-sub { font-size: 11.5px; color: #6b7280; }
+    .ts-analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; }
+    .ts-analysis-row { display: flex; flex-direction: column; gap: 4px; }
+    .ts-analysis-row-top { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; }
+    .ts-analysis-row-label { font-weight: 600; color: #1a1d29; }
+    .ts-analysis-row-nums { font-variant-numeric: tabular-nums; color: #6b7280; }
+    .ts-analysis-row-nums b.up { color: #16a34a; }
+    .ts-analysis-bar-track { position: relative; height: 7px; border-radius: 999px; background: #eceef2; overflow: hidden; }
+    .ts-analysis-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px;
+      transition: width 0.6s cubic-bezier(.4,0,.2,1), background 0.4s ease; }
+    .ts-analysis-bar-ghost { position: absolute; top: 0; bottom: 0; border-left: 2px dashed rgba(22,163,74,0.55); }
+    .ts-analysis-row-detail { font-size: 11px; color: #9aa0ab; }
+    .ts-analysis-chips { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .ts-analysis-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid #d9dce4; color: #6b7280; }
+    .ts-analysis-chip.matched { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
+    .ts-analysis-chip.missing { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
 
     .ts-controlbar {
       display: flex; align-items: center; gap: 16px; padding: 10px 22px; background: #fff;
@@ -45,7 +73,10 @@
 
     .ts-body { flex: 1; overflow-y: auto; padding: 26px 0 110px; display: flex; justify-content: center; }
     .ts-sheet { width: 720px; max-width: calc(100% - 32px); background: #fff; border: 1px solid #e4e6ec;
-      border-radius: 12px; padding: 34px 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+      border-radius: 12px; padding: 34px 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); animation: ts-fade-in 0.28s ease; }
+    @keyframes ts-fade-in { 0% { opacity: 0; transform: translateY(4px); } 100% { opacity: 1; transform: translateY(0); } }
+    .ts-level-btn { transition: background 0.15s ease, color 0.15s ease; }
+    .ts-pill-btn { transition: background 0.15s ease, filter 0.15s ease, opacity 0.15s ease; }
     .ts-sheet h1 { text-align: center; font-size: 21px; margin: 0 0 4px; }
     .ts-sheet .ts-contact { text-align: center; font-size: 12px; color: #6b7280; margin-bottom: 16px; }
     .ts-hr { border: none; border-top: 1px solid #e4e6ec; margin: 14px 0; }
@@ -358,11 +389,12 @@
       this.root.querySelector('#ts-back').addEventListener('click', onBack);
     }
 
-    // `view` = { resume, diff, job, tailoringLevel, decisions, currentScore, projectedScore }
+    // `view` = { resume, diff, job, tailoringLevel, decisions, currentScore, projectedScore,
+    //            currentAnalysis, projectedAnalysis }
     // handlers = { onBack, onLevelChange, onToggle (id, accept), onApplyAll, onDownload, onResetChanges }
     render(view, handlers) {
       this.mount();
-      const { resume, diff, tailoringLevel, currentScore, projectedScore, decisions } = view;
+      const { resume, diff, tailoringLevel, currentScore, projectedScore, decisions, currentAnalysis, projectedAnalysis } = view;
       const p = resume.personal || {};
 
       const levelBtns = ['low', 'medium', 'high'].map((lv) =>
@@ -423,14 +455,28 @@
       const totalChanges = this.countChanges(diff);
       const acceptedCount = this.countAccepted(diff, decisions);
 
+      const analysisOpen = !!this._analysisOpen;
+      const analysisHtml = this.renderAnalysisRows(currentAnalysis, projectedAnalysis);
+
       this.root.innerHTML = `
         <div class="ts-overlay">
           <div class="ts-topbar">
             <button class="ts-back" id="ts-back">← Back</button>
             <span class="ts-brand">Tailor resume</span>
-            <div class="ts-score">
+            <div class="ts-score ${analysisOpen ? 'open' : ''}" id="ts-score-toggle">
               <div class="ts-score-ring" id="ts-score-ring">${scoreRing(currentScore)}</div>
               <div class="ts-score-copy">MATCH SCORE<br/><b id="ts-score-num">${currentScore}</b> → ~${projectedScore} if you accept all</div>
+              <span class="ts-score-chevron">▾</span>
+            </div>
+          </div>
+          <div class="ts-analysis-wrap ${analysisOpen ? 'open' : ''}" id="ts-analysis-wrap">
+            <div class="ts-analysis-inner">
+              <div class="ts-analysis-head">
+                <span class="ts-analysis-title">Match analysis</span>
+                <span class="ts-analysis-sub">Current vs. projected after accepting all changes</span>
+              </div>
+              <div class="ts-analysis-grid" id="ts-analysis-grid">${analysisHtml}</div>
+              ${this.renderAnalysisChips(currentAnalysis)}
             </div>
           </div>
           <div class="ts-controlbar">
@@ -462,9 +508,16 @@
         </div>`;
 
       this.root.querySelector('#ts-back').addEventListener('click', handlers.onBack);
+      this.root.querySelector('#ts-score-toggle').addEventListener('click', () => {
+        this._analysisOpen = !this._analysisOpen;
+        const wrap = this.root.querySelector('#ts-analysis-wrap');
+        const badge = this.root.querySelector('#ts-score-toggle');
+        if (wrap) wrap.classList.toggle('open', this._analysisOpen);
+        if (badge) badge.classList.toggle('open', this._analysisOpen);
+      });
       this.root.querySelector('#ts-reset').addEventListener('click', handlers.onResetChanges);
       this.root.querySelector('#ts-apply-all').addEventListener('click', async () => {
-        await this.playApplyAllAnimation({ diff, decisions, currentScore, projectedScore });
+        await this.playApplyAllAnimation({ diff, decisions, currentScore, projectedScore, currentAnalysis, projectedAnalysis });
         handlers.onApplyAll();
       });
       this.root.querySelector('#ts-download').addEventListener('click', handlers.onDownload);
@@ -475,6 +528,36 @@
       this.root.querySelectorAll('[data-kind]').forEach((btn) => {
         btn.addEventListener('click', () => handlers.onToggle(btn.dataset.kind, btn.dataset.value === 'true'));
       });
+    }
+
+    renderAnalysisRows(currentAnalysis, projectedAnalysis) {
+      if (!currentAnalysis) return '';
+      const projByKey = {};
+      (projectedAnalysis?.breakdown || []).forEach((b) => { projByKey[b.key] = b.score; });
+      const color = (s) => s >= 70 ? '#16a34a' : s >= 40 ? '#d97706' : '#dc2626';
+      return currentAnalysis.breakdown.map((row) => {
+        const projScore = projByKey[row.key] != null ? projByKey[row.key] : row.score;
+        const delta = projScore - row.score;
+        return `
+          <div class="ts-analysis-row" data-analysis-key="${row.key}">
+            <div class="ts-analysis-row-top">
+              <span class="ts-analysis-row-label">${esc(row.label)}</span>
+              <span class="ts-analysis-row-nums"><span class="ts-analysis-cur">${row.score}</span>%${delta > 0 ? ` → <b class="up">~${projScore}%</b>` : ''}</span>
+            </div>
+            <div class="ts-analysis-bar-track">
+              <div class="ts-analysis-bar-fill" style="width:${row.score}%;background:${color(row.score)};"></div>
+              ${delta > 0 ? `<div class="ts-analysis-bar-ghost" style="left:${projScore}%;"></div>` : ''}
+            </div>
+            <div class="ts-analysis-row-detail">${esc(row.detail)}</div>
+          </div>`;
+      }).join('');
+    }
+
+    renderAnalysisChips(currentAnalysis) {
+      if (!currentAnalysis || (!currentAnalysis.matchedSkills?.length && !currentAnalysis.missingSkills?.length)) return '';
+      const matched = (currentAnalysis.matchedSkills || []).map((s) => `<span class="ts-analysis-chip matched">✓ ${esc(s)}</span>`).join('');
+      const missing = (currentAnalysis.missingSkills || []).map((s) => `<span class="ts-analysis-chip missing">missing: ${esc(s)}</span>`).join('');
+      return `<div class="ts-analysis-chips">${matched}${missing}</div>`;
     }
 
     countChanges(diff) {
@@ -548,7 +631,7 @@
     // can then commit the underlying decisions/state and (optionally)
     // re-render normally — the re-render will match what's already on
     // screen, so there's no visible jump.
-    async playApplyAllAnimation({ diff, decisions, currentScore, projectedScore }) {
+    async playApplyAllAnimation({ diff, decisions, currentScore, projectedScore, currentAnalysis, projectedAnalysis }) {
       const applyBtn = this.root.querySelector('#ts-apply-all');
       const scoreAnchor = this.root.querySelector('.ts-score');
       if (applyBtn) {
@@ -585,7 +668,27 @@
       }));
 
       const totalNodeTime = pendingKeys.length ? (pendingKeys.length - 1) * stagger + perItemDuration : 0;
-      const scoreAnimation = this.animateScoreTo(currentScore, projectedScore, Math.max(700, Math.min(1400, totalNodeTime || 900)));
+      const animDuration = Math.max(700, Math.min(1400, totalNodeTime || 900));
+      const scoreAnimation = this.animateScoreTo(currentScore, projectedScore, animDuration);
+
+      // If the analysis panel is open, slide each breakdown bar to its
+      // projected width (and swap the "current%" label in) in parallel with
+      // the score ring, instead of waiting for the next full re-render.
+      const projByKey = {};
+      (projectedAnalysis?.breakdown || []).forEach((b) => { projByKey[b.key] = b.score; });
+      if (currentAnalysis) {
+        currentAnalysis.breakdown.forEach((row) => {
+          const rowEl = this.root.querySelector(`[data-analysis-key="${row.key}"]`);
+          if (!rowEl) return;
+          const fill = rowEl.querySelector('.ts-analysis-bar-fill');
+          const ghost = rowEl.querySelector('.ts-analysis-bar-ghost');
+          const cur = rowEl.querySelector('.ts-analysis-cur');
+          const target = projByKey[row.key] != null ? projByKey[row.key] : row.score;
+          if (fill) fill.style.width = `${target}%`;
+          if (ghost) ghost.remove();
+          if (cur) cur.textContent = target;
+        });
+      }
 
       await Promise.all([...nodeAnimations, scoreAnimation]);
 
@@ -710,7 +813,7 @@
                 <span class="ts-qd-badge">AUTO-TAILORED</span>
               </div>
               <div class="ts-qd-preview-wrap">
-                <div class="ts-qd-page"><iframe id="ts-qd-frame" srcdoc="${esc(previewHtml)}"></iframe></div>
+                <div class="ts-qd-page"><iframe id="ts-qd-frame"></iframe></div>
               </div>
               <div class="ts-qd-footcaption">${esc(opts.template)} · ${opts.format.toUpperCase()} · ${opts.tailoringLevel[0].toUpperCase()}${opts.tailoringLevel.slice(1)} tailoring</div>
             </div>
@@ -772,6 +875,12 @@
         </div>`;
 
       const emitChange = (patch) => handlers.onChange({ ...opts, ...patch });
+
+      // Set via the `srcdoc` property (not an HTML attribute string) so the
+      // preview reliably paints as soon as the screen mounts, instead of
+      // staying blank until some other control forces a re-render.
+      const frame = this.root.querySelector('#ts-qd-frame');
+      if (frame) frame.srcdoc = previewHtml;
 
       this.root.querySelector('#ts-qd-back').addEventListener('click', handlers.onBack);
       this.root.querySelector('#ts-qd-download').addEventListener('click', (e) => handlers.onDownload(opts, e.currentTarget));
