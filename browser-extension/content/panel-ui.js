@@ -125,6 +125,25 @@
     .jt-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.25); border-top-color: #1a1326; border-radius: 50%; display: inline-block; animation: jt-spin 0.7s linear infinite; margin-right: 6px; vertical-align: -2px; }
     @keyframes jt-spin { to { transform: rotate(360deg); } }
 
+    /* ---- Skeleton loader (shown while job details are parsed) ---- */
+    .jt-skeleton { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .jt-sk-row { border-radius: 8px; background: linear-gradient(90deg, #1c2238 25%, #262d49 37%, #1c2238 63%);
+      background-size: 400% 100%; animation: jt-shimmer 1.4s ease infinite; }
+    @keyframes jt-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+    .jt-sk-title { height: 18px; width: 70%; border-radius: 6px; }
+    .jt-sk-sub { height: 12px; width: 45%; border-radius: 5px; margin-top: 8px; }
+    .jt-sk-block { display: flex; flex-direction: column; gap: 8px; }
+    .jt-sk-line { height: 10px; border-radius: 5px; }
+    .jt-sk-line.w1 { width: 96%; }
+    .jt-sk-line.w2 { width: 84%; }
+    .jt-sk-line.w3 { width: 60%; }
+    .jt-sk-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+    .jt-sk-pill { height: 22px; width: 64px; border-radius: 999px; }
+    .jt-sk-pill:nth-child(2) { width: 88px; }
+    .jt-sk-pill:nth-child(3) { width: 52px; }
+    .jt-sk-pill:nth-child(4) { width: 76px; }
+    .jt-loading-caption { font-size: 12px; color: #8790b8; text-align: center; margin-top: 2px; letter-spacing: 0.2px; }
+
     .jt-tailor-summary { font-size: 12.5px; line-height: 1.5; color: #d7dae8; background: #0c0f1c; border: 1px solid #262d49; border-radius: 10px; padding: 10px; margin-bottom: 10px; white-space: pre-wrap; }
     .jt-tag-new { font-size: 9.5px; background: #ff9a4d; color: #1a1326; border-radius: 5px; padding: 1px 4px; margin-left: 4px; font-weight: 700; }
     .jt-suggestions { font-size: 11.5px; color: #6a7196; margin-top: 8px; font-style: italic; }
@@ -286,7 +305,27 @@
 
     renderLoading(message) {
       this.clearFooter();
-      this.setBody(`<div class="jt-loading"><span class="jt-spinner" style="border-top-color:#ff9a4d"></span>${esc(message || 'Loading…')}</div>`);
+      this.setBody(`
+        <div class="jt-skeleton" aria-busy="true" aria-live="polite">
+          <div class="jt-sk-row jt-sk-title"></div>
+          <div class="jt-sk-row jt-sk-sub"></div>
+          <div class="jt-sk-block">
+            <div class="jt-sk-row jt-sk-line w1"></div>
+            <div class="jt-sk-row jt-sk-line w2"></div>
+            <div class="jt-sk-row jt-sk-line w3"></div>
+          </div>
+          <div class="jt-sk-pills">
+            <div class="jt-sk-row jt-sk-pill"></div>
+            <div class="jt-sk-row jt-sk-pill"></div>
+            <div class="jt-sk-row jt-sk-pill"></div>
+            <div class="jt-sk-row jt-sk-pill"></div>
+          </div>
+          <div class="jt-sk-block">
+            <div class="jt-sk-row jt-sk-line w2"></div>
+            <div class="jt-sk-row jt-sk-line w1"></div>
+          </div>
+          <div class="jt-loading-caption"><span class="jt-spinner" style="border-top-color:#ff9a4d"></span>${esc(message || 'Reading job details…')}</div>
+        </div>`);
     }
 
     // Centered "not a job page" state: shown *inside* the open panel (the
