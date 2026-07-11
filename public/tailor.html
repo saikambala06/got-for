@@ -520,57 +520,245 @@ function stripMetrics(text) {
     .replace(/\s{2,}/g, ' ').replace(/\s+([.,;])/g, '$1').replace(/\(\s*\)/g, '').trim();
 }
 
+// Each named template has its own genuine layout/markup (not just a font swap):
+// Classic = centered single column, Harvard = education-first formal OCS format,
+// Jake's = the well-known compact ATS single-column "Jake's Resume" layout,
+// Modern = a real two-column layout with a colored sidebar,
+// Minimal = whitespace-driven, rule-free design.
 const TEMPLATE_STYLES = {
-  'Classic': { font: "Georgia, 'Times New Roman', serif", headingMode: 'rule', headingCase: 'uppercase' },
-  'Harvard': { font: "'Times New Roman', Times, serif", headingMode: 'rule-bold', headingCase: 'uppercase' },
-  "Jake's": { font: 'Calibri, Arial, sans-serif', headingMode: 'rule-thin', headingCase: 'uppercase' },
-  'Modern': { font: "'Segoe UI', Arial, sans-serif", headingMode: 'color', headingCase: 'none' },
-  'Minimal': { font: 'Helvetica, Arial, sans-serif', headingMode: 'plain', headingCase: 'uppercase' }
+  'Classic': { font: "Georgia, 'Times New Roman', serif" },
+  'Harvard': { font: "'Times New Roman', Times, serif" },
+  "Jake's": { font: "Calibri, 'Segoe UI', Arial, sans-serif" },
+  'Modern': { font: "'Segoe UI', Arial, sans-serif" },
+  'Minimal': { font: 'Helvetica, Arial, sans-serif' }
+};
+
+// Turns the raw resume record into the plain fields every template needs,
+// applying the shared metric-stripping/escaping rules once up front.
+function buildResumeModel(resume, opts) {
+  const p = withProfileFallback(resume.personal);
+  const noMetrics = !!opts.noMetrics;
+  const clean = s => esc(noMetrics ? stripMetrics(s) : s);
+  const contactParts = [p.email, p.phone, p.location, p.linkedin, p.portfolio].filter(Boolean).map(esc);
+  const experience = (resume.experience || []).map(e => ({
+    role: esc(e.role || ''),
+    company: esc(e.company || ''),
+    dates: esc(e.dates || e.endDate || ''),
+    bullets: (e.description || '').split('\n').filter(Boolean).map(l => clean(l.replace(/^[-•*]\s*/, '')))
+  }));
+  const education = (resume.education || []).map(ed => ({
+    school: esc(ed.school || ''),
+    degree: esc(ed.degree || ''),
+    field: esc(ed.field || ''),
+    dates: esc(ed.dates || ed.endDate || '')
+  }));
+  return {
+    name: esc(p.name || ''),
+    contactParts,
+    summary: clean(resume.summary || ''),
+    skills: (resume.skills || []).map(esc),
+    experience,
+    education
+  };
+}
+
+function baseDocStyles(fontFamily, textColor, fontSize, lineHeight, extra) {
+  return `
+    * { box-sizing:border-box; }
+    body{ font-family:${fontFamily}; color:${textColor}; margin:0; padding:32px;
+      font-size:${fontSize}pt; line-height:${lineHeight}; }
+    ul{ margin:0; padding-left:18px; } li{ margin-bottom:2px; }
+    ${extra || ''}
+  `;
+}
+
+function renderClassic(m, opts, fontFamily, textColor, fontSize, lineHeight) {
+  const accent = opts.accent || '#16a34a';
+  const contact = m.contactParts.join(' &nbsp;|&nbsp; ');
+  const expHtml = m.experience.map(e => `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${e.role}</span><span>${e.dates}</span>
+      </div>
+      <div style="font-style:italic;color:#444;margin-bottom:4px;">${e.company}</div>
+      <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>`).join('');
+  const eduHtml = m.education.map(ed => `
+    <div style="margin-bottom:8px;display:flex;justify-content:space-between;">
+      <span><strong>${ed.school}</strong> — ${ed.degree} ${ed.field}</span><span>${ed.dates}</span>
+    </div>`).join('');
+  return `<style>${baseDocStyles(fontFamily, textColor, fontSize, lineHeight, `
+    .page{ max-width:720px; margin:0 auto; }
+    h1{ text-align:center; margin:0 0 2px; font-size:22px; letter-spacing:.03em; }
+    .contact{ text-align:center; font-size:12px; color:#555; margin-bottom:16px; }
+    h2{ font-size:13px; text-transform:uppercase; letter-spacing:.08em; border-bottom:2px solid ${accent}; padding-bottom:3px; margin:20px 0 8px; }
+  `)}</style>
+  <div class="page">
+    <h1>${m.name}</h1><div class="contact">${contact}</div>
+    <h2>Summary</h2><p>${m.summary}</p>
+    <h2>Skills</h2><p>${m.skills.join(', ')}</p>
+    <h2>Experience</h2>${expHtml}
+    <h2>Education</h2>${eduHtml}
+  </div>`;
+}
+
+function renderHarvard(m, opts, fontFamily, textColor, fontSize, lineHeight) {
+  // Harvard OCS-style: name in small caps, education listed before experience,
+  // bold institution/company with dates flush right on the same line.
+  const contact = m.contactParts.join(' &nbsp;•&nbsp; ');
+  const eduHtml = m.education.map(ed => `
+    <div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${ed.school}</span><span>${ed.dates}</span>
+      </div>
+      <div>${ed.degree}${ed.field ? ', ' + ed.field : ''}</div>
+    </div>`).join('');
+  const expHtml = m.experience.map(e => `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${e.company}</span><span>${e.dates}</span>
+      </div>
+      <div style="font-style:italic;margin-bottom:4px;">${e.role}</div>
+      <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>`).join('');
+  return `<style>${baseDocStyles(fontFamily, textColor, fontSize, lineHeight, `
+    .page{ max-width:700px; margin:0 auto; }
+    h1{ text-align:center; margin:0; font-size:20px; letter-spacing:.12em; text-transform:uppercase; }
+    .contact{ text-align:center; font-size:11.5px; margin:4px 0 18px; }
+    h2{ font-size:12.5px; text-transform:uppercase; letter-spacing:.1em; font-weight:700;
+        border-bottom:1.5px solid ${textColor}; padding-bottom:2px; margin:18px 0 8px; }
+  `)}</style>
+  <div class="page">
+    <h1>${m.name}</h1><div class="contact">${contact}</div>
+    <h2>Education</h2>${eduHtml}
+    <h2>Experience</h2>${expHtml}
+    <h2>Skills</h2><p>${m.skills.join(', ')}</p>
+    <h2>Summary</h2><p>${m.summary}</p>
+  </div>`;
+}
+
+function renderJakes(m, opts, fontFamily, textColor, fontSize, lineHeight) {
+  // The well-known "Jake's Resume" layout: dense, ATS-friendly, section
+  // heading immediately followed by a full-width rule, tight vertical rhythm.
+  const contact = m.contactParts.join(' &nbsp;|&nbsp; ');
+  const expHtml = m.experience.map(e => `
+    <div style="margin-bottom:9px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${e.role}</span><span>${e.dates}</span>
+      </div>
+      <div style="font-style:italic;font-size:0.95em;margin-bottom:2px;">${e.company}</div>
+      <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>`).join('');
+  const eduHtml = m.education.map(ed => `
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+      <span><strong>${ed.school}</strong> — ${ed.degree} ${ed.field}</span><span>${ed.dates}</span>
+    </div>`).join('');
+  return `<style>${baseDocStyles(fontFamily, textColor, fontSize, lineHeight, `
+    .page{ max-width:720px; margin:0 auto; }
+    h1{ text-align:center; margin:0; font-size:19px; }
+    .contact{ text-align:center; font-size:11px; color:#333; margin:2px 0 12px; }
+    h2{ font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; font-weight:700;
+        border-bottom:1px solid #000; padding-bottom:1px; margin:12px 0 5px; }
+    p{ margin:0 0 6px; }
+  `)}</style>
+  <div class="page">
+    <h1>${m.name}</h1><div class="contact">${contact}</div>
+    <h2>Education</h2>${eduHtml}
+    <h2>Experience</h2>${expHtml}
+    <h2>Skills</h2><p>${m.skills.join(', ')}</p>
+    <h2>Summary</h2><p>${m.summary}</p>
+  </div>`;
+}
+
+function renderModern(m, opts, fontFamily, textColor, fontSize, lineHeight) {
+  // A genuine two-column layout: colored sidebar for contact/skills, main
+  // column for summary/experience/education — structurally different from
+  // the single-column templates above.
+  const accent = opts.accent || '#16a34a';
+  const expHtml = m.experience.map(e => `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${e.role}</span><span style="color:#555;">${e.dates}</span>
+      </div>
+      <div style="font-style:italic;color:${accent};margin-bottom:4px;">${e.company}</div>
+      <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>`).join('');
+  const eduHtml = m.education.map(ed => `
+    <div style="margin-bottom:8px;"><strong>${ed.school}</strong><br>${ed.degree} ${ed.field}<br><span style="color:#777;">${ed.dates}</span></div>`).join('');
+  return `<style>${baseDocStyles(fontFamily, textColor, fontSize, lineHeight, `
+    .page{ display:flex; min-height:100%; }
+    .sidebar{ width:34%; background:${accent}; color:#fff; padding:26px 18px; }
+    .sidebar h1{ font-size:19px; margin:0 0 12px; line-height:1.2; }
+    .sidebar h3{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin:16px 0 6px; opacity:.85; }
+    .sidebar .contact-item{ font-size:11px; margin-bottom:5px; word-break:break-word; }
+    .sidebar .skill-pill{ display:inline-block; background:rgba(255,255,255,.18); border-radius:10px; padding:2px 8px; font-size:10.5px; margin:0 4px 4px 0; }
+    .main{ width:66%; padding:26px 24px; }
+    .main h2{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:${accent}; margin:0 0 8px; }
+    .main h2:not(:first-child){ margin-top:18px; }
+  `)}</style>
+  <div class="page">
+    <div class="sidebar">
+      <h1>${m.name}</h1>
+      ${m.contactParts.map(c => `<div class="contact-item">${c}</div>`).join('')}
+      <h3>Skills</h3>
+      ${m.skills.map(s => `<span class="skill-pill">${s}</span>`).join('')}
+      <h3>Education</h3>
+      ${eduHtml}
+    </div>
+    <div class="main">
+      <h2>Summary</h2><p>${m.summary}</p>
+      <h2>Experience</h2>${expHtml}
+    </div>
+  </div>`;
+}
+
+function renderMinimal(m, opts, fontFamily, textColor, fontSize, lineHeight) {
+  // Rule-free, whitespace-driven layout — the deliberate opposite of the
+  // bordered/sectioned templates above.
+  const accent = opts.accent || '#16a34a';
+  const contact = m.contactParts.join('   ');
+  const expHtml = m.experience.map(e => `
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-weight:600;">${e.role}</span><span style="color:#999;font-size:0.9em;">${e.dates}</span>
+      </div>
+      <div style="color:#888;margin-bottom:8px;">${e.company}</div>
+      <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>`).join('');
+  const eduHtml = m.education.map(ed => `
+    <div style="margin-bottom:10px;">${ed.school} &nbsp;·&nbsp; ${ed.degree} ${ed.field} <span style="color:#999;">${ed.dates}</span></div>`).join('');
+  return `<style>${baseDocStyles(fontFamily, textColor, fontSize, lineHeight, `
+    .page{ max-width:680px; margin:0 auto; }
+    h1{ font-weight:300; font-size:26px; letter-spacing:.02em; margin:0 0 4px; color:${accent}; }
+    .contact{ font-size:11px; color:#999; margin-bottom:28px; }
+    h2{ font-size:10.5px; text-transform:uppercase; letter-spacing:.18em; font-weight:600; color:#aaa; margin:26px 0 10px; }
+  `)}</style>
+  <div class="page">
+    <h1>${m.name}</h1><div class="contact">${contact}</div>
+    <h2>Summary</h2><p>${m.summary}</p>
+    <h2>Experience</h2>${expHtml}
+    <h2>Education</h2>${eduHtml}
+    <h2>Skills</h2><p>${m.skills.join(' &nbsp;·&nbsp; ')}</p>
+  </div>`;
+}
+
+const TEMPLATE_RENDERERS = {
+  'Classic': renderClassic,
+  'Harvard': renderHarvard,
+  "Jake's": renderJakes,
+  'Modern': renderModern,
+  'Minimal': renderMinimal
 };
 
 function resumeToHtml(resume, opts) {
-  const p = withProfileFallback(resume.personal);
-  const accent = opts.accent || '#16a34a';
   const textColor = opts.textColor || '#0f172a';
-  const noMetrics = !!opts.noMetrics;
-  const fontFamily = opts.fontFamily || null;
+  const fontFamily = opts.fontFamily || (TEMPLATE_STYLES[opts.template] || TEMPLATE_STYLES.Classic).font;
   const fontSize = opts.fontSize || 10.5;
   const lineHeight = opts.lineHeight || 1.25;
-  const tpl = TEMPLATE_STYLES[opts.template] || TEMPLATE_STYLES.Classic;
-  const clean = s => esc(noMetrics ? stripMetrics(s) : s);
-  const headingCss = {
-    rule: `border-bottom:2px solid ${accent}; padding-bottom:3px;`,
-    'rule-bold': `border-bottom:3px double ${accent}; padding-bottom:4px; font-weight:800;`,
-    'rule-thin': `border-bottom:1px solid ${accent}; padding-bottom:2px;`,
-    color: `color:${accent};`,
-    plain: `color:${textColor}; opacity:0.75;`
-  }[tpl.headingMode];
-  const contact = [p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' &nbsp;|&nbsp; ');
-  const skillsHtml = (resume.skills || []).map(esc).join(', ');
-  const expHtml = (resume.experience || []).map(e => `
-    <div style="margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;font-weight:700;">
-        <span>${esc(e.role || '')}</span><span>${esc(e.dates || e.endDate || '')}</span>
-      </div>
-      <div style="font-style:italic;color:#444;margin-bottom:4px;">${esc(e.company || '')}</div>
-      <ul style="margin:0;padding-left:18px;">
-        ${(e.description || '').split('\n').filter(Boolean).map(l => `<li>${clean(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}
-      </ul>
-    </div>`).join('');
-  const eduHtml = (resume.education || []).map(ed => `
-    <div style="margin-bottom:8px;"><strong>${esc(ed.school || '')}</strong> — ${esc(ed.degree || '')} ${esc(ed.field || '')}</div>`).join('');
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
-    body{ font-family:${fontFamily || tpl.font}; color:${textColor}; padding:32px; max-width:720px; margin:0 auto;
-      font-size:${fontSize}pt; line-height:${lineHeight}; }
-    h1{ text-align:center; margin-bottom:2px; } .contact{ text-align:center; font-size:12px; color:#555; margin-bottom:16px; }
-    h2{ font-size:13px; text-transform:${tpl.headingCase}; letter-spacing:.05em; ${headingCss} margin-top:20px; }
-  </style></head><body>
-    <h1>${esc(p.name || '')}</h1><div class="contact">${contact}</div>
-    <h2>Summary</h2><p>${clean(resume.summary || '')}</p>
-    <h2>Skills</h2><p>${skillsHtml}</p>
-    <h2>Experience</h2>${expHtml}
-    <h2>Education</h2>${eduHtml}
-  </body></html>`;
+  const model = buildResumeModel(resume, opts);
+  const renderer = TEMPLATE_RENDERERS[opts.template] || renderClassic;
+  const bodyHtml = renderer(model, opts, fontFamily, textColor, fontSize, lineHeight);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/></head><body>${bodyHtml}</body></html>`;
 }
 
 function downloadResume(resume, opts, filenameOverride) {
@@ -610,29 +798,53 @@ async function downloadHtmlAsPdf(html, fileBase) {
   const btn = document.getElementById('docDownloadBtn') || document.getElementById('qdDownload') || document.getElementById('tl-go-download');
   const prevText = btn ? btn.textContent : null;
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
+  // A4 width in CSS px at 96dpi — giving html2canvas an explicit, normal-flow
+  // element to measure avoids the "blank page" bug that happens when it's
+  // asked to rasterize an element that is itself position:fixed / far off-screen.
+  const PAGE_WIDTH_PX = 794;
+  let outer = null;
   try {
     await loadHtml2Pdf();
-    const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.left = '-99999px';
-    container.style.top = '0';
-    container.innerHTML = html;
-    document.body.appendChild(container);
-    const bodyEl = container.querySelector('body') || container;
+
+    // Outer wrapper does the "keep it off-screen" trick...
+    outer = document.createElement('div');
+    outer.style.position = 'fixed';
+    outer.style.top = '0';
+    outer.style.left = '0';
+    outer.style.width = '0';
+    outer.style.height = '0';
+    outer.style.overflow = 'hidden';
+
+    // ...but the element handed to html2canvas is a plain, normally-positioned
+    // child with a fixed width, so it always lays out and measures correctly.
+    const inner = document.createElement('div');
+    inner.style.position = 'static';
+    inner.style.width = `${PAGE_WIDTH_PX}px`;
+    inner.style.background = '#ffffff';
+    inner.innerHTML = html;
+
+    outer.appendChild(inner);
+    document.body.appendChild(outer);
+
+    // Give the browser a frame to lay out fonts/content before capturing.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const target = inner.querySelector('body') || inner;
+
     await window.html2pdf()
       .set({
         margin: 0,
         filename: `${fileBase}.pdf`,
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: PAGE_WIDTH_PX },
         jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'] }
       })
-      .from(bodyEl)
+      .from(target)
       .save();
-    document.body.removeChild(container);
   } catch (e) {
     showToast(e.message || 'Could not generate PDF', 'error');
   } finally {
+    if (outer && outer.parentNode) document.body.removeChild(outer);
     if (btn) { btn.disabled = false; btn.textContent = prevText; }
   }
 }
