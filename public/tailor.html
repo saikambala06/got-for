@@ -893,21 +893,30 @@ async function downloadHtmlAsPdf(html, fileBase) {
   // A4 width in CSS px at 96dpi.
   const PAGE_WIDTH_PX = 794;
   let outer = null;
+  let genOverlay = null;
   try {
     await loadHtml2Pdf();
 
-    // IMPORTANT: don't hide this off-screen with a huge negative offset
-    // (e.g. left:-99999px) — that's a known source of clipped/corrupted
-    // captures in html2canvas. Instead render it on-screen at (0,0), on
-    // top of everything, behind an opaque backdrop so it's not disruptive —
-    // this keeps the element in a normal, well-behaved viewport position.
+    // The capture target has to be genuinely laid out in the document (not
+    // display:none/visibility:hidden) or html2canvas renders it blank — but
+    // it doesn't need to be visible to the person. Older versions of this
+    // page rendered it on-screen at full size behind a plain white div,
+    // which caused a distracting flash of the resume across the whole
+    // screen (a different-looking "animation" every time depending on
+    // scroll position) and, because that div sat on top of everything,
+    // blocked scrolling/clicks on the real page for the second or so it
+    // took to capture. Clipping it inside a zero-size, overflow-hidden,
+    // pointer-events-none wrapper keeps it fully laid out (so the capture
+    // is correct) while making it completely invisible and non-blocking.
     outer = document.createElement('div');
     outer.style.position = 'fixed';
     outer.style.top = '0';
     outer.style.left = '0';
-    outer.style.zIndex = '999999';
-    outer.style.background = '#ffffff';
-    outer.style.overflow = 'visible';
+    outer.style.width = '0';
+    outer.style.height = '0';
+    outer.style.overflow = 'hidden';
+    outer.style.pointerEvents = 'none';
+    outer.style.zIndex = '-1';
 
     const inner = document.createElement('div');
     inner.style.position = 'static';
@@ -918,8 +927,35 @@ async function downloadHtmlAsPdf(html, fileBase) {
     outer.appendChild(inner);
     document.body.appendChild(outer);
 
-    // Give the browser a frame to lay out fonts/content before capturing.
+    // Show one consistent, intentional loading state instead of whatever
+    // flashed on screen before.
+    genOverlay = document.createElement('div');
+    genOverlay.innerHTML = `
+      <div style="position:fixed;inset:0;z-index:999999;background:rgba(15,17,23,.35);
+        display:flex;align-items:center;justify-content:center;">
+        <div style="background:var(--surface,#fff);color:var(--text,#111);border-radius:12px;
+          padding:22px 30px;display:flex;align-items:center;gap:12px;box-shadow:0 12px 32px rgba(0,0,0,.3);
+          font-size:13.5px;font-weight:600;">
+          <span style="width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(0,0,0,.15);
+            border-top-color:#16a34a;display:inline-block;animation:pdfSpin .8s linear infinite;"></span>
+          Generating your PDF…
+        </div>
+      </div>
+      <style>@keyframes pdfSpin{ to{ transform:rotate(360deg); } }</style>`;
+    document.body.appendChild(genOverlay);
+
+    // Give the browser a frame to lay out content, then wait for fonts and
+    // any images to actually finish loading — capturing mid-load is the
+    // other reason the output looked inconsistent/blurry between runs.
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (document.fonts && document.fonts.ready) {
+      try { await document.fonts.ready; } catch (e) { /* non-fatal */ }
+    }
+    const images = Array.from(inner.querySelectorAll('img'));
+    await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(res => {
+      img.addEventListener('load', res, { once: true });
+      img.addEventListener('error', res, { once: true });
+    })));
 
     const target = inner.querySelector('body') || inner;
 
@@ -928,7 +964,11 @@ async function downloadHtmlAsPdf(html, fileBase) {
         .set({
           margin: 0,
           filename: `${fileBase}.pdf`,
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: PAGE_WIDTH_PX, x: 0, y: 0 },
+          html2canvas: {
+            scale: 3, useCORS: true, backgroundColor: '#ffffff', windowWidth: PAGE_WIDTH_PX,
+            x: 0, y: 0, letterRendering: true, imageTimeout: 15000
+          },
+          image: { type: 'jpeg', quality: 1 },
           jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['css', 'legacy'] }
         })
@@ -946,6 +986,7 @@ async function downloadHtmlAsPdf(html, fileBase) {
     showToast(e.message || 'Could not generate PDF', 'error');
   } finally {
     if (outer && outer.parentNode) document.body.removeChild(outer);
+    if (genOverlay && genOverlay.parentNode) document.body.removeChild(genOverlay);
     if (btn) { btn.disabled = false; btn.textContent = prevText; }
   }
 }
