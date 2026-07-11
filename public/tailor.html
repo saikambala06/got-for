@@ -139,6 +139,47 @@
   .qd-note{ font-size:11px; color:var(--text-faint); line-height:1.5; }
 
   @media (max-width:900px){ .qd-body{ flex-direction:column; } .qd-right{ width:100%; } }
+
+  /* ---- template chooser overlay ---- */
+  .tpl-overlay{ position:fixed; inset:0; background:var(--bg); z-index:200; overflow-y:auto; }
+  .tpl-overlay-inner{ max-width:1100px; margin:0 auto; padding:28px 32px 60px; }
+  .tpl-overlay h1{ font-size:24px; margin:20px 0 4px; }
+  .tpl-overlay .sub{ font-size:13.5px; color:var(--text-faint); margin-bottom:26px; }
+  .tpl-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:22px; }
+  .tpl-card{ cursor:pointer; border:1.5px solid var(--border); border-radius:var(--radius); overflow:hidden;
+    background:var(--surface); transition:.15s; }
+  .tpl-card:hover{ border-color:var(--green); transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.25); }
+  .tpl-thumb{ width:100%; height:280px; overflow:hidden; position:relative; background:#fff; }
+  .tpl-thumb iframe{ position:absolute; top:0; left:0; width:800px; height:1035px; border:none;
+    transform:scale(0.275); transform-origin:top left; pointer-events:none; }
+  .tpl-card-label{ padding:11px 14px; font-size:13.5px; font-weight:700; text-align:center; }
+
+  /* ---- document editor overlay ---- */
+  .doc-overlay{ position:fixed; inset:0; background:var(--bg); z-index:210; display:flex; flex-direction:column; }
+  .doc-toolbar{ display:flex; align-items:center; gap:18px; padding:12px 20px; border-bottom:1px solid var(--border);
+    background:var(--surface); flex-wrap:wrap; }
+  .doc-toolbar select{ padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2);
+    color:var(--text); font-size:13px; }
+  .doc-tool-group{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-faint); }
+  .doc-tool-group button{ width:26px; height:26px; border-radius:6px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text); cursor:pointer; font-size:14px; }
+  .doc-tool-group input[type="range"]{ width:110px; }
+  .doc-preview-wrap{ flex:1; overflow:auto; display:flex; justify-content:center; padding:30px; background:var(--bg-soft); }
+  .doc-page{ background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.4); height:fit-content; }
+  .doc-page iframe{ width:794px; height:1123px; border:none; display:block; transform-origin:top center; }
+  .doc-bottombar{ display:flex; align-items:center; gap:12px; padding:14px 20px; border-top:1px solid var(--border);
+    background:var(--surface); }
+  .doc-filename-input{ flex:0 0 auto; width:280px; padding:9px 12px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text); font-size:13px; }
+  .doc-download-split{ display:flex; position:relative; }
+  .doc-download-split .btn{ border-radius:0; }
+  .doc-download-split .btn:first-child{ border-radius:10px 0 0 10px; }
+  .doc-download-caret{ border-radius:0 10px 10px 0 !important; border-left:1px solid rgba(0,0,0,.15) !important; padding:10px 10px !important; }
+  .doc-download-menu{ position:absolute; bottom:calc(100% + 6px); right:0; background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.35); overflow:hidden; min-width:180px; }
+  .doc-download-menu button{ display:flex; align-items:center; gap:8px; width:100%; padding:11px 14px; background:none;
+    border:none; color:var(--text); font-size:13px; cursor:pointer; text-align:left; }
+  .doc-download-menu button:hover{ background:var(--surface-2); }
 </style>
 </head>
 <body>
@@ -200,10 +241,9 @@
           <div class="tl-sheet" id="reviewSheet"></div>
           <div class="tl-bottombar">
             <button class="btn btn-primary" id="tl-apply-all">Apply all changes</button>
-            <button class="link-btn" id="tl-reset-changes">Reset changes</button>
+            <button class="link-btn" id="tl-reset-changes">Reset</button>
             <span class="tl-changes-note" id="tl-changes-note"></span>
             <div style="flex:1;"></div>
-            <button class="btn" id="tl-back-to-picker">← Start over</button>
             <button class="btn btn-primary" id="tl-go-download">Download resume →</button>
           </div>
         </div>
@@ -290,6 +330,56 @@
   </main>
 </div>
 
+<!-- Template chooser overlay -->
+<div id="templateChooserOverlay" class="tpl-overlay" style="display:none;">
+  <div class="tpl-overlay-inner">
+    <button class="btn" id="tplBackBtn">← Back to tailor resume</button>
+    <h1>Choose your resume template</h1>
+    <p class="sub">Select a design that fits your professional style. You can preview and download in PDF or Word.</p>
+    <div class="tpl-grid" id="tplGrid"></div>
+  </div>
+</div>
+
+<!-- Document editor / final download overlay -->
+<div id="docEditorOverlay" class="doc-overlay" style="display:none;">
+  <div class="doc-toolbar">
+    <select id="docFont">
+      <option value="Georgia, 'Times New Roman', serif">Crimson Text</option>
+      <option value="'Times New Roman', Times, serif">Times New Roman</option>
+      <option value="Calibri, Arial, sans-serif">Calibri</option>
+      <option value="'Segoe UI', Arial, sans-serif">Segoe UI</option>
+      <option value="Helvetica, Arial, sans-serif">Helvetica</option>
+    </select>
+    <div class="doc-tool-group">
+      <button id="docFontMinus">−</button><span id="docFontSizeLabel">10</span><button id="docFontPlus">+</button>
+    </div>
+    <div class="doc-tool-group">
+      <label>Line spacing</label><input type="range" id="docLineHeight" min="1" max="2" step="0.05" value="1.25">
+    </div>
+    <div class="doc-tool-group">
+      <label>Zoom</label><input type="range" id="docZoom" min="50" max="150" step="5" value="100"><span id="docZoomLabel">100%</span>
+    </div>
+    <div style="flex:1;"></div>
+    <button class="btn" id="docBackBtn">← Templates</button>
+  </div>
+  <div class="doc-preview-wrap">
+    <div class="doc-page"><iframe id="docFrame"></iframe></div>
+  </div>
+  <div class="doc-bottombar">
+    <input type="text" id="docFilename" class="doc-filename-input" />
+    <div style="flex:1;"></div>
+    <button class="btn" id="docCancelBtn">Cancel</button>
+    <div class="doc-download-split">
+      <button class="btn btn-primary" id="docDownloadBtn">⬇ Download</button>
+      <button class="btn btn-primary doc-download-caret" id="docDownloadCaret">▾</button>
+      <div class="doc-download-menu" id="docDownloadMenu" style="display:none;">
+        <button data-format="pdf">📄 Download PDF</button>
+        <button data-format="docx">📄 Download DOCX</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
@@ -317,7 +407,8 @@ const state = {
   resume: null,
   decisions: {},
   qd: { template: 'Classic', textColor: TEXT_COLORS[0], accent: '#16a34a', format: 'pdf', tailoringLevel: 'high', noMetrics: false },
-  jobKeywords: []
+  jobKeywords: [],
+  editor: { fontFamily: null, fontSize: 10, lineHeight: 1.25, zoom: 100, filename: '' }
 };
 
 function scoreRing(percent, size = 46) {
@@ -370,11 +461,15 @@ function resumeFullText(resume) {
   return parts.join(' \n ').toLowerCase();
 }
 
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function computeAtsScore(resume) {
   const keywords = state.jobKeywords || [];
   if (!keywords.length) return 0;
   const text = resumeFullText(resume);
-  const matched = keywords.filter(k => text.includes(k));
+  const matched = keywords.filter(k => new RegExp(`\\b${escapeRegex(k)}\\b`).test(text));
   return Math.round((matched.length / keywords.length) * 100);
 }
 
@@ -382,6 +477,17 @@ function resetDecisions() {
   state.decisions = { summary: true };
   (state.diff.experience || []).forEach(role => {
     role.bullets.forEach((b, bi) => { state.decisions[`exp:${role.index}:${bi}`] = true; });
+  });
+}
+
+// Reverts every suggestion back to its original/unaccepted state — used by
+// the "Reset" button. Explicitly sets every key to false rather than just
+// clearing the decisions object, because an unset key defaults to "accepted"
+// elsewhere (so clearing it used to be indistinguishable from Apply All).
+function rejectAllDecisions() {
+  state.decisions = { summary: false };
+  (state.diff.experience || []).forEach(role => {
+    role.bullets.forEach((b, bi) => { state.decisions[`exp:${role.index}:${bi}`] = false; });
   });
 }
 
@@ -427,6 +533,9 @@ function resumeToHtml(resume, opts) {
   const accent = opts.accent || '#16a34a';
   const textColor = opts.textColor || '#0f172a';
   const noMetrics = !!opts.noMetrics;
+  const fontFamily = opts.fontFamily || null;
+  const fontSize = opts.fontSize || 10.5;
+  const lineHeight = opts.lineHeight || 1.25;
   const tpl = TEMPLATE_STYLES[opts.template] || TEMPLATE_STYLES.Classic;
   const clean = s => esc(noMetrics ? stripMetrics(s) : s);
   const headingCss = {
@@ -451,7 +560,8 @@ function resumeToHtml(resume, opts) {
   const eduHtml = (resume.education || []).map(ed => `
     <div style="margin-bottom:8px;"><strong>${esc(ed.school || '')}</strong> — ${esc(ed.degree || '')} ${esc(ed.field || '')}</div>`).join('');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
-    body{ font-family:${tpl.font}; color:${textColor}; padding:32px; max-width:720px; margin:0 auto; }
+    body{ font-family:${fontFamily || tpl.font}; color:${textColor}; padding:32px; max-width:720px; margin:0 auto;
+      font-size:${fontSize}pt; line-height:${lineHeight}; }
     h1{ text-align:center; margin-bottom:2px; } .contact{ text-align:center; font-size:12px; color:#555; margin-bottom:16px; }
     h2{ font-size:13px; text-transform:${tpl.headingCase}; letter-spacing:.05em; ${headingCss} margin-top:20px; }
   </style></head><body>
@@ -463,9 +573,9 @@ function resumeToHtml(resume, opts) {
   </body></html>`;
 }
 
-function downloadResume(resume, opts) {
+function downloadResume(resume, opts, filenameOverride) {
   const html = resumeToHtml(resume, opts);
-  const fileBase = (withProfileFallback(resume.personal).name || 'resume').replace(/\s+/g, '_');
+  const fileBase = (filenameOverride || withProfileFallback(resume.personal).name || 'resume').replace(/\.(pdf|docx?|doc)$/i, '').replace(/\s+/g, '_');
   if (opts.format === 'docx') {
     const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
     const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
@@ -497,7 +607,7 @@ function loadHtml2Pdf() {
 }
 
 async function downloadHtmlAsPdf(html, fileBase) {
-  const btn = document.getElementById('qdDownload') || document.getElementById('tl-go-download');
+  const btn = document.getElementById('docDownloadBtn') || document.getElementById('qdDownload') || document.getElementById('tl-go-download');
   const prevText = btn ? btn.textContent : null;
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
   try {
@@ -541,6 +651,7 @@ function projectedResume(opts = {}) {
       const accepted = isAccepted(key);
       if (b.action === 'remove') { if (!accepted) lines.push(b.old); return; }
       if (b.action === 'keep') { lines.push(b.new); return; }
+      if (b.action === 'add') { if (accepted) lines.push(b.new); return; }
       lines.push(accepted ? b.new : (b.old || b.new));
     });
     return { ...original, description: lines.join('\n') };
@@ -648,6 +759,16 @@ function renderReviewSheet() {
               <button class="tl-act no active" style="display:inline-flex;" data-kind="${key}" data-value="false">✗ keep</button></div>`
           : `<div class="tl-plain">${esc(b.old)} <button class="tl-act yes" style="display:inline-flex;" data-kind="${key}" data-value="true">✓ remove</button></div>`;
       }
+      if (b.action === 'add') {
+        return `
+          <div class="tl-diff-row">
+            <div class="tl-new">${accepted ? esc(b.new) : '<span style="color:var(--text-faint);font-style:italic;">Not added</span>'}</div>
+            <div class="tl-diff-actions">
+              <button class="tl-act yes ${accepted ? 'active' : ''}" data-kind="${key}" data-value="true">✓</button>
+              <button class="tl-act no ${!accepted ? 'active' : ''}" data-kind="${key}" data-value="false">✗</button>
+            </div>
+          </div>`;
+      }
       return `
         ${accepted && b.old ? `<div class="tl-old">${esc(b.old)}</div>` : ''}
         <div class="tl-diff-row">
@@ -720,11 +841,6 @@ document.getElementById('tl-continue').addEventListener('click', async () => {
   btn.disabled = false; btn.textContent = 'Continue →';
 });
 
-document.getElementById('tl-back-to-picker').addEventListener('click', () => {
-  document.getElementById('pickerCard').style.display = 'block';
-  document.getElementById('reviewOut').style.display = 'none';
-});
-
 document.getElementById('reviewLevels').addEventListener('click', async (e) => {
   const btn = e.target.closest('.tl-level-btn');
   if (!btn) return;
@@ -741,12 +857,12 @@ document.getElementById('tl-apply-all').addEventListener('click', () => {
 });
 
 document.getElementById('tl-reset-changes').addEventListener('click', () => {
-  state.decisions = {};
+  rejectAllDecisions();
   renderReviewSheet();
 });
 
 document.getElementById('tl-go-download').addEventListener('click', () => {
-  downloadResume(projectedResume(), state.qd);
+  openTemplateChooser();
 });
 
 /* ---- quick download tab ---- */
@@ -787,7 +903,126 @@ document.getElementById('qdLevel').addEventListener('click', async (e) => {
   await runTailor(state.qd.tailoringLevel);
   renderQuickDownload();
 });
-document.getElementById('qdDownload').addEventListener('click', () => downloadResume(projectedResume(), state.qd));
+document.getElementById('qdDownload').addEventListener('click', () => openTemplateChooser());
+
+/* ---- template chooser overlay ---- */
+function openTemplateChooser() {
+  const resume = projectedResume();
+  const grid = document.getElementById('tplGrid');
+  grid.innerHTML = TEMPLATES.map(t => `
+    <div class="tpl-card" data-template="${esc(t)}">
+      <div class="tpl-thumb"><iframe srcdoc="${esc(resumeToHtml(resume, { ...state.qd, template: t }))}"></iframe></div>
+      <div class="tpl-card-label">${esc(t)}</div>
+    </div>`).join('');
+  grid.querySelectorAll('.tpl-card').forEach(card => {
+    card.addEventListener('click', () => selectTemplateAndOpenEditor(card.dataset.template));
+  });
+  document.getElementById('templateChooserOverlay').style.display = 'block';
+}
+
+document.getElementById('tplBackBtn').addEventListener('click', () => {
+  document.getElementById('templateChooserOverlay').style.display = 'none';
+});
+
+/* ---- document editor overlay ---- */
+function selectTemplateAndOpenEditor(templateName) {
+  state.qd.template = templateName;
+  document.getElementById('templateChooserOverlay').style.display = 'none';
+  document.getElementById('docEditorOverlay').style.display = 'flex';
+
+  const p = withProfileFallback(state.resume.personal);
+  state.editor.filename = `${(p.name || 'Resume').replace(/\s+/g, '_')}_Resume`;
+  document.getElementById('docFilename').value = state.editor.filename;
+  document.getElementById('docFont').value = TEMPLATE_STYLES[templateName]?.font || TEMPLATE_STYLES.Classic.font;
+  state.editor.fontFamily = document.getElementById('docFont').value;
+  document.getElementById('docFontSizeLabel').textContent = state.editor.fontSize;
+  document.getElementById('docLineHeight').value = state.editor.lineHeight;
+  document.getElementById('docZoom').value = state.editor.zoom;
+  document.getElementById('docZoomLabel').textContent = `${state.editor.zoom}%`;
+  renderDocEditor();
+}
+
+function renderDocEditor() {
+  const resume = projectedResume();
+  const html = resumeToHtml(resume, {
+    ...state.qd,
+    fontFamily: state.editor.fontFamily,
+    fontSize: state.editor.fontSize,
+    lineHeight: state.editor.lineHeight
+  });
+  document.getElementById('docFrame').srcdoc = html;
+  document.getElementById('docFrame').style.transform = `scale(${state.editor.zoom / 100})`;
+}
+
+document.getElementById('docBackBtn').addEventListener('click', () => {
+  document.getElementById('docEditorOverlay').style.display = 'none';
+  openTemplateChooser();
+});
+
+document.getElementById('docCancelBtn').addEventListener('click', () => {
+  document.getElementById('docEditorOverlay').style.display = 'none';
+});
+
+document.getElementById('docFont').addEventListener('change', e => {
+  state.editor.fontFamily = e.target.value;
+  renderDocEditor();
+});
+
+document.getElementById('docFontMinus').addEventListener('click', () => {
+  state.editor.fontSize = Math.max(7, state.editor.fontSize - 0.5);
+  document.getElementById('docFontSizeLabel').textContent = state.editor.fontSize;
+  renderDocEditor();
+});
+document.getElementById('docFontPlus').addEventListener('click', () => {
+  state.editor.fontSize = Math.min(16, state.editor.fontSize + 0.5);
+  document.getElementById('docFontSizeLabel').textContent = state.editor.fontSize;
+  renderDocEditor();
+});
+
+document.getElementById('docLineHeight').addEventListener('input', e => {
+  state.editor.lineHeight = parseFloat(e.target.value);
+  renderDocEditor();
+});
+
+document.getElementById('docZoom').addEventListener('input', e => {
+  state.editor.zoom = parseInt(e.target.value, 10);
+  document.getElementById('docZoomLabel').textContent = `${state.editor.zoom}%`;
+  document.getElementById('docFrame').style.transform = `scale(${state.editor.zoom / 100})`;
+});
+
+document.getElementById('docFilename').addEventListener('input', e => {
+  state.editor.filename = e.target.value;
+});
+
+document.getElementById('docDownloadCaret').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const menu = document.getElementById('docDownloadMenu');
+  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+});
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('docDownloadMenu');
+  if (menu.style.display === 'block' && !e.target.closest('.doc-download-split')) menu.style.display = 'none';
+});
+document.getElementById('docDownloadMenu').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-format]');
+  if (!btn) return;
+  document.getElementById('docDownloadMenu').style.display = 'none';
+  state.qd.format = btn.dataset.format;
+  downloadResume(projectedResume(), {
+    ...state.qd,
+    fontFamily: state.editor.fontFamily,
+    fontSize: state.editor.fontSize,
+    lineHeight: state.editor.lineHeight
+  }, state.editor.filename);
+});
+document.getElementById('docDownloadBtn').addEventListener('click', () => {
+  downloadResume(projectedResume(), {
+    ...state.qd,
+    fontFamily: state.editor.fontFamily,
+    fontSize: state.editor.fontSize,
+    lineHeight: state.editor.lineHeight
+  }, state.editor.filename);
+});
 
 loadResumes().then(() => {
   if (qp.get('mode') === 'quick') {
