@@ -4,6 +4,7 @@
  */
 const { parseResumeText } = require('./resumeParser');
 const { cleanSkill } = require('./skillUtils');
+const { jsonrepair } = require('jsonrepair');
 
 // ─── Shared Gemini caller ────────────────────────────────────────────────────
 //
@@ -429,7 +430,11 @@ function extractJSON(raw) {
       try {
         return repairTruncatedJSON(candidate, extractErrorPosition(e));
       } catch {
-        // Fall through and try the wider/truncation-repair path below.
+        try {
+          return JSON.parse(jsonrepair(candidate));
+        } catch {
+          // Fall through and try the wider/truncation-repair path below.
+        }
       }
     }
   }
@@ -450,7 +455,19 @@ function extractJSON(raw) {
     try {
       return repairTruncatedJSON(s, extractErrorPosition(e));
     } catch {
-      throw new Error(`JSON parse failed: ${e.message}`);
+      // Last resort: jsonrepair handles cases our own repair logic doesn't —
+      // unescaped quotes inside string values, raw control characters,
+      // trailing commas, single-quoted strings, etc. This is what actually
+      // recovers responses that fail with errors like "Expected ',' or ']'
+      // after array element", which usually means a stray unescaped quote
+      // mid-string threw off parsing well before the true end of the
+      // response (not a truncation issue at all, so our bracket-counting
+      // repair can't fix it).
+      try {
+        return JSON.parse(jsonrepair(s));
+      } catch {
+        throw new Error(`JSON parse failed: ${e.message}`);
+      }
     }
   }
 }
@@ -748,6 +765,7 @@ Rules:
 - You may also "add" a small number of brand new bullets per role (only at MEDIUM/HIGH level, and only synthesized from facts already present elsewhere in the resume — never invented)
 - Never invent facts, employers, dates, or achievements — only rephrase, reorder, and incorporate what already exists or what the candidate has explicitly confirmed
 - Follow the requested tailoring level intensity exactly as instructed
+- Output must be a single valid JSON object: escape any double-quote characters or line breaks that occur inside a string value (e.g. write \" and \n), never leave a raw " or newline inside a string, and never add trailing commas
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
@@ -877,7 +895,7 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
     // than a plain rewrite would. Too tight a budget here truncates the
     // response mid-JSON, which is what caused "JSON parse failed: Expected
     // ',' or ']'..." errors on longer resumes.
-    12000,
+    16000,
     { jsonMode: true }
   );
 
