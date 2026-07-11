@@ -54,9 +54,9 @@
   .tl-level-btn:disabled{ opacity:.6; cursor:default; }
   .tl-sheet{ max-width:720px; margin:0 auto; background:var(--surface); border:1px solid var(--border);
     border-radius:var(--radius); padding:30px 36px; position:relative; min-height:160px; }
-  .tl-tailor-loading{ position:absolute; inset:0; background:rgba(10,14,12,0.55); backdrop-filter:blur(4px);
-    -webkit-backdrop-filter:blur(4px); border-radius:var(--radius);
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:50; }
+  .tl-tailor-loading{ position:fixed; inset:0; background:rgba(10,14,12,0.65); backdrop-filter:blur(4px);
+    -webkit-backdrop-filter:blur(4px); border-radius:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:9999; }
   .tl-tailor-spinner{ width:34px; height:34px; border-radius:50%; border:3px solid var(--border);
     border-top-color:var(--green); animation:tlSpin .8s linear infinite; }
   .tl-tailor-loading-text{ font-size:13px; font-weight:600; color:var(--text-dim); }
