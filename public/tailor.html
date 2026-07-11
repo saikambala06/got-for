@@ -316,7 +316,8 @@ const state = {
   diff: null,
   resume: null,
   decisions: {},
-  qd: { template: 'Classic', textColor: TEXT_COLORS[0], accent: '#16a34a', format: 'pdf', tailoringLevel: 'high', noMetrics: false }
+  qd: { template: 'Classic', textColor: TEXT_COLORS[0], accent: '#16a34a', format: 'pdf', tailoringLevel: 'high', noMetrics: false },
+  jobKeywords: []
 };
 
 function scoreRing(percent, size = 46) {
@@ -332,12 +333,49 @@ function scoreRing(percent, size = 46) {
   </svg>`;
 }
 
-function matchScoreFor(skillsList) {
-  const target = (state.diff && state.diff.skills) || [];
-  if (!target.length) return 0;
-  const cur = new Set((skillsList || []).map(s => s.toLowerCase()));
-  const matched = target.filter(s => cur.has(s.toLowerCase()));
-  return Math.round((matched.length / target.length) * 100);
+/* ---- real ATS-style match score ----
+   Extracts significant keywords straight from the job description, then
+   measures how many actually show up anywhere in the resume's text
+   (summary, skills, and every experience bullet). Computed fresh for both
+   the original resume and the "projected" resume (the tailored resume with
+   the person's current accept/reject decisions applied), so the score
+   genuinely moves as changes are accepted or reverted. */
+const ATS_STOPWORDS = new Set([
+  'the','and','for','are','with','that','this','from','have','will','you','your','our','their','who',
+  'what','which','all','any','can','not','but','was','were','has','had','been','into','than','then',
+  'they','them','also','using','use','used','including','include','across','role','roles','job','jobs',
+  'team','teams','work','working','years','year','experience','experienced','strong','ability','abilities',
+  'skills','skill','required','requirements','requirement','preferred','plus','etc','about','other','such',
+  'both','more','most','some','each','per','within','ensure','ensuring','support','supporting','responsible',
+  'responsibilities','description','looking','candidate','candidates','company','position','opportunity',
+  'ideal','join','joining','new','well','high','best','good','great','able','need','needs','must','like',
+  'help','helping','make','making','level','levels','part','full','time'
+]);
+
+function extractKeywords(text) {
+  const counts = {};
+  const words = String(text || '').toLowerCase().match(/[a-z][a-z0-9+#.\-]{2,}/g) || [];
+  words.forEach(raw => {
+    const w = raw.replace(/^[-.]+|[-.]+$/g, '');
+    if (!w || w.length < 3 || ATS_STOPWORDS.has(w) || /^\d+$/.test(w)) return;
+    counts[w] = (counts[w] || 0) + 1;
+  });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 40).map(([w]) => w);
+}
+
+function resumeFullText(resume) {
+  const parts = [resume.summary || '', (resume.skills || []).join(' ')];
+  (resume.experience || []).forEach(e => parts.push(e.role || '', e.description || ''));
+  (resume.education || []).forEach(ed => parts.push(ed.degree || '', ed.field || ''));
+  return parts.join(' \n ').toLowerCase();
+}
+
+function computeAtsScore(resume) {
+  const keywords = state.jobKeywords || [];
+  if (!keywords.length) return 0;
+  const text = resumeFullText(resume);
+  const matched = keywords.filter(k => text.includes(k));
+  return Math.round((matched.length / keywords.length) * 100);
 }
 
 function resetDecisions() {
@@ -489,15 +527,18 @@ async function downloadHtmlAsPdf(html, fileBase) {
   }
 }
 
-function projectedResume() {
+function projectedResume(opts = {}) {
   const { diff, resume, decisions } = state;
-  const summary = decisions.summary !== false ? diff.summary.new : diff.summary.old;
+  const acceptAll = !!opts.acceptAll;
+  const isAccepted = key => acceptAll ? true : decisions[key] !== false;
+
+  const summary = isAccepted('summary') ? diff.summary.new : diff.summary.old;
   const experience = diff.experience.map((role, ri) => {
     const original = resume.experience[ri] || {};
     const lines = [];
     role.bullets.forEach((b, bi) => {
       const key = `exp:${role.index}:${bi}`;
-      const accepted = decisions[key] !== false;
+      const accepted = isAccepted(key);
       if (b.action === 'remove') { if (!accepted) lines.push(b.old); return; }
       if (b.action === 'keep') { lines.push(b.new); return; }
       lines.push(accepted ? b.new : (b.old || b.new));
@@ -570,6 +611,7 @@ async function runTailor(level) {
   const resume = state.resumes.find(r => r._id === state.selectedResumeId);
   if (!resume) { showToast('Pick a resume first', 'error'); return null; }
   state.resume = resume;
+  if (!state.jobKeywords.length) state.jobKeywords = extractKeywords(`${job.title} ${job.description}`);
   const { tailored } = await api.post(`/api/resumes/${state.selectedResumeId}/tailor`, {
     jobTitle: job.title, jobDescription: job.description, tailoringLevel: level || 'high'
   });
@@ -634,15 +676,23 @@ function renderReviewSheet() {
     });
   });
 
-  const currentScore = matchScoreFor(state.resume.skills);
-  const projectedScore = matchScoreFor(projectedResume().skills);
+  // "Current" = the score of the resume as it actually stands with today's
+  // accept/reject decisions applied (i.e. projectedResume() right now).
+  // "If you accept everything" = the score if every suggested change were accepted,
+  // computed independently of what's currently toggled.
+  const baselineScore = computeAtsScore(state.resume);
+  const currentScore = computeAtsScore(projectedResume());
+  const allAcceptedResume = projectedResume({ acceptAll: true });
+  const allAcceptedScore = computeAtsScore(allAcceptedResume);
   document.getElementById('tl-score').innerHTML = `
     <div>${scoreRing(currentScore)}</div>
-    <div class="tl-score-copy">MATCH SCORE<br/><b>${currentScore}</b> → ~${projectedScore} if you accept all</div>`;
+    <div class="tl-score-copy">MATCH SCORE<br/><b>${currentScore}</b>
+      ${currentScore !== baselineScore ? `<span style="color:var(--text-faint);font-weight:400;">(was ${baselineScore})</span>` : ''}
+      ${allAcceptedScore > currentScore ? ` → ~${allAcceptedScore} if you accept all` : ''}</div>`;
 
   const total = countChanges(diff);
   const accepted = countAccepted(diff, decisions);
-  document.getElementById('tl-apply-all').textContent = `Apply all ${total} changes → ~${projectedScore}`;
+  document.getElementById('tl-apply-all').textContent = `Apply all ${total} changes → ~${allAcceptedScore}`;
   document.getElementById('tl-changes-note').textContent = `${accepted} of ${total} changes accepted`;
 }
 
