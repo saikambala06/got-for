@@ -218,11 +218,9 @@ button{ font-family:inherit; }
   padding:13px 18px; border-radius:10px; font-size:13.5px;
   box-shadow: var(--shadow); z-index:999;
   display:flex; align-items:center; gap:10px;
-  animation: toast-in .25s ease;
 }
 .toast.error{ border-color: rgba(255,107,129,0.4); color:#ffd2da; }
 .toast.success{ border-color: rgba(54,211,153,0.4); color:#c9ffe9; }
-@keyframes toast-in{ from{ opacity:0; transform:translateY(8px);} to{ opacity:1; transform:none; } }
 
 .loader{
   width:18px; height:18px; border-radius:50%;
@@ -240,3 +238,224 @@ button{ font-family:inherit; }
   .cards-row{ grid-template-columns:1fr; }
   .form-grid{ grid-template-columns:1fr; }
 }
+
+/* ==========================================================================
+   MOTION SYSTEM
+   Shared easing/duration tokens + keyframes used across every page so
+   animation feels like one coherent system instead of per-page one-offs.
+   ========================================================================== */
+:root{
+  --ease-out: cubic-bezier(.16,1,.3,1);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --dur-fast: .15s;
+  --dur-base: .25s;
+  --dur-slow: .45s;
+}
+
+@keyframes fadeInUp{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:none; } }
+@keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes scaleIn{ from{ opacity:0; transform:scale(.95); } to{ opacity:1; transform:scale(1); } }
+@keyframes popIn{ 0%{ opacity:0; transform:scale(.86); } 65%{ transform:scale(1.03); } 100%{ opacity:1; transform:scale(1); } }
+@keyframes shimmer{ 0%{ background-position:-200% 0; } 100%{ background-position:200% 0; } }
+@keyframes floatY{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-5px); } }
+@keyframes checkPop{ 0%{ transform:scale(0) rotate(-20deg); opacity:0; } 60%{ transform:scale(1.15) rotate(4deg); } 100%{ transform:scale(1) rotate(0); opacity:1; } }
+
+/* Page-level entrance: applied to .main's direct content wrapper on load */
+.page-enter{ animation: fadeInUp var(--dur-slow) var(--ease-out) both; }
+
+/* Stagger utility — put on a list/grid container to fade its direct children
+   in one after another instead of all at once. */
+.stagger > *{ opacity:0; animation: fadeInUp var(--dur-base) var(--ease-out) both; }
+.stagger > *:nth-child(1){ animation-delay:.02s; }
+.stagger > *:nth-child(2){ animation-delay:.06s; }
+.stagger > *:nth-child(3){ animation-delay:.10s; }
+.stagger > *:nth-child(4){ animation-delay:.14s; }
+.stagger > *:nth-child(5){ animation-delay:.18s; }
+.stagger > *:nth-child(6){ animation-delay:.22s; }
+.stagger > *:nth-child(7){ animation-delay:.26s; }
+.stagger > *:nth-child(8){ animation-delay:.30s; }
+.stagger > *:nth-child(n+9){ animation-delay:.34s; }
+
+/* Respect the OS-level "reduce motion" setting: everything still changes
+   state, it just stops moving/animating to get there. */
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Keyboard focus should always be visible, mouse-click focus shouldn't look messy */
+:focus{ outline:none; }
+:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+
+/* ---------- Existing elements: micro-interactions ---------- */
+.card{ transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base) ease; }
+.nav-item{ position:relative; }
+.nav-item svg{ transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) ease; }
+.nav-item:hover svg{ transform: translateX(1px); }
+.nav-item.active{ animation: fadeIn var(--dur-base) ease; }
+.btn{ position:relative; overflow:hidden; }
+.btn:active{ transform: translateY(0) scale(.97); transition-duration: .08s; }
+.logout-btn svg, .close-x{ transition: transform var(--dur-fast) var(--ease-out); }
+.close-x:hover{ transform: rotate(90deg); }
+.skill-chip, .tl-skill, .pill{ transition: transform var(--dur-fast) var(--ease-out); }
+.stat-card{ transition: transform var(--dur-base) var(--ease-out); }
+.stat-card:hover{ transform: translateY(-2px); }
+.stat-card .stat-value{ font-variant-numeric: tabular-nums; }
+
+/* ==========================================================================
+   MODAL SYSTEM — .modal-backdrop / .modal-card
+   Used by any page that pops a confirmation/settings drawer over the page.
+   ========================================================================== */
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(6,8,16,0.6);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  display:flex; align-items:center; justify-content:center;
+  z-index:500; padding:20px;
+  animation: fadeIn var(--dur-base) ease both;
+}
+.modal-card{
+  background: var(--surface); border:1px solid var(--border);
+  border-radius: var(--radius); box-shadow: 0 30px 70px -20px rgba(0,0,0,.65);
+  padding:26px; width:100%; max-width:min(540px, 92vw); max-height:88vh; overflow-y:auto;
+  animation: scaleIn var(--dur-base) var(--ease-out) both;
+}
+.modal-card h3{ font-size:17px; margin-bottom:4px; }
+.modal-card p.modal-sub{ font-size:12.5px; color:var(--text-dim); margin-bottom:18px; }
+
+/* ==========================================================================
+   FIELD BLOCK — generic labeled control wrapper used inside modals/drawers
+   ========================================================================== */
+.field-block{ margin-bottom:20px; }
+.field-block:last-of-type{ margin-bottom:0; }
+.field-block label{
+  display:block; font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.05em; color:var(--text-faint); margin-bottom:8px;
+}
+.field-block select{
+  width:100%; padding:10px 12px; border-radius:var(--radius-sm);
+  border:1px solid var(--border); background:var(--surface-2); color:var(--text);
+  font-size:13.5px; font-family:inherit; transition: border-color var(--dur-fast) ease;
+}
+.field-block select:focus{ border-color:var(--accent); }
+
+.continue-btn{
+  width:100%; margin-top:8px; background:linear-gradient(135deg, var(--accent), #ff7a4d);
+  color:#1a1326; border:none; border-radius:10px; padding:13px; font-size:14px;
+  font-weight:700; cursor:pointer; transition: filter var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
+}
+.continue-btn:hover{ filter:brightness(1.06); transform:translateY(-1px); }
+.continue-btn:active{ transform: translateY(0) scale(.98); }
+.continue-btn:disabled{ opacity:.55; cursor:not-allowed; transform:none; filter:none; }
+.cancel-link{
+  display:block; width:100%; text-align:center; margin-top:12px; background:none; border:none;
+  color:var(--text-faint); font-size:12.5px; cursor:pointer; padding:6px; transition: color var(--dur-fast) ease;
+}
+.cancel-link:hover{ color:var(--text); }
+
+/* ==========================================================================
+   SEGMENTED CONTROL — .seg-group / .seg-btn
+   Used for Low/Med/High tailoring-level pickers and PDF/DOCX format toggles.
+   ========================================================================== */
+.seg-group{
+  display:flex; border:1px solid var(--border); border-radius:9px; overflow:hidden;
+}
+.seg-btn{
+  flex:1; border:none; background:var(--surface-2); color:var(--text-dim);
+  padding:9px 8px; font-size:12.5px; font-weight:600; cursor:pointer;
+  border-right:1px solid var(--border); font-family:inherit;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.seg-btn:last-child{ border-right:none; }
+.seg-btn:hover:not(.active):not(:disabled){ background: var(--surface); color:var(--text); }
+.seg-btn.active{ background: var(--accent); color:#1a1326; animation: popIn var(--dur-base) var(--ease-spring); }
+.seg-btn:disabled{ opacity:.55; cursor:not-allowed; }
+
+/* ==========================================================================
+   SWATCHES — .swatch-row / .swatch
+   Color pickers for resume text/accent color in Quick Download & Review.
+   ========================================================================== */
+.swatch-row{ display:flex; gap:9px; flex-wrap:wrap; }
+.swatch{
+  width:26px; height:26px; border-radius:50%; cursor:pointer;
+  border:2px solid transparent; display:inline-flex; align-items:center; justify-content:center;
+  transition: transform var(--dur-fast) var(--ease-spring), border-color var(--dur-fast) ease;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.swatch:hover{ transform: scale(1.12); }
+.swatch::after{
+  content:''; width:9px; height:9px; border-radius:50%; background:#fff;
+  opacity:0; transform:scale(.4); transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spring);
+  box-shadow: 0 0 2px rgba(0,0,0,.5);
+}
+.swatch.selected{ border-color: var(--text); transform:scale(1.08); }
+.swatch.selected::after{ opacity:1; transform:scale(1); }
+
+/* ==========================================================================
+   TOGGLE SWITCH — .switch / .track
+   Used for the "No metrics" style on/off preferences.
+   ========================================================================== */
+.toggle-block{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:14px; }
+.toggle-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.toggle-copy{ flex:1; min-width:0; }
+.toggle-title{ font-size:13px; font-weight:700; }
+.toggle-desc{ font-size:11.5px; color:var(--text-faint); margin-top:3px; line-height:1.45; }
+.switch{ position:relative; width:40px; height:23px; flex-shrink:0; display:inline-block; }
+.switch input{ opacity:0; width:0; height:0; position:absolute; }
+.switch .track{
+  position:absolute; inset:0; background:var(--border); border-radius:999px; cursor:pointer;
+  transition: background var(--dur-base) ease;
+}
+.switch .track::before{
+  content:''; position:absolute; width:17px; height:17px; left:3px; top:3px;
+  background:#fff; border-radius:50%; transition: transform var(--dur-base) var(--ease-spring);
+  box-shadow: 0 2px 5px rgba(0,0,0,.3);
+}
+.switch input:checked + .track{ background: var(--green); }
+.switch input:checked + .track::before{ transform: translateX(17px); }
+.switch input:focus-visible + .track{ outline:2px solid var(--accent); outline-offset:2px; }
+
+/* ==========================================================================
+   MODE OPTION CARDS — .mode-option family
+   The "Review & Edit" vs "Quick Download" picker on the Tailor Resume page.
+   ========================================================================== */
+.mode-option{
+  display:flex; align-items:flex-start; gap:12px; border:1.5px solid var(--border);
+  border-radius:12px; padding:14px 16px; margin-bottom:12px; cursor:pointer;
+  background:var(--surface-2); transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
+}
+.mode-option:hover{ border-color:var(--accent); transform:translateY(-1px); }
+.mode-option.selected{ border-color:var(--accent); background:var(--accent-soft); }
+.mode-radio{
+  width:18px; height:18px; border-radius:50%; border:2px solid var(--border); flex-shrink:0; margin-top:2px;
+  display:flex; align-items:center; justify-content:center; transition: border-color var(--dur-fast) ease;
+}
+.mode-option.selected .mode-radio{ border-color:var(--accent); }
+.mode-radio-dot{
+  width:9px; height:9px; border-radius:50%; background:var(--accent); transform:scale(0);
+  transition: transform var(--dur-fast) var(--ease-spring);
+}
+.mode-option.selected .mode-radio-dot{ transform:scale(1); }
+.mode-title{ font-size:14.5px; font-weight:700; display:flex; align-items:center; gap:8px; }
+.mode-badge{ font-size:11px; font-weight:700; color:var(--blue); }
+.mode-badge.fast{ color: var(--accent-2); }
+.mode-desc{ font-size:12.5px; color:var(--text-faint); margin-top:3px; line-height:1.45; }
+
+/* ==========================================================================
+   SKELETON LOADING — shimmer placeholder for content that's still loading
+   ========================================================================== */
+.skeleton{
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 6px;
+}
+
+/* ---------- Toast / loader refinements ---------- */
+.toast{ animation: fadeInUp var(--dur-base) var(--ease-spring); }
+.toast.leaving{ animation: fadeIn var(--dur-fast) ease reverse both; }
+.loader, .loader-sm{ animation: spin .7s linear infinite; }
+.empty-state .icon{ display:inline-block; animation: floatY 3s ease-in-out infinite; }

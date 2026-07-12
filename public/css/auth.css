@@ -48,7 +48,17 @@
   background: rgba(255,107,129,0.1); border:1px solid rgba(255,107,129,0.35);
   color:#ffd2da; padding:10px 13px; border-radius:9px; font-size:13px; display:none;
 }
-.auth-error.show{ display:block; }
+.auth-error.show{ display:block; animation: authShake .4s var(--ease-out); }
+@keyframes authShake{
+  0%{ opacity:0; transform:translateX(0); }
+  20%{ opacity:1; transform:translateX(-6px); }
+  40%{ transform:translateX(5px); }
+  60%{ transform:translateX(-3px); }
+  80%{ transform:translateX(2px); }
+  100%{ transform:translateX(0); }
+}
+.field input{ transition: border-color var(--dur-fast, .15s) ease, box-shadow var(--dur-fast, .15s) ease; }
+.field input:focus{ box-shadow: 0 0 0 3px var(--accent-soft, rgba(255,154,77,.15)); }
 .auth-submit{ margin-top:6px; width:100%; justify-content:center; padding:12px; font-size:14px; }
 .demo-note{
   margin-top:18px; text-align:center; font-size:12.5px; color:var(--text-faint);

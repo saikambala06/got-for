@@ -198,13 +198,13 @@ function renderSummary(jobs) {
     </div>`).join('');
 }
 
-function renderJobList() {
+function renderJobList(animate) {
   const listEl = document.getElementById('jobList');
   if (!allJobs.length) {
     listEl.innerHTML = `<div class="empty-state"><div class="icon">📭</div><h4>No applications found</h4><p>Try a different filter or add a new one.</p></div>`;
     return;
   }
-  listEl.innerHTML = allJobs.map((j) => `
+  const rows = allJobs.map((j) => `
     <div class="job-row ${j._id === selectedId ? 'active' : ''}" data-id="${j._id}">
       <div style="display:flex;align-items:center;gap:12px;min-width:0;">
         <div class="jr-icon">${escapeHtml(j.company).slice(0,2).toUpperCase()}</div>
@@ -218,6 +218,7 @@ function renderJobList() {
         <button class="star-btn ${j.favorite ? 'fav' : ''}" data-fav="${j._id}" title="Favorite">★</button>
       </div>
     </div>`).join('');
+  listEl.innerHTML = animate ? `<div class="stagger">${rows}</div>` : rows;
 
   listEl.querySelectorAll('.job-row').forEach((row) => {
     row.addEventListener('click', (e) => {
@@ -248,6 +249,7 @@ function renderDetail() {
     return;
   }
   panel.innerHTML = `
+    <div class="page-enter">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;">
       <div>
         <h3 style="font-size:19px;">${escapeHtml(job.title)}</h3>
@@ -261,11 +263,16 @@ function renderDetail() {
     ${job.jobUrl ? `<div class="kv-row"><span>Posting</span><span><a href="${escapeHtml(job.jobUrl)}" target="_blank" style="color:var(--accent-2)">View original →</a></span></div>` : ''}
     ${job.skills && job.skills.length ? `<div style="margin-top:16px;"><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">SKILLS</div>${job.skills.map(s=>`<span class="skill-chip">${escapeHtml(s)}</span>`).join('')}</div>` : ''}
     ${job.notes ? `<div style="margin-top:16px;"><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">NOTES</div><p style="font-size:13.5px;line-height:1.6;color:var(--text);">${escapeHtml(job.notes)}</p></div>` : ''}
-    <div style="display:flex;gap:10px;margin-top:24px;">
+    <div style="display:flex;gap:10px;margin-top:24px;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" id="tailorJobBtn">✨ Tailor resume for this job</button>
       <button class="btn btn-sm" id="editJobBtn">Edit</button>
       <button class="btn btn-sm btn-danger" id="deleteJobBtn">Delete</button>
     </div>
+    </div>
   `;
+  document.getElementById('tailorJobBtn').addEventListener('click', () => {
+    window.location.href = `/tailor-resume.html?jobId=${encodeURIComponent(job._id)}`;
+  });
   document.getElementById('editJobBtn').addEventListener('click', () => openModal(job));
   document.getElementById('deleteJobBtn').addEventListener('click', async () => {
     if (!confirm('Delete this application? This cannot be undone.')) return;
@@ -291,7 +298,7 @@ async function loadJobs() {
     allJobs = jobs;
     if (!jobs.find((j) => j._id === selectedId)) selectedId = null;
     renderSummary(jobs);
-    renderJobList();
+    renderJobList(true);
     renderDetail();
   } catch (err) {
     showToast(err.message, 'error');
