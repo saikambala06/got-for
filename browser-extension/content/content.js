@@ -184,7 +184,7 @@
     panel.renderFooter({
       onManual: openManualForm,
       onMarkApplied: markApplied,
-      onTailor: tailorResume,
+      onTailor: openTailorPicker,
       onCoverLetter: draftCoverLetter,
       onReload: confirmReload,
       applied: state.applied
@@ -422,15 +422,12 @@
     );
   }
 
-  function tailorResume() {
-    const job = currentJob();
-    send('tabs:openTailor', {
-      resumeId: state.selectedResumeId,
-      jobTitle: job.title,
-      company: job.company,
-      jobDescription: job.description
-    }).catch((err) => alert(`Could not open Tailor Resume: ${err.message}`));
-  }
+  // NOTE: Tailoring (both "Review & edit" and "Quick Download") now happens
+  // entirely inside this in-page panel via openTailorPicker() -> openStudio()
+  // -> renderStudio()/renderQuickDownloadScreen(). Every screen re-fetches
+  // and re-renders from state.resumes/state.selectedResumeId directly, and
+  // "Download" in Quick Download downloads right there — no separate tab is
+  // opened and there's no intermediate "template" page to redirect through.
 
   // ─── Resume export (client-side, no server dependency) ─────────────────
 
