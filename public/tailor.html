@@ -851,7 +851,17 @@ function downloadResume(resume, opts, filenameOverride) {
   const html = resumeToHtml(resume, opts);
   const fileBase = (filenameOverride || withProfileFallback(resume.personal).name || 'resume').replace(/\.(pdf|docx?|doc)$/i, '').replace(/\s+/g, '_');
   if (opts.format === 'docx') {
-    const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
+    // `html` from resumeToHtml() is already a complete document (its own
+    // <html>/<head>/<body>). Wrapping that whole string inside a second
+    // <html ...> tag (as this used to do) produces a doc with two nested
+    // <html> roots and a DOCTYPE that's no longer the first thing in the
+    // file — Word's HTML parser chokes on that and the file opens cut off
+    // or completely empty. Instead, inject the mso namespaces into the
+    // existing single <html> tag.
+    const wrapped = html.replace(
+      '<html>',
+      `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>`
+    );
     const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -925,13 +935,16 @@ async function downloadHtmlAsPdf(html, fileBase) {
     // took to capture. Clipping it inside a zero-size, overflow-hidden,
     // pointer-events-none wrapper keeps it fully laid out (so the capture
     // is correct) while making it completely invisible and non-blocking.
+    // NOTE: this used to be a 0x0, overflow:hidden wrapper. html2canvas
+    // clones and paints based on the real layout, and clipping the wrapper
+    // to zero size clips the clone's render box too — that's what was
+    // making the exported PDF come out blank or cut off. Moving it off the
+    // visible canvas (instead of collapsing it to nothing) keeps it hidden
+    // from the person without breaking the capture.
     outer = document.createElement('div');
     outer.style.position = 'fixed';
     outer.style.top = '0';
-    outer.style.left = '0';
-    outer.style.width = '0';
-    outer.style.height = '0';
-    outer.style.overflow = 'hidden';
+    outer.style.left = '-99999px';
     outer.style.pointerEvents = 'none';
     outer.style.zIndex = '-1';
 
@@ -1210,7 +1223,16 @@ document.getElementById('tl-continue').addEventListener('click', async () => {
       await runTailor(state.qd.tailoringLevel);
       document.getElementById('qdTabBtn').disabled = false;
       document.querySelector('[data-tab="quick"]').click();
-      renderQuickDownload();
+      // The quick-download panel starts as display:none and only becomes
+      // visible via the .click() above. Setting the iframe's srcdoc in the
+      // very same tick means the frame gets its initial layout while the
+      // panel is still (from the browser's point of view) mid-transition
+      // from display:none — it can end up rendering the resume into a
+      // stale/collapsed box, showing up blank until some other control
+      // re-sets srcdoc after the panel has properly settled. Waiting a
+      // couple of frames lets the browser finish laying out the now-visible
+      // panel before the resume content loads into it.
+      requestAnimationFrame(() => requestAnimationFrame(() => renderQuickDownload()));
     } else {
       await runTailor('high');
       rejectAllDecisions(); // nothing accepted yet — badge should reflect the real, untailored ATS score

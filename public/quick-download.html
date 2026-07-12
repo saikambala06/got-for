@@ -285,7 +285,15 @@ function resumeToExportHtml(resume) {
 }
 
 function downloadDocx(html, filenameBase) {
-  const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
+  // `html` is already a full document (its own <html>/<head>/<body> from
+  // ResumeTemplates.renderResumeHTML). Wrapping it in a second <html ...>
+  // tag creates nested <html> roots + a DOCTYPE that's no longer first in
+  // the file, which Word's parser can't handle — the .doc opens cut off or
+  // blank. Inject the mso namespaces into the existing <html> tag instead.
+  const wrapped = html.replace(
+    '<html>',
+    `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>`
+  );
   const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -299,12 +307,16 @@ function downloadDocx(html, filenameBase) {
 function downloadPdf(html, filenameBase) {
   // Print-to-PDF via a hidden iframe so it never navigates/redirects the current page
   // and isn't blocked as a popup.
+  // A 0x0 iframe lays its inner document out in a 0-width viewport before
+  // print ever kicks in, which is what made the "PDF" come out blank or
+  // cut off — give it a real page-sized box and just push it off-screen
+  // instead of collapsing it to nothing.
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
+  iframe.style.top = '0';
+  iframe.style.left = '-99999px';
+  iframe.style.width = '794px';
+  iframe.style.height = '1123px';
   iframe.style.border = '0';
   document.body.appendChild(iframe);
   const doc = iframe.contentWindow.document;
