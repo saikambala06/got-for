@@ -54,13 +54,62 @@
   .tl-level-btn:disabled{ opacity:.6; cursor:default; }
   .tl-sheet{ max-width:720px; margin:0 auto; background:var(--surface); border:1px solid var(--border);
     border-radius:var(--radius); padding:30px 36px; position:relative; min-height:160px; }
-  .tl-tailor-loading{ position:fixed; inset:0; background:rgba(10,14,12,0.65); backdrop-filter:blur(4px);
-    -webkit-backdrop-filter:blur(4px); border-radius:0;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:9999; }
+  .tl-tailor-loading{ position:fixed; inset:0; background:rgba(10,14,12,0.72); backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px); border-radius:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; z-index:9999;
+    opacity:0; animation:tlLoadingIn .25s ease forwards; }
+  @keyframes tlLoadingIn{ from{ opacity:0; } to{ opacity:1; } }
   .tl-tailor-spinner{ width:34px; height:34px; border-radius:50%; border:3px solid var(--border);
     border-top-color:var(--green); animation:tlSpin .8s linear infinite; }
   .tl-tailor-loading-text{ font-size:13px; font-weight:600; color:var(--text-dim); }
   @keyframes tlSpin{ to{ transform:rotate(360deg); } }
+
+  /* ---- professional multi-step tailoring loader ---- */
+  .tl-loader-card{ display:flex; flex-direction:column; align-items:center; gap:20px; }
+  .tl-loader-ring-wrap{ position:relative; width:64px; height:64px; }
+  .tl-loader-ring{ width:64px; height:64px; }
+  .tl-loader-ring circle{ fill:none; stroke-width:4; }
+  .tl-loader-ring .bg{ stroke:rgba(255,255,255,0.1); }
+  .tl-loader-ring .fg{ stroke:var(--green); stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%;
+    stroke-dasharray:176; stroke-dashoffset:176; animation:tlRingSweep 1.6s cubic-bezier(.65,0,.35,1) infinite; }
+  @keyframes tlRingSweep{
+    0%{ stroke-dashoffset:176; }
+    50%{ stroke-dashoffset:40; }
+    100%{ stroke-dashoffset:176; }
+  }
+  .tl-loader-ring-icon{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:20px; animation:tlPulse 1.6s ease-in-out infinite; }
+  @keyframes tlPulse{ 0%,100%{ transform:scale(1); opacity:.85; } 50%{ transform:scale(1.14); opacity:1; } }
+  .tl-loader-steps{ display:flex; flex-direction:column; gap:9px; min-width:230px; }
+  .tl-loader-step{ display:flex; align-items:center; gap:9px; font-size:12.5px; color:var(--text-faint);
+    transition:color .3s ease, transform .3s ease; opacity:.55; }
+  .tl-loader-step .dot{ width:16px; height:16px; border-radius:50%; border:1.5px solid var(--border); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:10px; transition:.3s ease; }
+  .tl-loader-step.active{ color:var(--text); opacity:1; transform:translateX(2px); }
+  .tl-loader-step.active .dot{ border-color:var(--green); box-shadow:0 0 0 3px rgba(54,211,153,0.15); }
+  .tl-loader-step.active .dot::after{ content:''; width:7px; height:7px; border-radius:50%; background:var(--green);
+    animation:tlDotBlink 1s ease-in-out infinite; }
+  @keyframes tlDotBlink{ 0%,100%{ opacity:.4; } 50%{ opacity:1; } }
+  .tl-loader-step.done{ color:var(--text-dim); opacity:.85; }
+  .tl-loader-step.done .dot{ border-color:var(--green); background:var(--green); color:#04140d; font-weight:800; }
+  .tl-loader-step.done .dot::before{ content:'✓'; }
+  .tl-loader-caption{ font-size:11.5px; color:var(--text-faint); }
+
+  /* fade/slide-in used when swapping tailoring levels or revealing panels */
+  .tl-fade-in{ animation:tlFadeIn .35s cubic-bezier(.2,.7,.3,1); }
+  @keyframes tlFadeIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:translateY(0); } }
+
+  /* ---- always-visible before/after ATS comparison strip ---- */
+  .tl-compare-strip{ display:flex; align-items:center; gap:0; margin-bottom:14px; background:var(--surface);
+    border:1px solid var(--border); border-radius:var(--radius); padding:14px 20px; }
+  .tl-compare-item{ flex:1; text-align:center; }
+  .tl-compare-label{ font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-faint); margin-bottom:4px; }
+  .tl-compare-val{ font-size:22px; font-weight:800; }
+  .tl-compare-val.before{ color:var(--text-dim); }
+  .tl-compare-val.after{ color:var(--green); }
+  .tl-compare-arrow{ font-size:18px; color:var(--text-faint); padding:0 14px; }
+  .tl-compare-delta{ font-size:11px; font-weight:700; color:var(--green); margin-top:2px; }
+  .tl-level-btn .lvl-score{ display:block; font-size:9.5px; font-weight:600; opacity:.85; margin-top:1px; }
   .qd-pill:disabled{ opacity:.6; cursor:default; }
   .tl-sheet h2{ text-align:center; font-size:20px; margin-bottom:4px; }
   .tl-sheet .contact{ text-align:center; font-size:12px; color:var(--text-faint); margin-bottom:16px; }
@@ -237,6 +286,7 @@
         </div>
 
         <div id="reviewOut" style="display:none;position:relative;">
+          <div class="tl-compare-strip" id="tl-compare-strip"></div>
           <div class="tl-review-top">
             <span class="field-label" style="margin:0;">Tailoring level</span>
             <div class="tl-level-group" id="reviewLevels">
@@ -256,8 +306,7 @@
             <button class="btn btn-primary" id="tl-go-download">Download resume →</button>
           </div>
           <div class="tl-tailor-loading" id="reviewTailorLoading" style="display:none;">
-            <div class="tl-tailor-spinner"></div>
-            <div class="tl-tailor-loading-text" id="reviewTailorLoadingText">Tailoring in progress…</div>
+            <div class="tl-loader-card" id="reviewTailorLoaderCard"></div>
           </div>
         </div>
       </div>
@@ -339,8 +388,7 @@
           </div>
         </div>
         <div class="tl-tailor-loading" id="qdTailorLoading" style="display:none;">
-          <div class="tl-tailor-spinner"></div>
-          <div class="tl-tailor-loading-text" id="qdTailorLoadingText">Tailoring in progress…</div>
+          <div class="tl-loader-card" id="qdTailorLoaderCard"></div>
         </div>
       </div>
     </div>
@@ -425,7 +473,11 @@ const state = {
   decisions: {},
   qd: { template: 'Classic', textColor: TEXT_COLORS[0], accent: '#16a34a', format: 'pdf', tailoringLevel: 'high', noMetrics: false },
   jobKeywords: [],
-  editor: { fontFamily: null, fontSize: 10, lineHeight: 1.25, zoom: 100, filename: '' }
+  editor: { fontFamily: null, fontSize: 10, lineHeight: 1.25, zoom: 100, filename: '' },
+  // Client-side cache of tailoring diffs already fetched this session, keyed
+  // by level ('low'|'medium'|'high'). Populated in bulk by runTailorAll() so
+  // switching levels afterwards is instant (no network round trip).
+  tailorCache: {}
 };
 
 function scoreRing(percent, size = 46) {
@@ -851,17 +903,7 @@ function downloadResume(resume, opts, filenameOverride) {
   const html = resumeToHtml(resume, opts);
   const fileBase = (filenameOverride || withProfileFallback(resume.personal).name || 'resume').replace(/\.(pdf|docx?|doc)$/i, '').replace(/\s+/g, '_');
   if (opts.format === 'docx') {
-    // `html` from resumeToHtml() is already a complete document (its own
-    // <html>/<head>/<body>). Wrapping that whole string inside a second
-    // <html ...> tag (as this used to do) produces a doc with two nested
-    // <html> roots and a DOCTYPE that's no longer the first thing in the
-    // file — Word's HTML parser chokes on that and the file opens cut off
-    // or completely empty. Instead, inject the mso namespaces into the
-    // existing single <html> tag.
-    const wrapped = html.replace(
-      '<html>',
-      `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>`
-    );
+    const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
     const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -935,16 +977,13 @@ async function downloadHtmlAsPdf(html, fileBase) {
     // took to capture. Clipping it inside a zero-size, overflow-hidden,
     // pointer-events-none wrapper keeps it fully laid out (so the capture
     // is correct) while making it completely invisible and non-blocking.
-    // NOTE: this used to be a 0x0, overflow:hidden wrapper. html2canvas
-    // clones and paints based on the real layout, and clipping the wrapper
-    // to zero size clips the clone's render box too — that's what was
-    // making the exported PDF come out blank or cut off. Moving it off the
-    // visible canvas (instead of collapsing it to nothing) keeps it hidden
-    // from the person without breaking the capture.
     outer = document.createElement('div');
     outer.style.position = 'fixed';
     outer.style.top = '0';
-    outer.style.left = '-99999px';
+    outer.style.left = '0';
+    outer.style.width = '0';
+    outer.style.height = '0';
+    outer.style.overflow = 'hidden';
     outer.style.pointerEvents = 'none';
     outer.style.zIndex = '-1';
 
@@ -1104,32 +1143,152 @@ document.querySelectorAll('.tl-mode').forEach(opt => {
 
 const LEVEL_LABELS = { low: 'Low', medium: 'Medium', high: 'High' };
 
+/* ---- professional multi-step tailoring loader ----
+   Shows a ring spinner plus a short sequence of steps that light up in
+   order while the AI call is in flight. The steps are cosmetic pacing
+   (we don't get real server-side progress from a single AI call) but are
+   timed to roughly track how long each phase of the tailoring pipeline
+   actually takes, so the wait reads as purposeful rather than a stuck spinner. */
+const TL_LOADER_STEPS = [
+  { icon: '🔎', label: 'Reading the job description' },
+  { icon: '🧩', label: 'Matching skills & keywords' },
+  { icon: '✍️', label: 'Rewriting summary & bullets' },
+  { icon: '📊', label: 'Scoring the ATS match' }
+];
+let _loaderStepTimer = null;
+
+function _renderLoaderCard(cardEl, level, activeStepIdx) {
+  if (!cardEl) return;
+  cardEl.innerHTML = `
+    <div class="tl-loader-ring-wrap">
+      <svg class="tl-loader-ring" viewBox="0 0 64 64">
+        <circle class="bg" cx="32" cy="32" r="28"/>
+        <circle class="fg" cx="32" cy="32" r="28"/>
+      </svg>
+      <div class="tl-loader-ring-icon">${TL_LOADER_STEPS[activeStepIdx]?.icon || '✨'}</div>
+    </div>
+    <div class="tl-loader-steps">
+      ${TL_LOADER_STEPS.map((s, i) => `
+        <div class="tl-loader-step ${i === activeStepIdx ? 'active' : i < activeStepIdx ? 'done' : ''}">
+          <span class="dot"></span><span>${esc(s.label)}</span>
+        </div>`).join('')}
+    </div>
+    <div class="tl-loader-caption">${LEVEL_LABELS[level] || 'High'} tailoring · usually a few seconds</div>`;
+}
+
 function showTailorLoading(scope, level) {
   const loadingEl = document.getElementById(scope === 'quick' ? 'qdTailorLoading' : 'reviewTailorLoading');
-  const textEl = document.getElementById(scope === 'quick' ? 'qdTailorLoadingText' : 'reviewTailorLoadingText');
-  if (textEl) textEl.textContent = `${LEVEL_LABELS[level] || 'High'} tailoring in progress…`;
+  const cardEl = document.getElementById(scope === 'quick' ? 'qdTailorLoaderCard' : 'reviewTailorLoaderCard');
   if (loadingEl) loadingEl.style.display = 'flex';
+
+  let step = 0;
+  _renderLoaderCard(cardEl, level, step);
+  if (_loaderStepTimer) clearInterval(_loaderStepTimer);
+  _loaderStepTimer = setInterval(() => {
+    step = Math.min(step + 1, TL_LOADER_STEPS.length - 1);
+    _renderLoaderCard(cardEl, level, step);
+  }, 900);
+
   const group = document.getElementById(scope === 'quick' ? 'qdLevel' : 'reviewLevels');
   if (group) group.querySelectorAll('button').forEach(b => b.disabled = true);
 }
 
 function hideTailorLoading(scope) {
+  if (_loaderStepTimer) { clearInterval(_loaderStepTimer); _loaderStepTimer = null; }
   const loadingEl = document.getElementById(scope === 'quick' ? 'qdTailorLoading' : 'reviewTailorLoading');
   if (loadingEl) loadingEl.style.display = 'none';
   const group = document.getElementById(scope === 'quick' ? 'qdLevel' : 'reviewLevels');
   if (group) group.querySelectorAll('button').forEach(b => b.disabled = false);
 }
 
+// Always-visible "before tailoring / after tailoring" strip — independent of
+// individual bullet accept/reject state, so the person can see the real
+// headline ATS impact of each tailoring level at a glance.
+function renderCompareStrip(level) {
+  const strip = document.getElementById('tl-compare-strip');
+  if (!strip) return;
+  const { before, after } = levelScoreSummary(level);
+  const afterKnown = after !== null;
+  const delta = afterKnown ? after - before : 0;
+  strip.classList.remove('tl-fade-in'); void strip.offsetWidth; strip.classList.add('tl-fade-in');
+  strip.innerHTML = `
+    <div class="tl-compare-item">
+      <div class="tl-compare-label">Before tailoring</div>
+      <div class="tl-compare-val before">${before}</div>
+    </div>
+    <div class="tl-compare-arrow">→</div>
+    <div class="tl-compare-item">
+      <div class="tl-compare-label">After tailoring (${LEVEL_LABELS[level]})</div>
+      <div class="tl-compare-val after">${afterKnown ? after : '…'}</div>
+      ${afterKnown ? `<div class="tl-compare-delta">${delta >= 0 ? '+' : ''}${delta} pts</div>` : ''}
+    </div>`;
+
+  // Small score hints on each level button once that level has been fetched.
+  document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(btn => {
+    const lvl = btn.dataset.level;
+    const s = levelScoreSummary(lvl);
+    const labelText = LEVEL_LABELS[lvl] === 'Medium' ? 'Med' : LEVEL_LABELS[lvl];
+    btn.innerHTML = `${labelText}${s.after !== null ? `<span class="lvl-score">${s.after}</span>` : ''}`;
+  });
+}
+
 async function runTailor(level) {
+  const lvl = level || 'high';
   const resume = state.resumes.find(r => r._id === state.selectedResumeId);
   if (!resume) { showToast('Pick a resume first', 'error'); return null; }
   state.resume = resume;
   if (!state.jobKeywords.length) state.jobKeywords = extractKeywords(`${job.title} ${job.description}`);
+
+  // Instant path: already fetched (either individually or via the bulk
+  // tailor-all prefetch) — no network round trip needed.
+  if (state.tailorCache[lvl]) {
+    state.diff = state.tailorCache[lvl];
+    return state.diff;
+  }
+
   const { tailored } = await api.post(`/api/resumes/${state.selectedResumeId}/tailor`, {
-    jobTitle: job.title, jobDescription: job.description, tailoringLevel: level || 'high'
+    jobTitle: job.title, jobDescription: job.description, tailoringLevel: lvl
   });
+  state.tailorCache[lvl] = tailored;
   state.diff = tailored;
   return tailored;
+}
+
+// Fires Low/Medium/High tailoring in parallel on the server (one round trip
+// instead of three sequential ones) and caches every level up front, so
+// switching between tailoring levels afterwards is instant with no spinner.
+async function runTailorAll() {
+  const resume = state.resumes.find(r => r._id === state.selectedResumeId);
+  if (!resume) { showToast('Pick a resume first', 'error'); return null; }
+  state.resume = resume;
+  if (!state.jobKeywords.length) state.jobKeywords = extractKeywords(`${job.title} ${job.description}`);
+
+  if (state.tailorCache.low && state.tailorCache.medium && state.tailorCache.high) {
+    return state.tailorCache;
+  }
+
+  const result = await api.post(`/api/resumes/${state.selectedResumeId}/tailor-all`, {
+    jobTitle: job.title, jobDescription: job.description
+  });
+  state.tailorCache.low = result.low;
+  state.tailorCache.medium = result.medium;
+  state.tailorCache.high = result.high;
+  return state.tailorCache;
+}
+
+// Real ATS score (before tailoring / after tailoring, fully accepted) for a
+// given cached level's diff — used to render the before/after comparison
+// strip regardless of which individual bullets the person has accepted.
+function levelScoreSummary(level) {
+  const diff = state.tailorCache[level];
+  const before = computeAtsScore(state.resume);
+  if (!diff) return { before, after: null };
+  const savedDiff = state.diff, savedDecisions = state.decisions;
+  state.diff = diff;
+  const after = computeAtsScore(projectedResume({ acceptAll: true }));
+  state.diff = savedDiff;
+  state.decisions = savedDecisions;
+  return { before, after };
 }
 
 function renderReviewSheet(opts = {}) {
@@ -1218,33 +1377,34 @@ function renderReviewSheet(opts = {}) {
 document.getElementById('tl-continue').addEventListener('click', async () => {
   const btn = document.getElementById('tl-continue');
   btn.disabled = true; btn.textContent = 'Matching against your resume…';
+  const scope = state.mode === 'quick' ? 'quick' : 'review';
+  showTailorLoading(scope, 'high');
   try {
+    // Fire all three tailoring levels in parallel on the server up front —
+    // this is the "fast and quick" path: one round trip instead of a fresh
+    // AI call every time the person switches Low/Medium/High afterwards.
+    await runTailorAll();
+    state.diff = state.tailorCache.high;
+
     if (state.mode === 'quick') {
-      await runTailor(state.qd.tailoringLevel);
       document.getElementById('qdTabBtn').disabled = false;
       document.querySelector('[data-tab="quick"]').click();
-      // The quick-download panel starts as display:none and only becomes
-      // visible via the .click() above. Setting the iframe's srcdoc in the
-      // very same tick means the frame gets its initial layout while the
-      // panel is still (from the browser's point of view) mid-transition
-      // from display:none — it can end up rendering the resume into a
-      // stale/collapsed box, showing up blank until some other control
-      // re-sets srcdoc after the panel has properly settled. Waiting a
-      // couple of frames lets the browser finish laying out the now-visible
-      // panel before the resume content loads into it.
-      requestAnimationFrame(() => requestAnimationFrame(() => renderQuickDownload()));
+      renderQuickDownload();
     } else {
-      await runTailor('high');
       rejectAllDecisions(); // nothing accepted yet — badge should reflect the real, untailored ATS score
       document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.toggle('active', b.dataset.level === 'high'));
       state.badgeDisplayedScore = undefined; // force the very first paint to snap in, not animate from a stale 0
+      renderCompareStrip('high');
       renderReviewSheet({ animateScore: false });
+      document.getElementById('reviewSheet').classList.add('tl-fade-in');
       document.getElementById('pickerCard').style.display = 'none';
       document.getElementById('reviewOut').style.display = 'block';
       document.getElementById('qdTabBtn').disabled = false;
     }
   } catch (e) {
     showToast(e.message || 'Tailoring failed', 'error');
+  } finally {
+    hideTailorLoading(scope);
   }
   btn.disabled = false; btn.textContent = 'Continue →';
 });
@@ -1252,12 +1412,28 @@ document.getElementById('tl-continue').addEventListener('click', async () => {
 document.getElementById('reviewLevels').addEventListener('click', async (e) => {
   const btn = e.target.closest('.tl-level-btn');
   if (!btn || btn.disabled) return;
+  const level = btn.dataset.level;
   document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  showTailorLoading('review', btn.dataset.level);
-  try {
-    await runTailor(btn.dataset.level);
+
+  // Already prefetched by runTailorAll() — swap instantly with a light
+  // fade instead of showing a spinner for something that's already cached.
+  if (state.tailorCache[level]) {
+    await runTailor(level);
     rejectAllDecisions();
+    renderCompareStrip(level);
+    renderReviewSheet({ animateScore: true });
+    document.getElementById('reviewSheet').classList.remove('tl-fade-in');
+    void document.getElementById('reviewSheet').offsetWidth;
+    document.getElementById('reviewSheet').classList.add('tl-fade-in');
+    return;
+  }
+
+  showTailorLoading('review', level);
+  try {
+    await runTailor(level);
+    rejectAllDecisions();
+    renderCompareStrip(level);
     renderReviewSheet({ animateScore: true });
   } catch (e2) {
     showToast(e2.message || 'Tailoring failed', 'error');
@@ -1318,14 +1494,17 @@ document.getElementById('qdLevel').addEventListener('click', async (e) => {
   const btn = e.target.closest('.qd-pill'); if (!btn || btn.disabled) return;
   if (btn.dataset.value === state.qd.tailoringLevel) return;
   state.qd.tailoringLevel = btn.dataset.value;
-  showTailorLoading('quick', state.qd.tailoringLevel);
+  const alreadyCached = !!state.tailorCache[state.qd.tailoringLevel];
+  if (!alreadyCached) showTailorLoading('quick', state.qd.tailoringLevel);
   try {
     await runTailor(state.qd.tailoringLevel);
     renderQuickDownload();
+    const wrap = document.getElementById('qdPreviewWrap') || document.querySelector('.qd-preview-wrap');
+    if (wrap) { wrap.classList.remove('tl-fade-in'); void wrap.offsetWidth; wrap.classList.add('tl-fade-in'); }
   } catch (e2) {
     showToast(e2.message || 'Tailoring failed', 'error');
   } finally {
-    hideTailorLoading('quick');
+    if (!alreadyCached) hideTailorLoading('quick');
   }
 });
 document.getElementById('qdDownload').addEventListener('click', () => openTemplateChooser());

@@ -80,13 +80,7 @@
   function downloadTailoredResume(resume, opts) {
     const html = resumeToHtml(resume, opts);
     if (opts.format === 'docx') {
-      // `html` is already a full document (own <html>/<head>/<body>);
-      // wrapping it again in <html ...> creates nested roots + a
-      // misplaced DOCTYPE that breaks Word's parser (cut off/empty .doc).
-      const wrapped = html.replace(
-        '<html>',
-        `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>`
-      );
+      const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
       const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

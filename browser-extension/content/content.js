@@ -559,16 +559,7 @@
     if (opts.format === 'docx') {
       // Lightweight Word-compatible export: Word opens HTML saved with a
       // .doc extension and the right MIME/header just fine.
-      // `html` from resumeToHtml() is already a full document (its own
-      // <html>/<head>/<body>). Wrapping the whole string in a second
-      // <html ...> tag creates nested <html> roots and pushes the DOCTYPE
-      // out of first position — Word's parser can choke on that and the
-      // file opens cut off or empty. Inject the mso namespaces into the
-      // existing <html> tag instead of wrapping again.
-      const wrapped = html.replace(
-        '<html>',
-        `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>`
-      );
+      const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
       const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
