@@ -6,7 +6,6 @@ const requireAuth = require('../middleware/auth');
 const { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI } = require('../utils/aiResumeParser');
 const { normalizeDocxText } = require('../utils/resumeParser');
 const { getKeyPool } = require('../utils/geminiKeyPool');
-const tailorCache = require('../utils/tailorCache');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -154,11 +153,7 @@ router.post('/:id/tailor', async (req, res) => {
     const { jobTitle = '', jobDescription = '', emphasizeSkills = [], tailoringLevel = 'high' } = req.body;
     if (!jobDescription.trim()) return res.status(400).json({ error: 'Job description is required' });
 
-    const cached = tailorCache.get(resume._id.toString(), tailoringLevel, jobTitle, jobDescription, emphasizeSkills);
-    if (cached) return res.json({ tailored: cached, cached: true });
-
     const tailored = await tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills, tailoringLevel);
-    tailorCache.set(resume._id.toString(), tailoringLevel, jobTitle, jobDescription, emphasizeSkills, tailored);
     res.json({ tailored });
   } catch (err) {
     console.error('[/tailor]', err.message);
@@ -168,37 +163,6 @@ router.post('/:id/tailor', async (req, res) => {
     // Surface the real reason (Gemini status code / message) instead of a
     // generic "please try again" — a masked error is impossible to
     // self-diagnose from the client side.
-    res.status(502).json({ error: `AI tailoring failed: ${err.message}` });
-  }
-});
-
-// ─── Tailor at all three levels in parallel ───────────────────────────────────
-// Firing Low/Medium/High concurrently instead of sequentially (one AI call
-// each) means the whole set is ready in roughly the time of a single call,
-// so switching tailoring levels afterwards is instant (served from cache).
-router.post('/:id/tailor-all', async (req, res) => {
-  try {
-    const resume = await Resume.findOne({ _id: req.params.id, user: req.userId });
-    if (!resume) return res.status(404).json({ error: 'Resume not found' });
-
-    const { jobTitle = '', jobDescription = '', emphasizeSkills = [] } = req.body;
-    if (!jobDescription.trim()) return res.status(400).json({ error: 'Job description is required' });
-
-    const levels = ['low', 'medium', 'high'];
-    const results = await Promise.all(levels.map(async (level) => {
-      const cached = tailorCache.get(resume._id.toString(), level, jobTitle, jobDescription, emphasizeSkills);
-      if (cached) return cached;
-      const tailored = await tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills, level);
-      tailorCache.set(resume._id.toString(), level, jobTitle, jobDescription, emphasizeSkills, tailored);
-      return tailored;
-    }));
-
-    res.json({ low: results[0], medium: results[1], high: results[2] });
-  } catch (err) {
-    console.error('[/tailor-all]', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
-    }
     res.status(502).json({ error: `AI tailoring failed: ${err.message}` });
   }
 });
