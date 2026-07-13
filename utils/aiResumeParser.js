@@ -349,11 +349,20 @@ function sanitizeParsed(p) {
       link:        str(x?.link, x?.url, x?.github, x?.website),
       description: str(x?.description, x?.summary, x?.details),
     })),
-    certifications: arr(p?.certifications ?? p?.certificates ?? p?.credentials).map((x) => ({
-      name:   str(x?.name, x?.title, x?.certification),
-      issuer: str(x?.issuer, x?.issuedBy, x?.organization, x?.provider),
-      date:   str(x?.date, x?.year, x?.issued),
-    })),
+    certifications: arr(p?.certifications ?? p?.certificates ?? p?.credentials).map((x) => {
+      // The schema asks the model for {name, issuer, date} objects, but for
+      // resumes that just list bare cert names it sometimes returns plain
+      // strings instead. Optional chaining on a string silently returns
+      // undefined for every field, so without this check a string entry
+      // like "AWS Certified Solutions Architect" collapsed to
+      // {name: '', issuer: '', date: ''} — the whole certification lost.
+      if (typeof x === 'string') return { name: x.trim(), issuer: '', date: '' };
+      return {
+        name:   str(x?.name, x?.title, x?.certification),
+        issuer: str(x?.issuer, x?.issuedBy, x?.organization, x?.provider),
+        date:   str(x?.date, x?.year, x?.issued),
+      };
+    }).filter((c) => c.name),
     achievements: arr(p?.achievements ?? p?.honors ?? p?.awards).map(a => {
       if (typeof a === 'string') return a.trim();
       if (typeof a === 'object' && a !== null) return str(a?.title, a?.name, a?.description);
