@@ -114,45 +114,14 @@
     <div class="topbar">
       <div>
         <div class="page-title">Resumes</div>
-        <div class="page-sub">Parse a resume into a structured profile, or tailor it against a job description — powered by Gemini.</div>
+        <div class="page-sub">Resumes you've parsed and saved. Click one to view its details.</div>
       </div>
+      <a href="/parse-resume.html" class="btn btn-primary">+ Parse a resume</a>
     </div>
 
     <div class="card section-card">
-      <div class="rt-tabs">
-        <button class="rt-tab active" data-tab="saved">My resumes</button>
-        <button class="rt-tab" data-tab="parse">Parse resume</button>
-      </div>
-
-      <!-- SAVED -->
-      <div class="rt-panel active" id="panel-saved">
-        <div class="rt-hint">Resumes you've parsed and saved. Click one to view its details.</div>
-        <div id="savedResumesList"></div>
-        <div id="savedResumeDetail"></div>
-      </div>
-
-      <!-- PARSE -->
-      <div class="rt-panel" id="panel-parse">
-        <textarea class="rt-textarea" id="resumeInput" placeholder="Paste the full resume text here..."></textarea>
-        <div class="rt-actions">
-          <button class="btn btn-primary" id="parseBtn">Parse resume</button>
-          <button class="btn" id="uploadBtn">Upload PDF/DOCX</button>
-          <input type="file" id="resumeFileInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />
-        </div>
-        <div id="parseStatus"></div>
-        <div id="parseError"></div>
-        <div id="dossierOut"></div>
-        <div id="saveRow" style="display:none; margin-top:18px;">
-          <div class="row-2" style="align-items:flex-end; grid-template-columns:1fr auto;">
-            <div>
-              <div class="field-label">Resume name</div>
-              <input type="text" id="saveTitleInput" placeholder="e.g. Frontend Engineer resume" style="width:100%; padding:11px 14px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:13.5px;" />
-            </div>
-            <button class="btn btn-primary" id="saveResumeBtn">Save resume</button>
-          </div>
-        </div>
-      </div>
-
+      <div id="savedResumesList"></div>
+      <div id="savedResumeDetail"></div>
     </div>
   </main>
 </div>
@@ -160,195 +129,6 @@
 <script src="/js/api.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-const rtState = { resumeText: '', parsed: null, parsedTab: 'summary' };
-
-function gaugeSVG(score) {
-  const r = 44, c = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(100, score)) / 100;
-  const offset = c * (1 - pct);
-  let color = 'var(--red)';
-  if (score >= 75) color = 'var(--green)';
-  else if (score >= 50) color = 'var(--accent)';
-  return `<svg width="104" height="104" viewBox="0 0 104 104">
-    <circle cx="52" cy="52" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="9"/>
-    <circle cx="52" cy="52" r="${r}" fill="none" stroke="${color}" stroke-width="9"
-      stroke-dasharray="${c}" stroke-dashoffset="${offset}" stroke-linecap="round"/>
-  </svg>`;
-}
-
-/* ---- tabs ---- */
-document.querySelectorAll('.rt-tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.rt-tab').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.rt-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'saved') loadSavedResumes();
-  });
-});
-
-/* ---- parse ---- */
-document.getElementById('resumeInput').addEventListener('input', e => { rtState.resumeText = e.target.value; });
-
-document.getElementById('parseBtn').addEventListener('click', async () => {
-  if (!rtState.resumeText.trim()) { showToast('Paste a resume first', 'error'); return; }
-  const btn = document.getElementById('parseBtn');
-  btn.disabled = true; btn.innerHTML = '<span class="loader-sm"></span> Reading resume…';
-  document.getElementById('parseError').innerHTML = '';
-  try {
-    const { parsed } = await api.post('/api/resumes/parse-text', { text: rtState.resumeText });
-    rtState.parsed = parsed;
-    rtState.parsedTab = 'summary';
-    renderDossier();
-    showSaveRow();
-  } catch (e) {
-    document.getElementById('parseError').innerHTML = `<div class="rt-error">${e.message}</div>`;
-  }
-  btn.disabled = false; btn.textContent = 'Parse resume';
-});
-
-/* ---- upload PDF/DOCX (parsed server-side, no Gemini key needed) ---- */
-document.getElementById('uploadBtn').addEventListener('click', () => {
-  document.getElementById('resumeFileInput').click();
-});
-
-document.getElementById('resumeFileInput').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const btn = document.getElementById('uploadBtn');
-  const originalLabel = btn.textContent;
-  btn.disabled = true; btn.innerHTML = '<span class="loader-sm"></span> Uploading…';
-  document.getElementById('parseError').innerHTML = '';
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    const { parsed } = await api.upload('/api/resumes/parse', formData);
-    rtState.parsed = parsed;
-    rtState.parsedTab = 'summary';
-    rtState.resumeText = ''; // came from a file, not pasted text
-    renderDossier();
-    showSaveRow(file.name);
-    showToast('Resume parsed from ' + file.name);
-  } catch (err) {
-    document.getElementById('parseError').innerHTML = `<div class="rt-error">${err.message}</div>`;
-  }
-  btn.disabled = false; btn.textContent = originalLabel;
-  e.target.value = '';
-});
-
-/* ---- save parsed resume to backend ---- */
-function showSaveRow(defaultName) {
-  const row = document.getElementById('saveRow');
-  const titleInput = document.getElementById('saveTitleInput');
-  if (!titleInput.value) {
-    titleInput.value = defaultName ? defaultName.replace(/\.(pdf|docx)$/i, '') : (rtState.parsed?.personal?.name || 'Untitled resume');
-  }
-  row.style.display = 'block';
-}
-
-function mapParsedToResumePayload(parsed, title) {
-  return {
-    title: title || parsed.personal?.name || 'Untitled resume',
-    personal: {
-      name: parsed.personal?.name || '',
-      email: parsed.personal?.email || '',
-      phone: parsed.personal?.phone || '',
-      location: parsed.personal?.location || '',
-      linkedin: parsed.personal?.linkedin || '',
-      portfolio: parsed.personal?.portfolio || ''
-    },
-    summary: parsed.summary || '',
-    skills: Array.isArray(parsed.skills) ? parsed.skills : [],
-    experience: (parsed.experience || []).map(e => ({
-      company: e.company || '',
-      role: e.role || '',
-      location: e.location || '',
-      startDate: e.startDate || '',
-      endDate: e.endDate || '',
-      current: !!e.current,
-      description: e.description || ''
-    })),
-    education: (parsed.education || []).map(ed => ({
-      school: ed.school || '',
-      degree: ed.degree || '',
-      field: ed.field || '',
-      location: ed.location || '',
-      startDate: ed.startDate || '',
-      endDate: ed.endDate || '',
-      current: !!ed.current,
-      description: ed.description || ''
-    })),
-    projects: Array.isArray(parsed.projects) ? parsed.projects : [],
-    certifications: Array.isArray(parsed.certifications) ? parsed.certifications : [],
-    achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
-    languages: Array.isArray(parsed.languages) ? parsed.languages : [],
-    publications: Array.isArray(parsed.publications) ? parsed.publications : []
-  };
-}
-
-document.getElementById('saveResumeBtn').addEventListener('click', async () => {
-  if (!rtState.parsed) { showToast('Parse a resume first', 'error'); return; }
-  const titleInput = document.getElementById('saveTitleInput');
-  const title = titleInput.value.trim();
-  if (!title) { showToast('Give the resume a name first', 'error'); return; }
-
-  const btn = document.getElementById('saveResumeBtn');
-  const originalLabel = btn.textContent;
-  btn.disabled = true; btn.innerHTML = '<span class="loader-sm"></span> Saving…';
-  try {
-    const payload = mapParsedToResumePayload(rtState.parsed, title);
-    await api.post('/api/resumes', payload);
-    showToast('Resume saved');
-    document.querySelectorAll('.rt-tab').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.rt-panel').forEach(p => p.classList.remove('active'));
-    document.querySelector('[data-tab="saved"]').classList.add('active');
-    document.getElementById('panel-saved').classList.add('active');
-    await loadSavedResumes();
-  } catch (err) {
-    showToast(err.message || 'Could not save resume', 'error');
-  }
-  btn.disabled = false; btn.textContent = originalLabel;
-});
-
-function renderDossier() {
-  const p = rtState.parsed;
-  const out = document.getElementById('dossierOut');
-  if (!p) { out.innerHTML = ''; return; }
-  const tabs = ['summary', 'experience', 'education'];
-  let content = '';
-  if (rtState.parsedTab === 'summary') {
-    content = `
-      <div class="field-label">Name</div><div class="field-value">${p.personal?.name || '—'}</div>
-      <div class="field-label">Contact</div><div class="field-value">${p.personal?.email || '—'}${p.personal?.phone ? ' · ' + p.personal.phone : ''}${p.personal?.location ? ' · ' + p.personal.location : ''}</div>
-      <div class="field-label">Summary</div><div class="field-value">${p.summary || '—'}</div>
-      <div class="field-label">Skills</div>
-      <div>${(p.skills || []).map(s => `<span class="skill-chip">${s}</span>`).join('') || '—'}</div>`;
-  } else if (rtState.parsedTab === 'experience') {
-    content = (p.experience || []).map(e => `
-      <div class="exp-entry">
-        <div class="role">${e.role || ''}</div>
-        <div class="org">${e.company || ''}${e.startDate ? ' · ' + e.startDate + (e.endDate ? ' – ' + e.endDate : '') : ''}</div>
-        <ul>${(e.description || '').split('\n').filter(Boolean).map(b => `<li>${b}</li>`).join('')}</ul>
-      </div>`).join('') || '<div class="rt-hint">No experience entries found.</div>';
-  } else {
-    content = (p.education || []).map(ed => `
-      <div class="exp-entry">
-        <div class="role">${ed.degree || ''}${ed.field ? ' · ' + ed.field : ''}</div>
-        <div class="org">${ed.school || ''}${ed.startDate ? ' · ' + ed.startDate + (ed.endDate ? ' – ' + ed.endDate : '') : ''}</div>
-      </div>`).join('') || '<div class="rt-hint">No education entries found.</div>';
-  }
-  out.innerHTML = `
-    <div class="dossier">
-      <div class="dtabs">${tabs.map(t => `<button data-dtab="${t}" class="${rtState.parsedTab === t ? 'active' : ''}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>
-      <div class="dcontent">${content}</div>
-    </div>`;
-  document.querySelectorAll('[data-dtab]').forEach(b => {
-    b.addEventListener('click', () => { rtState.parsedTab = b.dataset.dtab; renderDossier(); });
-  });
-}
-
-
-
 /* ---- saved resumes ---- */
 async function loadSavedResumes() {
   const list = document.getElementById('savedResumesList');
@@ -357,7 +137,7 @@ async function loadSavedResumes() {
   try {
     const { resumes } = await api.get('/api/resumes');
     if (!resumes.length) {
-      list.innerHTML = `<div class="rt-hint">No saved resumes yet. Parse or upload one in the <b>Parse resume</b> tab, then hit Save.</div>`;
+      list.innerHTML = `<div class="rt-hint">No saved resumes yet. <a href="/parse-resume.html" style="color:var(--accent-2)">Parse a resume</a> to add one.</div>`;
       return;
     }
     list.innerHTML = resumes.map(r => `
