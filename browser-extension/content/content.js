@@ -134,15 +134,34 @@
     panel.renderLoading('Analyzing job requirements with AI…');
     try {
       const jobForAnalysis = state.job;
-      const analysis = await send('job:analyze', {
+      let analysis = await send('job:analyze', {
         jobTitle: jobForAnalysis.title,
         company: jobForAnalysis.company,
         jobDescription: jobForAnalysis.description
-      });
+      }).catch(() => null);
+
       // A newer load may have replaced state.job while this request was in
       // flight. Only apply the result if it still belongs to the job that's
       // actually on screen right now.
       if (myToken !== loadToken || state.job !== jobForAnalysis) return;
+
+      const isEmpty = (a) => !a || (!a.skills?.length && !a.qualifications?.length && !a.highlights?.length);
+
+      // If the primary description came back empty — usually because the
+      // page's DOM structure caused the wrong block to be scraped (e.g. a
+      // cookie banner or nav wrapper instead of the actual posting) — retry
+      // once against the raw, unfiltered page text. Gemini is instructed to
+      // find and ignore clutter itself, so this is a real second chance
+      // rather than just resending the same bad input.
+      if (isEmpty(analysis) && jobForAnalysis.rawPageText && jobForAnalysis.rawPageText.length > jobForAnalysis.description.length) {
+        analysis = await send('job:analyze', {
+          jobTitle: jobForAnalysis.title,
+          company: jobForAnalysis.company,
+          jobDescription: jobForAnalysis.rawPageText
+        }).catch(() => null);
+        if (myToken !== loadToken || state.job !== jobForAnalysis) return;
+      }
+
       if (analysis) {
         if (analysis.skills?.length) state.job.skillsFound = analysis.skills;
         if (analysis.qualifications?.length) state.job.qualificationPhrases = analysis.qualifications;
@@ -184,7 +203,7 @@
     panel.renderFooter({
       onManual: openManualForm,
       onMarkApplied: markApplied,
-      onTailor: openTailorPicker,
+      onTailor: tailorResume,
       onCoverLetter: draftCoverLetter,
       onReload: confirmReload,
       applied: state.applied

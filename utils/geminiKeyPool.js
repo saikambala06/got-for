@@ -110,7 +110,19 @@ class GeminiKeyPool {
 // state (and the round-robin cursor) persists between calls.
 let instance = null;
 function getKeyPool() {
-  if (!instance) instance = new GeminiKeyPool();
+  if (!instance) {
+    instance = new GeminiKeyPool();
+    // Log once, at first use, so a naming mistake (e.g. only 1 of 3 keys
+    // detected) is visible immediately in server/Vercel function logs
+    // instead of being discovered only after a 429 reaches the user.
+    if (instance.hasKeys()) {
+      console.log(
+        `[geminiKeyPool] loaded ${instance.count()} key(s): ${instance.keys.map((k) => instance.label(k)).join(', ')}`
+      );
+    } else {
+      console.warn('[geminiKeyPool] no GEMINI_API_KEY / GEMINI_API_KEYS / GEMINI_API_KEY_N found — AI features disabled');
+    }
+  }
   return instance;
 }
 
