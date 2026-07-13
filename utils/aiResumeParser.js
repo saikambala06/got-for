@@ -765,7 +765,16 @@ Rules:
 - You may also "add" a small number of brand new bullets per role (only at MEDIUM/HIGH level, and only synthesized from facts already present elsewhere in the resume — never invented)
 - Never invent facts, employers, dates, or achievements — only rephrase, reorder, and incorporate what already exists or what the candidate has explicitly confirmed
 - Follow the requested tailoring level intensity exactly as instructed
+- Score the ATS/recruiter match twice — see ATS SCORING RUBRIC below — once for the resume exactly as it stands today ("before"), and once assuming every change you just proposed above is fully accepted ("after")
 - Output must be a single valid JSON object: escape any double-quote characters or line breaks that occur inside a string value (e.g. write \" and \n), never leave a raw " or newline inside a string, and never add trailing commas
+
+ATS SCORING RUBRIC (apply this the same way every time, for both "before" and "after"):
+- Hard skills / tools / technologies overlap with the job description — 40% of the score
+- Job title & seniority alignment (does the candidate's level/title match what's asked?) — 20%
+- Relevant responsibilities/domain experience overlap — 25%
+- Keyword/terminology alignment (the exact language the job description uses) — 15%
+- Score 0–100 and calibrate realistically: a strong, well-aligned candidate typically lands 75–92; a partial/adjacent fit 45–70; a weak fit below 40. Do not default to a narrow band — genuinely differentiate based on the actual overlap.
+- "before" reflects ONLY the resume content exactly as given (ignore your own suggestions). "after" reflects the resume if literally every "modify"/"add"/"remove" decision above were applied — it must genuinely track how much those specific changes move the needle (a "low" tailoring pass with light edits should produce a smaller before→after lift than a "high" pass that rewrites aggressively; never report "after" lower than "before" unless the original resume is already a stronger match than any honest rewrite could achieve).
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
@@ -782,8 +791,25 @@ Return ONLY valid JSON, no markdown, no explanation:
       ]
     }
   ],
+  "atsScore": { "before": 62, "after": 87 },
   "suggestions": "1–2 sentence explanation of the key changes made"
 }`;
+
+// Clamp/validate the AI's before/after ATS scores. Returns null for a side
+// that the model omitted or returned as non-numeric, rather than silently
+// coercing to 0 — 0 is a real (if harsh) score and callers need to be able
+// to tell "AI scored this 0" apart from "AI didn't return a score at all"
+// so they can fall back to a client-side estimate only in the latter case.
+function sanitizeAtsScore(v) {
+  const clampScore = (n) => (Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null);
+  const before = clampScore(Number(v?.before));
+  let after = clampScore(Number(v?.after));
+  // Tailoring is meant to help, not hurt — if both scores came back, never
+  // let "after" render lower than "before" (rare model noise, not a real
+  // regression worth surfacing as "your tailored resume scores worse").
+  if (before !== null && after !== null && after < before) after = before;
+  return { before, after };
+}
 
 function splitBullets(description) {
   return String(description || '')
@@ -850,6 +876,7 @@ function sanitizeTailorResult(result, resume) {
   });
 
   out.suggestions = typeof out.suggestions === 'string' ? out.suggestions : '';
+  out.atsScore = sanitizeAtsScore(result.atsScore);
   return out;
 }
 

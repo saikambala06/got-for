@@ -14,6 +14,20 @@
     border-radius:10px; padding:10px 14px; margin-bottom:20px; font-size:12.5px; color:var(--text-dim);
   }
   .job-banner b{ color:var(--text); }
+  .field-block{ margin-bottom:20px; }
+  .field-block label{ display:block; font-size:12px; font-weight:700; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em; }
+  .field-block select{
+    width:100%; padding:10px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:9px;
+    color:var(--text); font-size:13.5px;
+  }
+  .continue-btn{
+    width:100%; margin-top:8px; background:linear-gradient(135deg, var(--accent), var(--accent-2)); color:#1a1326;
+    border:none; border-radius:10px; padding:13px; font-size:14.5px; font-weight:700; cursor:pointer;
+  }
+  .continue-btn:hover{ filter:brightness(1.05); }
+  .continue-btn:disabled{ opacity:.5; cursor:not-allowed; }
+  .cancel-link{ display:block; margin:12px auto 0; background:none; border:none; color:var(--text-dim); font-size:12.5px; cursor:pointer; text-align:center; width:100%; }
+  .cancel-link:hover{ color:var(--text); }
 </style>
 </head>
 <body>
@@ -28,7 +42,7 @@
       </div>
     </div>
 
-    <div class="tr-wrap page-enter">
+    <div class="tr-wrap">
       <div class="modal-card" style="width:520px;">
         <h1>Tailor your resume</h1>
         <p class="sub">Pick a resume, then choose how to apply AI suggestions.</p>
@@ -57,7 +71,7 @@
           </div>
         </div>
 
-        <button class="continue-btn" id="continueBtn" disabled>Continue →</button>
+        <button class="continue-btn" id="continueBtn">Continue →</button>
         <button class="cancel-link" id="cancelBtn">Cancel</button>
       </div>
     </div>
@@ -97,22 +111,15 @@ async function init() {
       sel.innerHTML = resumes.map(r =>
         `<option value="${r._id}" ${r._id === presetResumeId || (!presetResumeId && r.isDefault) ? 'selected' : ''}>${escapeHtml(r.title)}${r.isDefault ? ' (Default)' : ''}</option>`
       ).join('');
-      // Resumes have finished loading and at least one is selected — safe to enable Continue.
-      document.getElementById('continueBtn').disabled = !sel.value;
     }
   } catch (err) {
     showToast(err.message, 'error');
-    document.getElementById('continueBtn').disabled = true;
   }
 }
 
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-
-document.getElementById('resumeSelect').addEventListener('change', (e) => {
-  document.getElementById('continueBtn').disabled = !e.target.value;
-});
 
 document.querySelectorAll('.mode-option').forEach(opt => {
   opt.addEventListener('click', () => {

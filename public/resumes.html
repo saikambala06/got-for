@@ -13,12 +13,10 @@
     padding:11px 18px; font-size:13.5px; font-weight:600; color:var(--text-faint);
     border:none; background:none; cursor:pointer; border-bottom:2px solid transparent;
     position:relative; top:1px; font-family:var(--font-body);
-    transition: color var(--dur-fast, .15s) ease, border-color var(--dur-fast, .15s) ease;
   }
-  .rt-tab:hover{ color:var(--text); }
   .rt-tab.active{ color:var(--accent-2); border-bottom-color:var(--accent); }
   .rt-panel{ display:none; }
-  .rt-panel.active{ display:block; animation: fadeInUp var(--dur-base, .25s) var(--ease-out, ease) both; }
+  .rt-panel.active{ display:block; }
 
   .rt-textarea{
     width:100%; min-height:170px; border-radius:var(--radius-sm); border:1px solid var(--border);
@@ -41,14 +39,12 @@
   @keyframes rt-spin{ to{ transform:rotate(360deg); } }
 
   /* dossier */
-  .dossier{ display:grid; grid-template-columns:200px 1fr; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-top:26px; animation: fadeInUp var(--dur-slow, .45s) var(--ease-out, ease) both; }
+  .dossier{ display:grid; grid-template-columns:200px 1fr; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-top:26px; }
   .dossier .dtabs{ background:var(--bg-soft); border-right:1px solid var(--border); padding:14px 0; }
   .dossier .dtabs button{
     display:block; width:100%; text-align:left; padding:11px 18px; border:none; background:none;
     font-size:13px; color:var(--text-faint); cursor:pointer; border-left:2px solid transparent; font-family:var(--font-body);
-    transition: color var(--dur-fast, .15s) ease, border-color var(--dur-fast, .15s) ease, background var(--dur-fast, .15s) ease;
   }
-  .dossier .dtabs button:hover{ color:var(--text); }
   .dossier .dtabs button.active{ color:var(--text); font-weight:600; background:var(--surface); border-left-color:var(--accent); }
   .dossier .dcontent{ padding:26px 30px; background:var(--surface); }
   .field-label{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-faint); margin-bottom:5px; }
@@ -122,7 +118,7 @@
       </div>
     </div>
 
-    <div class="card section-card page-enter">
+    <div class="card section-card">
       <div class="rt-tabs">
         <button class="rt-tab active" data-tab="saved">My resumes</button>
         <button class="rt-tab" data-tab="parse">Parse resume</button>
@@ -364,25 +360,18 @@ async function loadSavedResumes() {
       list.innerHTML = `<div class="rt-hint">No saved resumes yet. Parse or upload one in the <b>Parse resume</b> tab, then hit Save.</div>`;
       return;
     }
-    list.innerHTML = `<div class="stagger">${resumes.map(r => `
+    list.innerHTML = resumes.map(r => `
       <div class="resume-card" data-view="${r._id}">
         <div>
           <div class="rc-title">${r.title}${r.isDefault ? '<span class="rc-badge">Default</span>' : ''}</div>
           <div class="rc-meta">${(r.skills || []).length} skills · updated ${timeAgo(r.updatedAt)}</div>
         </div>
         <div class="rc-actions">
-          <button class="btn btn-primary btn-sm" data-tailor="${r._id}">✨ Tailor to job</button>
           <button class="btn" data-view-btn="${r._id}">View</button>
           <button class="btn" data-delete="${r._id}">Delete</button>
         </div>
-      </div>`).join('')}</div>`;
+      </div>`).join('');
 
-    list.querySelectorAll('[data-tailor]').forEach(el => {
-      el.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        window.location.href = `/tailor-resume.html?resumeId=${encodeURIComponent(el.dataset.tailor)}`;
-      });
-    });
     list.querySelectorAll('[data-view], [data-view-btn]').forEach(el => {
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();

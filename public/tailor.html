@@ -938,31 +938,24 @@ async function downloadHtmlAsPdf(html, fileBase) {
   try {
     await loadHtml2Pdf();
 
-    // The capture target has to be genuinely laid out AND fully unclipped,
-    // or html2canvas renders it blank. html2canvas doesn't screenshot the
-    // live page — it re-renders a clone of the DOM tree itself, and it
-    // applies every ancestor's `overflow` as a real paint-time clip region
-    // (not just a visual screen-clip). A zero-size `overflow:hidden`
-    // wrapper — which is what used to be here — clips that re-render down
-    // to nothing, so the exported PDF comes out as a blank page even
-    // though the resume content is genuinely present in the DOM.
-    // The earlier, even older approach rendered it on-screen at full size
-    // behind a plain white div, which caused a distracting flash of the
-    // resume across the whole screen (a different-looking "animation"
-    // every time depending on scroll position) and, because that div sat
-    // on top of everything, blocked scrolling/clicks on the real page for
-    // the second or so it took to capture.
-    // Positioning it far off-screen (instead of clipping it) avoids both
-    // problems at once: nothing is clipped (overflow stays visible, so
-    // html2canvas captures the full content), and it's never inside the
-    // viewport, so the person never sees it and it can't block clicks.
+    // The capture target has to be genuinely laid out in the document (not
+    // display:none/visibility:hidden) or html2canvas renders it blank — but
+    // it doesn't need to be visible to the person. Older versions of this
+    // page rendered it on-screen at full size behind a plain white div,
+    // which caused a distracting flash of the resume across the whole
+    // screen (a different-looking "animation" every time depending on
+    // scroll position) and, because that div sat on top of everything,
+    // blocked scrolling/clicks on the real page for the second or so it
+    // took to capture. Clipping it inside a zero-size, overflow-hidden,
+    // pointer-events-none wrapper keeps it fully laid out (so the capture
+    // is correct) while making it completely invisible and non-blocking.
     outer = document.createElement('div');
     outer.style.position = 'fixed';
     outer.style.top = '0';
-    outer.style.left = '-100000px';
-    outer.style.width = `${PAGE_WIDTH_PX}px`;
-    outer.style.height = 'auto';
-    outer.style.overflow = 'visible';
+    outer.style.left = '0';
+    outer.style.width = '0';
+    outer.style.height = '0';
+    outer.style.overflow = 'hidden';
     outer.style.pointerEvents = 'none';
     outer.style.zIndex = '-1';
 

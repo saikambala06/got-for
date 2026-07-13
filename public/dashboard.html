@@ -24,7 +24,7 @@
       </select>
     </div>
 
-    <div class="grid cards-row stagger" id="statCards">
+    <div class="grid cards-row" id="statCards">
       <div class="card stat-card">
         <div class="stat-label">All time</div>
         <div class="stat-value" id="statTotal">—</div>
@@ -42,7 +42,7 @@
       </div>
     </div>
 
-    <div class="card section-card page-enter" id="trendCard" style="background:#fff;color:#1a1a1a;">
+    <div class="card section-card" id="trendCard" style="background:#fff;color:#1a1a1a;">
       <div class="section-head">
         <div>
           <h3 style="color:#1a1a1a;">Application Trends</h3>
@@ -61,7 +61,7 @@
       <div id="trendLegend" style="display:flex;justify-content:center;gap:24px;margin-top:14px;font-size:13.5px;font-weight:600;"></div>
     </div>
 
-    <div class="card section-card page-enter" style="margin-top:20px;animation-delay:.1s;">
+    <div class="card section-card" style="margin-top:20px;">
       <div class="section-head">
         <div>
           <h3>Recently added</h3>
@@ -159,37 +159,15 @@ function externalTrendTooltip(context) {
   tooltipEl.style.opacity = 1;
 }
 
-// Animates a stat number counting up from its currently-displayed value to a
-// new one. No-ops if the value hasn't actually changed, so the 30s auto-
-// refresh below doesn't make the numbers flicker when nothing changed.
-const statPrevValues = {};
-function animateCountUp(elId, value) {
-  const el = document.getElementById(elId);
-  const target = Number(value) || 0;
-  const from = statPrevValues[elId] ?? 0;
-  statPrevValues[elId] = target;
-  if (from === target) { el.textContent = target; return; }
-  const duration = 700;
-  const start = performance.now();
-  function tick(now) {
-    const p = Math.min(1, (now - start) / duration);
-    const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
-    el.textContent = Math.round(from + (target - from) * eased);
-    if (p < 1) requestAnimationFrame(tick);
-    else el.textContent = target;
-  }
-  requestAnimationFrame(tick);
-}
-
 async function loadDashboard() {
   await requireSession();
   const period = document.getElementById('periodSelect').value;
 
   try {
     const stats = await api.get('/api/jobs/stats');
-    animateCountUp('statTotal', stats.total);
-    animateCountUp('statMonthly', stats.monthly);
-    animateCountUp('statWeekly', stats.last7);
+    document.getElementById('statTotal').textContent = stats.total;
+    document.getElementById('statMonthly').textContent = stats.monthly;
+    document.getElementById('statWeekly').textContent = stats.last7;
 
     await loadChartJs();
     document.getElementById('trendChartError')?.remove();
@@ -318,13 +296,6 @@ async function loadDashboard() {
           <span style="font-size:12px;color:var(--text-faint);width:70px;text-align:right;">${timeAgo(j.appliedOn)}</span>
         </div>
       </div>`).join('');
-    const fingerprint = recent.map(j => j._id + j.status).join(',');
-    if (fingerprint !== window._recentFingerprint) {
-      window._recentFingerprint = fingerprint;
-      recentEl.classList.remove('page-enter');
-      void recentEl.offsetWidth; // restart the animation
-      recentEl.classList.add('page-enter');
-    }
   } catch (err) { /* already toasted above if relevant */ }
 }
 

@@ -9,13 +9,12 @@
 <link rel="stylesheet" href="/css/app.css" />
 <style>
   .acc-layout{ display:grid; grid-template-columns: 220px 1fr; gap:18px; align-items:start; }
-  .acc-tab{ padding:11px 14px; border-radius:10px; font-size:14px; font-weight:500; color:var(--text-dim); cursor:pointer; margin-bottom:4px; display:flex; align-items:center; gap:10px; transition: background var(--dur-fast, .15s) ease, color var(--dur-fast, .15s) ease; }
+  .acc-tab{ padding:11px 14px; border-radius:10px; font-size:14px; font-weight:500; color:var(--text-dim); cursor:pointer; margin-bottom:4px; display:flex; align-items:center; gap:10px; }
   .acc-tab:hover{ background:var(--surface-2); }
   .acc-tab.active{ background:var(--accent-soft); color:var(--accent-2); font-weight:600; }
   .acc-panel{ display:none; }
-  .acc-panel.active{ display:block; animation: fadeInUp var(--dur-base, .25s) var(--ease-out, ease) both; }
-  .big-avatar{ width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff; transition: transform var(--dur-base, .25s) var(--ease-spring, ease); }
-  .big-avatar:hover{ transform: scale(1.06) rotate(-3deg); }
+  .acc-panel.active{ display:block; }
+  .big-avatar{ width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff; }
 </style>
 </head>
 <body>
@@ -30,7 +29,7 @@
       </div>
     </div>
 
-    <div class="acc-layout page-enter">
+    <div class="acc-layout">
       <div class="card" style="padding:10px;">
         <div class="acc-tab active" data-tab="profile">Profile</div>
         <div class="acc-tab" data-tab="security">Security</div>
@@ -123,10 +122,9 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
     });
     showToast('Profile updated');
     document.querySelectorAll('[data-user-name]').forEach((el) => el.textContent = document.getElementById('pName').value.trim());
-    btn.textContent = '✓ Saved';
-    setTimeout(() => { btn.textContent = 'Save changes'; btn.disabled = false; }, 1200);
   } catch (err) {
     showToast(err.message, 'error');
+  } finally {
     btn.disabled = false; btn.textContent = 'Save changes';
   }
 });
@@ -142,10 +140,9 @@ document.getElementById('passwordForm').addEventListener('submit', async (e) => 
     });
     showToast('Password updated');
     document.getElementById('passwordForm').reset();
-    btn.textContent = '✓ Updated';
-    setTimeout(() => { btn.textContent = 'Update password'; btn.disabled = false; }, 1200);
   } catch (err) {
     showToast(err.message, 'error');
+  } finally {
     btn.disabled = false; btn.textContent = 'Update password';
   }
 });

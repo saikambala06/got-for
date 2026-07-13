@@ -12,7 +12,7 @@
 <body>
 
 <div class="auth-wrap">
-  <div class="auth-side page-enter">
+  <div class="auth-side">
     <div class="brand">
       <div class="mark">SK</div>
       <div class="name">SK<span> VK</span></div>
@@ -21,7 +21,7 @@
     <div class="auth-pitch">
       <h1>Track every application, <em>land the offer</em> faster.</h1>
       <p>SK VK is a completely free dashboard for organizing your job search — applications, resumes, and progress, all in one calm, focused view. No paywalls, no upgrade nags.</p>
-      <div class="auth-stats stagger">
+      <div class="auth-stats">
         <div><b>100%</b><span>Free, always</span></div>
         <div><b>∞</b><span>Applications tracked</span></div>
         <div><b>1</b><span>Place for it all</span></div>
@@ -31,7 +31,7 @@
     <div class="auth-foot">Your data is stored securely in your own account — not your browser.</div>
   </div>
 
-  <div class="auth-form-side page-enter" style="animation-delay:.08s;">
+  <div class="auth-form-side">
     <div class="auth-box">
       <div class="auth-toggle">
         <button id="tabLogin" class="active" type="button">Sign in</button>
@@ -91,12 +91,10 @@
   function showLogin() {
     tabLogin.classList.add('active'); tabRegister.classList.remove('active');
     panelLogin.style.display = 'block'; panelRegister.style.display = 'none';
-    panelLogin.classList.remove('page-enter'); void panelLogin.offsetWidth; panelLogin.classList.add('page-enter');
   }
   function showRegister() {
     tabRegister.classList.add('active'); tabLogin.classList.remove('active');
     panelRegister.style.display = 'block'; panelLogin.style.display = 'none';
-    panelRegister.classList.remove('page-enter'); void panelRegister.offsetWidth; panelRegister.classList.add('page-enter');
   }
   tabLogin.addEventListener('click', showLogin);
   tabRegister.addEventListener('click', showRegister);
