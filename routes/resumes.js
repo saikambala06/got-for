@@ -160,9 +160,15 @@ router.post('/:id/tailor', async (req, res) => {
     if (err.message.includes('GEMINI_API_KEY')) {
       return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
     }
-    // Surface the real reason (Gemini status code / message) instead of a
-    // generic "please try again" — a masked error is impossible to
-    // self-diagnose from the client side.
+    // A transient overload (already retried across the whole key pool by
+    // geminiClient.js) is a service-availability issue, not a bad response
+    // from us — 503 + a clear retry hint instead of a bare 502.
+    if (err.message.includes('high demand') || err.message.includes('UNAVAILABLE') || err.message.includes('timed out')) {
+      return res.status(503).json({ error: 'The AI tailoring service is temporarily overloaded. Please try again in a few seconds.' });
+    }
+    // Otherwise surface the real reason (Gemini status code / message)
+    // instead of a generic "please try again" — a masked error is
+    // impossible to self-diagnose from the client side.
     res.status(502).json({ error: `AI tailoring failed: ${err.message}` });
   }
 });

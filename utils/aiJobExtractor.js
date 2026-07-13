@@ -11,6 +11,7 @@
  */
 const { callAI, extractJSON } = require('./xaiClient');
 const { extractSkillsFromText } = require('./skillsLexicon');
+const { getKeyPool } = require('./geminiKeyPool');
 
 const SYSTEM_PROMPT = `You are a precision job-posting data extraction engine. Your ONLY job is to read raw, messy text scraped from a job listing web page and output a single valid JSON object — nothing else. No markdown fences, no commentary, no explanation before or after. Just raw JSON.
 
@@ -148,7 +149,7 @@ async function extractJobDetails(title, company, description) {
     return { skills: [], qualifications: [], highlights: [], employmentType: '', experienceLevel: '', salaryMin: 0, salaryMax: 0, salaryPeriod: '', usedAI: false };
   }
 
-  if (!process.env.XAI_API_KEY && !process.env.GEMINI_API_KEY) {
+  if (!process.env.XAI_API_KEY && !getKeyPool().hasKeys()) {
     console.warn('[aiJobExtractor] No AI provider configured (XAI_API_KEY / GEMINI_API_KEY) — using local extraction engine');
     return localExtractJobDetails(title, company, text);
   }
