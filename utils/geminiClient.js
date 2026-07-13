@@ -1,77 +1,47 @@
 /**
- * Shared Gemini caller — the single place every AI feature (resume parsing,
- * tailoring, cover letters, job-posting analysis/extraction) goes through.
+ * Shared Google Gemini chat client. Used by aiResumeParser.js and
+ * aiJobExtractor.js so every AI-powered feature (resume parsing, tailoring,
+ * cover letters, job field extraction) goes through the same provider,
+ * model, and key-rotation logic — no more mixed xAI/Gemini paths.
  *
- * This used to be duplicated: aiResumeParser.js had one implementation with
- * a key pool but weak 5xx handling, and xaiClient.js had a second, weaker
- * implementation with no key pool, no retry, and no timeout at all. That
- * split caused two separate bugs:
- *   1. A transient Gemini 503 ("high demand") crashed tailoring outright,
- *      because 5xx errors got exactly one same-key retry and then failed
- *      fast instead of rotating through the rest of the key pool.
- *   2. Job-page reading/analysis (which went through the weaker client) had
- *      no timeout at all, so a slow/overloaded Gemini response could hang
- *      the request for a long time, and any failure there fell straight
- *      back to the crude regex extractor — which is what produced
- *      inaccurate skills/qualifications.
+ * Uses the shared multi-key pool (utils/geminiKeyPool.js) so that when one
+ * GEMINI_API_KEY hits its free-tier quota (HTTP 429) or gets disabled
+ * (403), the call transparently rotates to the next configured key instead
+ * of failing in front of the user — this is what keeps job-field extraction
+ * accurate and available even under quota pressure.
  *
- * Fix: one client, used everywhere, that (a) rotates across the whole key
- * pool on 429/403/5xx, (b) does a short bounded retry with backoff for 5xx
- * before rotating, (c) makes a second full pass across the pool after a
- * short delay if every key hit a transient 5xx (Gemini overload is usually
- * seconds, not minutes), and (d) times out each individual request so a
- * hung call can't stall the whole feature.
+ * Configure one or more keys via GEMINI_API_KEY, GEMINI_API_KEYS
+ * (comma/newline separated), or GEMINI_API_KEY_1..N — see geminiKeyPool.js.
+ *
+ * If no key is configured, or every configured key's call fails, this
+ * throws — callers are expected to catch that and degrade to their own
+ * local, non-AI fallback rather than surface a raw error to the user.
  */
 
 const { getKeyPool } = require('./geminiKeyPool');
 
+// 'gemini-2.5-flash' is no longer available to new API keys/projects
+// (Google returns a 404 "no longer available to new users"). We default to
+// 'gemini-flash-latest', Google's auto-updated alias that always points at
+// their current-generation Flash model, so accuracy doesn't regress as
+// Google rotates model versions. Override via GEMINI_MODEL if needed.
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
-const REQUEST_TIMEOUT_MS = 25000; // don't let one call hang the request indefinitely
-const MAX_SAME_KEY_RETRIES = 2; // for transient 5xx on a single key, before rotating
-const SAME_KEY_RETRY_BASE_MS = 700;
-const OVERLOAD_COOLDOWN_MS = 8000; // short — a 503 is usually transient, not a real quota exhaustion
-const EXTRA_POOL_PASSES = 1; // additional full sweeps of the pool if every key was overloaded
-const POOL_PASS_DELAY_MS = 2500;
 
 function parseRetryAfterSeconds(response, bodyText) {
   const header = response.headers.get?.('retry-after');
   if (header && !Number.isNaN(Number(header))) return Number(header);
+  // Gemini also sometimes embeds a RetryInfo with a "retryDelay": "37s" in the JSON error body.
   const match = bodyText && bodyText.match(/"retryDelay"\s*:\s*"(\d+)s"/);
   return match ? Number(match[1]) : null;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fetchWithTimeout(url, options, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      throw new Error(`Gemini request timed out after ${Math.round(timeoutMs / 1000)}s`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function isRetryable5xx(status) {
-  return status === 500 || status === 502 || status === 503 || status === 504;
-}
-
 /**
- * @param {Array<{role: string, content: string}>} messages
- * @param {number} maxTokens
- * @param {{ jsonMode?: boolean }} opts
- * @returns {Promise<string>} raw text response (fences stripped)
+ * Calls Gemini with the given chat-style messages, rotating across every
+ * configured API key on quota/auth errors until one succeeds.
  */
 async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {}) {
   const pool = getKeyPool();
-  if (!pool.hasKeys()) throw new Error('GEMINI_API_KEY not configured');
+  if (!pool.hasKeys()) throw new Error('No Gemini API key configured (set GEMINI_API_KEY)');
 
   const systemText = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
   const contents = messages
@@ -84,8 +54,12 @@ async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {})
   const requestBody = {
     contents,
     generationConfig: {
-      temperature: 0,
+      temperature: 0, // deterministic extraction — accuracy over creativity
       maxOutputTokens: maxTokens,
+      // Flash models reason ("think") by default. A budget of 0 turns that
+      // off entirely — this is extraction/rewriting, not reasoning — so the
+      // whole token budget goes to visible output instead of being silently
+      // spent on hidden "thinking" tokens.
       thinkingConfig: { thinkingBudget: 0 },
       ...(jsonMode ? { responseMimeType: 'application/json' } : {})
     }
@@ -96,115 +70,97 @@ async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {})
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const doRequest = (apiKey) =>
-    fetchWithTimeout(
-      url,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify(requestBody)
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
       },
-      REQUEST_TIMEOUT_MS
-    );
+      body: JSON.stringify(requestBody)
+    });
 
+  // Try every key in the pool (round-robin, skipping ones on cooldown) until
+  // one succeeds. A 429 (quota exhausted) or 403 (key disabled/blocked)
+  // rotates immediately to the next key with no delay to the user. A
+  // transient 5xx gets one same-key retry with backoff before moving on.
+  const order = pool.availableOrder().length ? pool.availableOrder() : pool.allBySoonestAvailable();
   let lastError = null;
-  let sawOverload = false;
 
-  const totalPasses = 1 + EXTRA_POOL_PASSES;
-  for (let pass = 0; pass < totalPasses; pass++) {
-    if (pass > 0) {
-      // Only worth another full sweep if the *previous* pass failed purely
-      // due to overload (5xx) — a hard failure (bad request/blocked/etc.)
-      // won't be fixed by waiting and retrying the same thing again.
-      if (!sawOverload) break;
-      sawOverload = false;
-      await sleep(POOL_PASS_DELAY_MS);
+  for (const apiKey of order) {
+    let response;
+    try {
+      response = await doRequest(apiKey);
+    } catch (networkErr) {
+      lastError = networkErr;
+      continue; // network hiccup on this key — try the next one
     }
 
-    const order = pool.availableOrder().length ? pool.availableOrder() : pool.allBySoonestAvailable();
-
-    for (const apiKey of order) {
-      let response;
-      try {
-        response = await doRequest(apiKey);
-      } catch (networkErr) {
-        lastError = networkErr;
-        continue; // network hiccup / timeout on this key — try the next one
-      }
-
-      // Transient overload: bounded same-key retries with backoff before
-      // giving up on this key and rotating to the next one.
-      if (!response.ok && isRetryable5xx(response.status)) {
-        let attempt = 0;
-        while (!response.ok && isRetryable5xx(response.status) && attempt < MAX_SAME_KEY_RETRIES) {
-          attempt++;
-          await sleep(SAME_KEY_RETRY_BASE_MS * attempt);
-          try {
-            response = await doRequest(apiKey);
-          } catch (networkErr) {
-            lastError = networkErr;
-            response = null;
-            break;
-          }
-        }
-        if (!response || (!response.ok && isRetryable5xx(response.status))) {
-          const bodyText = response ? await response.text().catch(() => '') : '';
-          sawOverload = true;
-          pool.markExhausted(apiKey, OVERLOAD_COOLDOWN_MS / 1000);
-          lastError = new Error(
-            `Gemini API ${response ? response.status : 'network'} on key ${pool.label(apiKey)} (overloaded): ${bodyText.slice(0, 200)}`
-          );
-          continue; // rotate to the next key immediately
-        }
-      }
-
-      if (response.status === 429 || response.status === 403) {
-        const bodyText = await response.text().catch(() => '');
-        const retryAfter = parseRetryAfterSeconds(response, bodyText);
-        pool.markExhausted(apiKey, retryAfter);
-        lastError = new Error(`Gemini API ${response.status} on key ${pool.label(apiKey)}: ${bodyText.slice(0, 200)}`);
-        continue;
-      }
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        // Not a quota/overload issue (bad request, bad model, blocked, etc.)
-        // — retrying won't help, so fail fast with the real reason.
-        throw new Error(`Gemini API ${response.status}: ${body.slice(0, 300)}`);
-      }
-
-      pool.markWorking(apiKey);
-      const data = await response.json();
-
-      if (!data.candidates?.length) {
-        const blockReason = data.promptFeedback?.blockReason;
-        throw new Error(
-          blockReason
-            ? `Gemini blocked the request (${blockReason}) — try rephrasing the job description or resume.`
-            : 'Gemini returned no candidates'
-        );
-      }
-
-      const candidate = data.candidates[0];
-      const text = (candidate.content?.parts || []).map((p) => p.text || '').join('').trim();
-
-      if (!text) {
-        throw new Error(
-          candidate.finishReason === 'MAX_TOKENS'
-            ? 'Gemini response was cut off before it produced any output — try a shorter job description or resume.'
-            : `Gemini returned an empty response${candidate.finishReason ? ` (${candidate.finishReason})` : ''}`
-        );
-      }
-
-      return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    if (!response.ok && response.status >= 500) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      response = await doRequest(apiKey);
     }
+
+    if (response.status === 429 || response.status === 403) {
+      const bodyText = await response.text().catch(() => '');
+      const retryAfter = parseRetryAfterSeconds(response, bodyText);
+      pool.markExhausted(apiKey, retryAfter);
+      lastError = new Error(`Gemini API ${response.status} on key ${pool.label(apiKey)}: ${bodyText.slice(0, 200)}`);
+      continue; // rotate to the next key in the pool
+    }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      // Not a quota issue (bad request, bad model, etc.) — retrying with a
+      // different key won't help, so fail fast with the real reason.
+      throw new Error(`Gemini API ${response.status}: ${body.slice(0, 300)}`);
+    }
+
+    pool.markWorking(apiKey);
+    const data = await response.json();
+
+    if (!data.candidates?.length) {
+      const blockReason = data.promptFeedback?.blockReason;
+      throw new Error(
+        blockReason
+          ? `Gemini blocked the request (${blockReason}) — try rephrasing the job description.`
+          : 'Gemini returned no candidates'
+      );
+    }
+
+    const candidate = data.candidates[0];
+    const text = (candidate.content?.parts || []).map((p) => p.text || '').join('').trim();
+
+    if (!text) {
+      throw new Error(
+        candidate.finishReason === 'MAX_TOKENS'
+          ? 'Gemini response was cut off before it produced any output — try shorter input.'
+          : `Gemini returned an empty response${candidate.finishReason ? ` (${candidate.finishReason})` : ''}`
+      );
+    }
+
+    return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
   }
 
-  if (sawOverload) {
-    throw new Error(
-      `Gemini is currently experiencing high demand and did not recover after retrying across ${pool.count()} key(s). Please try again in a moment.`
-    );
-  }
+  // Every key in the pool is either exhausted or errored.
   throw lastError || new Error('All configured Gemini API keys are currently unavailable');
 }
 
-module.exports = { callGemini, GEMINI_MODEL };
+/**
+ * Provider-agnostic entry point kept for callers that don't need jsonMode.
+ * Gemini is now the sole provider — this simply calls it and surfaces the
+ * real error (no more silent provider chain) if it fails.
+ */
+async function callAI(messages, maxTokens = 8000) {
+  return callGemini(messages, maxTokens);
+}
+
+function extractJSON(text) {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error('No JSON object found in AI response');
+  }
+  return JSON.parse(text.slice(start, end + 1));
+}
+
+module.exports = { callAI, callGemini, extractJSON };

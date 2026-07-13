@@ -198,23 +198,14 @@
     }
 
     open() { this.isOpen = true; this.panel.style.display = 'flex'; this.launcher.style.display = 'none'; }
-    // Just hides the panel/launcher — it does NOT remove the host or reset
-    // window.__skvkAssistantLoaded. Removing + resetting used to force the
-    // background script to re-inject content.js on the next toolbar click,
-    // but re-injecting content.js while the page's `window` (and its
-    // existing chrome.runtime.onMessage listener from the first injection)
-    // is still alive registers a SECOND listener rather than replacing the
-    // first — every close/reopen cycle piled on another one. With enough
-    // duplicate listeners, a single toolbar click could fire multiple
-    // stale handlers at once, each spinning up its own SKVKPanel host, so
-    // the page ended up with several overlapping/duplicate panels and the
-    // toggle could appear to "not open" or show stale data. Hiding instead
-    // of destroying means re-clicking the icon only ever talks to the one
-    // listener that's actually been there since the page loaded.
     close() {
       this.isOpen = false;
-      this.panel.style.display = 'none';
-      this.launcher.style.display = 'block';
+      // "Completely close" — remove the panel and its launcher tab from the
+      // page entirely, rather than just hiding them. Resetting the loaded
+      // flag means the next toolbar-icon click re-injects a fresh instance
+      // instead of toggling a hidden one back into view.
+      this.host.remove();
+      if (typeof window !== 'undefined') window.__skvkAssistantLoaded = false;
     }
     toggle() { this.isOpen ? this.close() : this.open(); }
 
