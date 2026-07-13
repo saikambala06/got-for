@@ -142,7 +142,14 @@ async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {})
   }
 
   // Every key in the pool is either exhausted or errored.
-  throw lastError || new Error('All configured Gemini API keys are currently unavailable');
+  const triedCount = order.length;
+  const totalCount = pool.count();
+  const suffix = totalCount > 1
+    ? ` (tried all ${triedCount} of ${triedCount === totalCount ? triedCount : `${totalCount} configured`} keys — check GET /api/resumes/ai-status)`
+    : ' (only 1 key configured — add GEMINI_API_KEYS or GEMINI_API_KEY_2 to rotate across more, see README)';
+  const finalError = lastError || new Error('All configured Gemini API keys are currently unavailable');
+  finalError.message += suffix;
+  throw finalError;
 }
 
 /**
