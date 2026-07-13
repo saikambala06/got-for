@@ -62,12 +62,20 @@ skvk/
 
 The app gracefully degrades — if the key is absent, resume parsing falls back to a regex-based extractor and the "Tailor to Job" button returns a clear error.
 
+### Optional: APILayer resume parser
+
+The "Parse resume" upload page can alternatively use APILayer's resume parser for the initial file → structured-data extraction step.
+
+1. Get a key at https://apilayer.com/marketplace/resume_parser-api.
+2. Add it to your environment as `APILAYER_API_KEY`.
+3. **Never put this key in any file under `public/`** — it's read server-side only, inside `utils/apiLayerResumeParser.js`, which the browser reaches through `POST /api/resumes/parse-apilayer`. Putting an `apikey` header directly in client-side JavaScript would expose it to anyone who opens DevTools.
+
 ## 3. Run locally
 
 ```bash
 npm install
 cp .env.example .env
-# Edit .env — paste your MONGODB_URI, JWT_SECRET, and GEMINI_API_KEY
+# Edit .env — paste your MONGODB_URI, JWT_SECRET, GEMINI_API_KEY, and (optionally) APILAYER_API_KEY
 npm run dev
 ```
 
@@ -81,6 +89,7 @@ Visit `http://localhost:4000`. Create an account to get started.
    - `MONGODB_URI` — your MongoDB Atlas connection string
    - `JWT_SECRET` — any long random string
    - `GEMINI_API_KEY` — your Gemini API key
+   - `APILAYER_API_KEY` — your APILayer key (optional, only if using the APILayer parser)
    - `NODE_ENV` — `production`
 4. Click **Deploy**.
 

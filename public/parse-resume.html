@@ -459,8 +459,8 @@ async function handleFile(file){
     setStatus('Please upload a PDF or DOCX file.', true);
     return;
   }
-  if (file.size > 8*1024*1024){
-    setStatus('File too large — 8MB max.', true);
+  if (file.size > 5*1024*1024){
+    setStatus('File too large — 5MB max.', true);
     return;
   }
 
@@ -468,51 +468,45 @@ async function handleFile(file){
   fileMeta.classList.add('show');
   dropzone.classList.add('scanning');
   setStep(1);
-  setStatus('Reading document…');
+  setStatus('Uploading to AI parser…');
 
   try {
-    let allLines = [];
-    if (ext === 'pdf'){
-      allLines = await extractPdfLines(file);
-    } else {
-      allLines = await extractDocxLines(file);
-    }
-
-    const rawText = allLines.map(l=>l.text).join('\n');
-    if (!rawText.trim()){
-      throw new Error('No selectable text found in this file. If it\'s a scanned/image PDF, try the DOCX version instead.');
-    }
-
-    applyBigFlags(allLines);
+    const formData = new FormData();
+    formData.append('file', file);
 
     setStep(2);
-    setStatus('Detecting section boundaries…');
-    await sleep(120);
+    setStatus('Analyzing document with AI…');
+
+    // The file goes to our own server, which holds the APILayer key and
+    // forwards the request — the key never touches the browser.
+    const res = await fetch('/api/resumes/parse-apilayer', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+
+    let data = {};
+    try { data = await res.json(); } catch(e){ /* no body */ }
+
+    if (res.status === 401){
+      throw new Error('Please log in to use AI-powered parsing.');
+    }
+    if (!res.ok){
+      throw new Error(data.error || 'AI parsing failed.');
+    }
 
     setStep(3);
     setStatus('Structuring entries…');
     await sleep(120);
 
-    let resume;
-    try {
-      resume = buildResume(allLines, rawText);
-    } catch(innerErr){
-      console.error('Structured parse failed, using fallback', innerErr);
-      resume = fallbackResume(rawText);
-    }
-
+    const resume = data.parsed;
     lastParsed = resume;
     renderResume(resume);
     setStep(4);
-    setStatus('Done — ' + rawText.length + ' characters parsed, ' + resume.confidence + '% confidence.');
+    setStatus('Done — parsed with AI, ' + resume.confidence + '% confidence.');
   } catch(err){
     console.error(err);
-    let msg = (err && err.message) ? err.message : 'Something went wrong reading that file.';
-    if (err && err.name === 'PasswordException'){
-      msg = 'This PDF is password-protected. Please upload an unlocked file.';
-    } else if (/central directory|not a valid zip|corrupt|end of central directory/i.test(msg)){
-      msg = 'This DOCX looks corrupted, or it\'s an older .doc file. Please re-save it as .docx and try again.';
-    }
+    const msg = (err && err.message) ? err.message : 'Something went wrong reading that file.';
     setStatus(msg, true);
   } finally {
     dropzone.classList.remove('scanning');
