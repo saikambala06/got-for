@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Quick Download — SK VK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css" />
+<style>
+  .qd-grid{ display:grid; grid-template-columns: 1.15fr 0.85fr; gap:22px; align-items:start; }
+  .qd-tag{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint); display:flex; align-items:center; gap:8px; }
+  .qd-tag .dot{ width:6px; height:6px; border-radius:50%; background:var(--green); }
+  .qd-tag.tailored .dot{ background: var(--accent); }
+  .qd-head-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+
+  .preview-card{ background:#fff; color:#1a1d29; border-radius:12px; padding:34px 40px; min-height:420px; }
+  .preview-card h1{ text-align:center; font-size:21px; margin:0 0 2px; color:#1a1d29; }
+  .preview-card .p-title{ text-align:center; font-size:12.5px; font-weight:700; letter-spacing:.04em; margin-bottom:2px; }
+  .preview-card .p-contact{ text-align:center; font-size:12px; color:#6b7280; margin-bottom:14px; }
+  .preview-card hr{ border:none; border-top:1px solid #e4e6ec; margin:12px 0; }
+  .preview-card .p-heading{ font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; margin:16px 0 8px; }
+  .preview-card .p-role{ font-weight:700; font-size:13.5px; }
+  .preview-card .p-company{ font-style:italic; color:#4b5160; font-size:12.5px; margin-bottom:6px; }
+  .preview-card ul{ margin:0 0 12px; padding-left:18px; }
+  .preview-card li{ font-size:12.8px; line-height:1.55; margin-bottom:4px; }
+  .preview-loading{ text-align:center; padding:60px 0; color:var(--text-dim); font-size:13px; }
+
+  .cust-card{ padding:24px; }
+  .cust-card p.sub{ font-size:12.5px; color:var(--text-dim); margin-bottom:20px; }
+  .cust-row{ display:flex; gap:14px; margin-bottom:18px; }
+  .cust-field{ flex:1; }
+  .cust-field label{ display:block; font-size:11.5px; font-weight:700; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; letter-spacing:.03em; }
+  .cust-field select{ width:100%; padding:9px 10px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; }
+  .cust-block{ margin-bottom:18px; }
+  .toggle-block{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:18px; }
+  .dl-btn{
+    width:100%; background:linear-gradient(135deg, var(--accent), var(--accent-2)); color:#1a1326; border:none;
+    border-radius:10px; padding:13px; font-size:14px; font-weight:700; cursor:pointer;
+  }
+  .dl-btn:hover{ filter:brightness(1.05); }
+  .dl-btn:disabled{ opacity:.55; cursor:not-allowed; }
+  .dl-foot{ font-size:11.5px; color:var(--text-faint); margin-top:10px; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="sidebar-root" data-active="resumes"></div>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Quick Download</div>
+        <div class="page-sub">Auto-tailored preview with your saved formatting defaults.</div>
+      </div>
+      <a href="/tailor-resume.html" class="btn btn-sm">← Back</a>
+    </div>
+
+    <div class="qd-grid">
+      <div class="card section-card">
+        <div class="qd-head-row">
+          <span class="qd-tag" id="previewTag"><span class="dot"></span>LIVE PREVIEW</span>
+          <span class="qd-tag tailored" id="tailoredTag"><span class="dot"></span>AUTO-TAILORED</span>
+        </div>
+        <div id="previewMount" class="preview-card">
+          <div class="preview-loading"><span class="loader"></span><div style="margin-top:8px;">Loading resume…</div></div>
+        </div>
+      </div>
+
+      <div class="card cust-card">
+        <span class="qd-tag" style="margin-bottom:8px;"><span class="dot"></span>QUICK DOWNLOAD</span>
+        <h3 style="margin:6px 0 2px;">Customizations</h3>
+        <p class="sub">Saved defaults applied to every quick download.</p>
+
+        <div class="cust-row">
+          <div class="cust-field">
+            <label>Resume</label>
+            <select id="resumeSelect"><option>Loading…</option></select>
+          </div>
+          <div class="cust-field">
+            <label>Template</label>
+            <select id="templateSelect">
+              <option>Classic</option><option>Harvard</option><option>Jake's</option><option>Modern</option><option>Minimal</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="cust-block">
+          <label style="display:block; font-size:11.5px; font-weight:700; color:var(--text-dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:.03em;">Text color</label>
+          <div class="swatch-row" id="textColorRow"></div>
+        </div>
+
+        <div class="cust-block">
+          <label style="display:block; font-size:11.5px; font-weight:700; color:var(--text-dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:.03em;">Accent color <span style="text-transform:none;font-weight:500;color:var(--text-faint);">headings &amp; rules</span></label>
+          <div class="swatch-row" id="accentRow"></div>
+        </div>
+
+        <div class="cust-row">
+          <div class="cust-field">
+            <label>Format</label>
+            <div class="seg-group" id="formatGroup">
+              <button class="seg-btn" data-format="pdf">PDF</button>
+              <button class="seg-btn active" data-format="docx">DOCX</button>
+            </div>
+          </div>
+          <div class="cust-field">
+            <label>Tailoring level</label>
+            <div class="seg-group" id="levelGroup">
+              <button class="seg-btn active" data-level="low">Low</button>
+              <button class="seg-btn" data-level="medium">Med</button>
+              <button class="seg-btn" data-level="high">High</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="toggle-block">
+          <div class="toggle-row">
+            <div class="toggle-copy">
+              <div class="toggle-title">No metrics</div>
+              <div class="toggle-desc">When toggled off, AI adds numbers (like "20%" or "500 users") to the bullet points. Toggle on to keep bullet points number-free.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="noMetricsToggle" checked />
+              <span class="track"></span>
+            </label>
+          </div>
+        </div>
+
+        <button class="dl-btn" id="downloadBtn">↓ Download DOCX</button>
+        <div class="dl-foot">🐨 Every quick download uses these settings. Change them anytime — we'll remember.</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+const ACCENTS = ['#2563eb', '#16a34a', '#0ea5a4', '#dc2626', '#ec4899', '#d946ef', '#ea580c', '#f59e0b', '#0f172a', '#7c3aed'];
+const TEXT_COLORS = ['#1a1d29', '#000000', '#33363f', '#0f172a'];
+const params = new URLSearchParams(location.search);
+const jobId = params.get('jobId') || '';
+
+let resumes = [];
+let job = null;
+let currentResume = null;   // raw saved resume
+let previewResume = null;   // possibly tailored/projected resume used for rendering + download
+let debounceTimer = null;
+
+const settings = {
+  resumeId: params.get('resumeId') || '',
+  template: 'Classic',
+  textColor: '#1a1d29',
+  accentColor: '#0ea5a4',
+  format: 'docx',
+  tailoringLevel: 'low',
+  noMetrics: true
+};
+
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderSwatchRow(container, colors, selected, onPick) {
+  container.innerHTML = colors.map(c =>
+    `<span class="swatch ${c === selected ? 'selected' : ''}" data-color="${c}" style="background:${c}"></span>`
+  ).join('');
+  container.querySelectorAll('.swatch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      container.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+      sw.classList.add('selected');
+      onPick(sw.dataset.color);
+    });
+  });
+}
+
+async function init() {
+  await requireSession();
+
+  if (jobId) {
+    try { const { job: j } = await api.get(`/api/jobs/${jobId}`); job = j; }
+    catch (err) { /* optional */ }
+  }
+
+  try {
+    const { user } = await api.get('/api/auth/me');
+    if (user.quickDownloadDefaults) Object.assign(settings, user.quickDownloadDefaults);
+  } catch (err) { /* fall back to hard-coded defaults */ }
+
+  try {
+    const { resumes: list } = await api.get('/api/resumes');
+    resumes = list;
+    if (!settings.resumeId) settings.resumeId = (resumes.find(r => r.isDefault) || resumes[0] || {})._id || '';
+    const sel = document.getElementById('resumeSelect');
+    sel.innerHTML = resumes.length
+      ? resumes.map(r => `<option value="${r._id}" ${r._id === settings.resumeId ? 'selected' : ''}>${esc(r.title)}${r.isDefault ? ' (Default)' : ''}</option>`).join('')
+      : `<option value="">No saved resumes</option>`;
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+
+  document.getElementById('templateSelect').value = settings.template;
+  document.getElementById('formatGroup').querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.format === settings.format));
+  document.getElementById('levelGroup').querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.level === settings.tailoringLevel));
+  document.getElementById('noMetricsToggle').checked = !!settings.noMetrics;
+  updateDownloadLabel();
+
+  renderSwatchRow(document.getElementById('textColorRow'), TEXT_COLORS, settings.textColor, (c) => { settings.textColor = c; renderPreview(); });
+  renderSwatchRow(document.getElementById('accentRow'), ACCENTS, settings.accentColor, (c) => { settings.accentColor = c; renderPreview(); });
+
+  wireControls();
+  await loadResumeAndTailor();
+}
+
+function wireControls() {
+  document.getElementById('resumeSelect').addEventListener('change', (e) => {
+    settings.resumeId = e.target.value;
+    loadResumeAndTailor();
+  });
+  document.getElementById('templateSelect').addEventListener('change', (e) => {
+    settings.template = e.target.value;
+    renderPreview();
+  });
+  document.getElementById('formatGroup').addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg-btn'); if (!btn) return;
+    settings.format = btn.dataset.format;
+    document.getElementById('formatGroup').querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+    updateDownloadLabel();
+  });
+  document.getElementById('levelGroup').addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg-btn'); if (!btn) return;
+    settings.tailoringLevel = btn.dataset.level;
+    document.getElementById('levelGroup').querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+    loadResumeAndTailor();
+  });
+  document.getElementById('noMetricsToggle').addEventListener('change', (e) => {
+    settings.noMetrics = e.target.checked;
+    loadResumeAndTailor();
+  });
+  document.getElementById('downloadBtn').addEventListener('click', doDownload);
+}
+
+function updateDownloadLabel() {
+  document.getElementById('downloadBtn').textContent = settings.format === 'pdf' ? '↓ Download PDF' : '↓ Download DOCX';
+}
+
+function synthesizedJobDescription() {
+  if (!job) return '';
+  if (job.description && job.description.trim()) return job.description.trim();
+  return `${job.title} at ${job.company}. ${(job.skills || []).length ? 'Key skills: ' + job.skills.join(', ') + '. ' : ''}${job.notes || ''}`.trim();
+}
+
+async function loadResumeAndTailor() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(async () => {
+    if (!settings.resumeId) return;
+    document.getElementById('previewMount').innerHTML = `<div class="preview-loading"><span class="loader"></span><div style="margin-top:8px;">${job ? 'Tailoring against ' + esc(job.title) + '…' : 'Loading resume…'}</div></div>`;
+    try {
+      const { resume } = await api.get(`/api/resumes/${settings.resumeId}`);
+      currentResume = resume;
+
+      const jd = synthesizedJobDescription();
+      if (jd) {
+        document.getElementById('tailoredTag').style.display = 'flex';
+        const { tailored } = await api.post(`/api/resumes/${settings.resumeId}/tailor`, {
+          jobTitle: job.title,
+          jobDescription: jd,
+          tailoringLevel: settings.tailoringLevel,
+          noMetrics: settings.noMetrics
+        });
+        previewResume = projectAllAccepted(resume, tailored);
+      } else {
+        document.getElementById('tailoredTag').style.display = 'none';
+        previewResume = resume;
+      }
+      renderPreview();
+    } catch (err) {
+      document.getElementById('previewMount').innerHTML = `<div class="preview-loading" style="color:var(--red);">${esc(err.message)}</div>`;
+    }
+  }, jd_debounce());
+}
+function jd_debounce() { return 250; }
+
+// Auto-accept every AI suggestion (this is the "quick" path — no per-bullet review).
+function projectAllAccepted(resume, diff) {
+  const experience = diff.experience.map((role, i) => {
+    const original = resume.experience[role.index] || resume.experience[i] || {};
+    const lines = role.bullets.filter(b => b.action !== 'remove').map(b => b.new || b.old);
+    return { ...original, description: lines.join('\n') };
+  });
+  return { ...resume, summary: diff.summary.new, skills: diff.skills, experience };
+}
+
+function renderPreview() {
+  if (!previewResume) return;
+  const r = previewResume;
+  const p = r.personal || {};
+  const contact = [p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' &nbsp;|&nbsp; ');
+  const expHtml = (r.experience || []).map(e => `
+    <div class="p-role">${esc(e.role || '')}</div>
+    <div class="p-company">${esc(e.company || '')}${e.dates ? ' — ' + esc(e.dates) : ''}</div>
+    <ul>${(e.description || '').split('\n').filter(Boolean).map(l => `<li>${esc(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}</ul>`).join('');
+
+  document.getElementById('previewMount').innerHTML = `
+    <div style="color:${settings.textColor}">
+      <h1 style="color:${settings.textColor}">${esc(p.name || 'Your Name')}</h1>
+      <div class="p-title" style="color:${settings.accentColor}">${esc(r.title || '')}</div>
+      <div class="p-contact">${contact}</div>
+      <hr style="border-top:2px solid ${settings.accentColor}" />
+      <div class="p-heading" style="color:${settings.accentColor}">Summary</div>
+      <div style="font-size:12.8px;line-height:1.6;">${esc(r.summary || '')}</div>
+      <div class="p-heading" style="color:${settings.accentColor}">Experience</div>
+      ${expHtml}
+    </div>`;
+}
+
+function resumeToExportHtml(resume) {
+  const p = resume.personal || {};
+  const accent = settings.accentColor;
+  const textColor = settings.textColor;
+  const contact = [p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' &nbsp;|&nbsp; ');
+  const skillsHtml = (resume.skills || []).map(esc).join(', ');
+  const expHtml = (resume.experience || []).map(e => `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${esc(e.role || '')}</span><span>${esc(e.dates || '')}</span>
+      </div>
+      <div style="font-style:italic;color:#444;margin-bottom:4px;">${esc(e.company || '')}</div>
+      <ul style="margin:0;padding-left:18px;">
+        ${(e.description || '').split('\n').filter(Boolean).map(l => `<li>${esc(l.replace(/^[-•*]\s*/, ''))}</li>`).join('')}
+      </ul>
+    </div>`).join('');
+  const eduHtml = (resume.education || []).map(ed => `
+    <div style="margin-bottom:8px;"><strong>${esc(ed.school || '')}</strong> — ${esc(ed.degree || '')} ${esc(ed.field || '')}</div>`).join('');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${esc(p.name || 'Resume')}</title>
+    <style>
+      body{ font-family: Georgia, 'Times New Roman', serif; color:${textColor}; padding:40px; max-width:760px; margin:0 auto; }
+      h1{ text-align:center; margin-bottom:2px; }
+      .contact{ text-align:center; font-size:12px; color:#555; margin-bottom:18px; }
+      h2{ font-size:13px; text-transform:uppercase; letter-spacing:0.05em; border-bottom:2px solid ${accent}; padding-bottom:3px; margin-top:22px; }
+      @media print { body{ padding:0; } }
+    </style></head><body>
+    <h1>${esc(p.name || '')}</h1>
+    <div class="contact">${contact}</div>
+    <h2>Summary</h2><p>${esc(resume.summary || '')}</p>
+    <h2>Skills</h2><p>${skillsHtml}</p>
+    <h2>Experience</h2>${expHtml}
+    <h2>Education</h2>${eduHtml}
+    </body></html>`;
+}
+
+async function doDownload() {
+  if (!previewResume) return;
+  const btn = document.getElementById('downloadBtn');
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Preparing…';
+
+  // Remember these settings for next time.
+  try { await api.put('/api/account/quick-download-defaults', settings); } catch (e) { /* non-fatal */ }
+
+  const html = resumeToExportHtml(previewResume);
+  if (settings.format === 'docx') {
+    const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
+    const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(previewResume.personal?.name || 'resume').replace(/\s+/g, '_')}.doc`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } else {
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 300);
+  }
+
+  btn.disabled = false; btn.textContent = original;
+  showToast('Resume ready — check your downloads');
+}
+
+init();
+</script>
+</body>
+</html>

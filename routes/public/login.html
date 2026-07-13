@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SK VK — Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css" />
+<link rel="stylesheet" href="/css/auth.css" />
+</head>
+<body>
+
+<div class="auth-wrap">
+  <div class="auth-side">
+    <div class="brand">
+      <div class="mark">SK</div>
+      <div class="name">SK<span> VK</span></div>
+    </div>
+
+    <div class="auth-pitch">
+      <h1>Track every application, <em>land the offer</em> faster.</h1>
+      <p>SK VK is a completely free dashboard for organizing your job search — applications, resumes, and progress, all in one calm, focused view. No paywalls, no upgrade nags.</p>
+      <div class="auth-stats">
+        <div><b>100%</b><span>Free, always</span></div>
+        <div><b>∞</b><span>Applications tracked</span></div>
+        <div><b>1</b><span>Place for it all</span></div>
+      </div>
+    </div>
+
+    <div class="auth-foot">Your data is stored securely in your own account — not your browser.</div>
+  </div>
+
+  <div class="auth-form-side">
+    <div class="auth-box">
+      <div class="auth-toggle">
+        <button id="tabLogin" class="active" type="button">Sign in</button>
+        <button id="tabRegister" type="button">Create account</button>
+      </div>
+
+      <div id="panelLogin">
+        <h2>Welcome back</h2>
+        <p class="sub">Sign in to pick up your job search where you left off.</p>
+        <div class="auth-error" id="loginError"></div>
+        <form id="loginForm">
+          <div class="field">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" required autocomplete="email" placeholder="you@example.com" />
+          </div>
+          <div class="field">
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" required autocomplete="current-password" placeholder="••••••••" />
+          </div>
+          <button class="btn btn-primary auth-submit" type="submit" id="loginBtn">Sign in</button>
+        </form>
+        <div class="demo-note">New here? <a href="#" id="goRegister" style="color:var(--accent-2)">Create a free account</a></div>
+      </div>
+
+      <div id="panelRegister" style="display:none">
+        <h2>Create your account</h2>
+        <p class="sub">Free forever. Set up your dashboard in under a minute.</p>
+        <div class="auth-error" id="registerError"></div>
+        <form id="registerForm">
+          <div class="field">
+            <label for="regName">Full name</label>
+            <input type="text" id="regName" required autocomplete="name" placeholder="Jordan Lee" />
+          </div>
+          <div class="field">
+            <label for="regEmail">Email</label>
+            <input type="email" id="regEmail" required autocomplete="email" placeholder="you@example.com" />
+          </div>
+          <div class="field">
+            <label for="regPassword">Password</label>
+            <input type="password" id="regPassword" required autocomplete="new-password" placeholder="At least 6 characters" />
+          </div>
+          <button class="btn btn-primary auth-submit" type="submit" id="registerBtn">Create free account</button>
+        </form>
+        <div class="demo-note">Already have an account? <a href="#" id="goLogin" style="color:var(--accent-2)">Sign in</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+  const tabLogin = document.getElementById('tabLogin');
+  const tabRegister = document.getElementById('tabRegister');
+  const panelLogin = document.getElementById('panelLogin');
+  const panelRegister = document.getElementById('panelRegister');
+
+  function showLogin() {
+    tabLogin.classList.add('active'); tabRegister.classList.remove('active');
+    panelLogin.style.display = 'block'; panelRegister.style.display = 'none';
+  }
+  function showRegister() {
+    tabRegister.classList.add('active'); tabLogin.classList.remove('active');
+    panelRegister.style.display = 'block'; panelLogin.style.display = 'none';
+  }
+  tabLogin.addEventListener('click', showLogin);
+  tabRegister.addEventListener('click', showRegister);
+  document.getElementById('goRegister').addEventListener('click', (e) => { e.preventDefault(); showRegister(); });
+  document.getElementById('goLogin').addEventListener('click', (e) => { e.preventDefault(); showLogin(); });
+
+  // If already logged in, skip straight to the dashboard
+  api.get('/api/auth/me').then(() => { window.location.href = '/dashboard.html'; }).catch(() => {});
+
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('loginError');
+    const btn = document.getElementById('loginBtn');
+    errEl.classList.remove('show');
+    btn.disabled = true; btn.textContent = 'Signing in…';
+    try {
+      await api.post('/api/auth/login', {
+        email: document.getElementById('loginEmail').value.trim(),
+        password: document.getElementById('loginPassword').value
+      });
+      window.location.href = '/dashboard.html';
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.add('show');
+      btn.disabled = false; btn.textContent = 'Sign in';
+    }
+  });
+
+  document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('registerError');
+    const btn = document.getElementById('registerBtn');
+    errEl.classList.remove('show');
+    btn.disabled = true; btn.textContent = 'Creating account…';
+    try {
+      await api.post('/api/auth/register', {
+        name: document.getElementById('regName').value.trim(),
+        email: document.getElementById('regEmail').value.trim(),
+        password: document.getElementById('regPassword').value
+      });
+      window.location.href = '/dashboard.html';
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.add('show');
+      btn.disabled = false; btn.textContent = 'Create free account';
+    }
+  });
+</script>
+</body>
+</html>

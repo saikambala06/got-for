@@ -80,6 +80,51 @@
   }
 
   // ── 2. Generic DOM heuristics (fallback for sites without JSON-LD) ──
+
+  // Known ATS/job-board containers that hold the actual posting body. Tried
+  // first because they're far more reliable than any generic heuristic —
+  // Greenhouse, Lever, Workday, iCIMS, Taleo, SmartRecruiters, BambooHR,
+  // LinkedIn, and Indeed all mark up the description this way.
+  const DESCRIPTION_SELECTORS = [
+    '[class*="job-description" i]', '[id*="job-description" i]',
+    '[class*="jobdescription" i]', '[id*="jobdescription" i]',
+    '[class*="job-details" i]', '[id*="job-details" i]',
+    '[class*="jobDetails" i]',
+    '[class*="posting-body" i]', '[class*="posting-description" i]',
+    '[class*="job-post" i]', '[id*="job-post" i]',
+    '[data-testid*="job-description" i]', '[data-testid*="jobDescription" i]',
+    '[class*="vacancy-description" i]',
+    '#jobDescriptionText', // Indeed
+    '.jobs-description__content', '.jobs-box__html-content', // LinkedIn
+    '[class*="description" i]'
+  ];
+
+  // Blocks matching these are almost never the actual posting body, even if
+  // they happen to be large — related-job carousels, sidebars, cookie/consent
+  // banners, and navigation are the usual sources of "wrong content" bugs.
+  const CLUTTER_SELECTOR = [
+    '[class*="related" i]', '[class*="similar" i]', '[class*="recommend" i]',
+    '[class*="carousel" i]', '[class*="sidebar" i]', '[class*="cookie" i]',
+    '[class*="consent" i]', '[class*="newsletter" i]', '[class*="breadcrumb" i]',
+    '[class*="comment" i]', '[class*="footer" i]', '[class*="navbar" i]',
+    '[class*="social-share" i]', '[class*="job-list" i]', '[class*="job-card" i]',
+    '[class*="search-results" i]'
+  ].join(', ');
+
+  function isClutter(el) {
+    return el.matches?.(CLUTTER_SELECTOR) || !!el.closest(CLUTTER_SELECTOR);
+  }
+
+  /** Text-per-child-element density — high for genuine prose blocks, low for
+   *  wrapper divs that just aggregate many unrelated child sections. This is
+   *  what keeps a page's <main> (which also contains the sidebar, related
+   *  jobs, nav, etc.) from beating out the actual description div just
+   *  because it has more raw characters. */
+  function density(el, len) {
+    const children = el.querySelectorAll('*').length;
+    return len / (1 + children);
+  }
+
   function fromDom() {
     const title =
       textOf(document.querySelector('h1')) ||
@@ -101,15 +146,50 @@
     const atMatch = (document.title + ' ' + bodyText.slice(0, 400)).match(/\bat\s+([A-Z][\w&.,'\- ]{1,40})\b/);
     if (atMatch) company = atMatch[1].trim();
 
-    // Description: the largest text block on the page (article/main/section),
-    // excluding nav/header/footer/aside.
-    const blocks = Array.from(document.querySelectorAll('article, main, section, div'))
-      .filter((el) => !el.closest('nav, header, footer, aside'))
-      .map((el) => ({ el, len: (el.innerText || '').length }))
-      .sort((a, b) => b.len - a.len);
-    const description = blocks.length ? blocks[0].el.innerText.trim() : bodyText.trim();
+    // Description, in priority order:
+    //   1. A known ATS description container (most reliable).
+    //   2. The highest text-density candidate block, excluding clutter.
+    //   3. The whole page body as a last resort, so the AI backend always
+    //      has *something* to read instead of an empty string that would
+    //      otherwise skip AI analysis entirely.
+    let description = '';
+    let source = 'dom';
 
-    return { title, company, location, employmentType, salary, description, source: 'dom' };
+    for (const sel of DESCRIPTION_SELECTORS) {
+      const el = document.querySelector(sel);
+      if (el && !isClutter(el)) {
+        const text = stripHtml(el.innerHTML);
+        if (text.length > 200) {
+          description = text;
+          source = 'dom-selector';
+          break;
+        }
+      }
+    }
+
+    if (!description) {
+      const candidates = Array.from(document.querySelectorAll('article, main, section, div'))
+        .filter((el) => !el.closest('nav, header, footer, aside') && !isClutter(el))
+        .map((el) => {
+          const text = el.innerText || '';
+          return { el, len: text.length, score: density(el, text.length) };
+        })
+        .filter((c) => c.len > 200)
+        .sort((a, b) => b.score - a.score);
+
+      if (candidates.length) {
+        description = stripHtml(candidates[0].el.innerHTML);
+      }
+    }
+
+    if (!description) {
+      // Nothing scored well — fall back to the full page text (still minus
+      // nav/header/footer/aside) rather than leaving the panel with nothing
+      // to analyze.
+      description = bodyText.trim();
+    }
+
+    return { title, company, location, employmentType, salary, description, source };
   }
 
   // ── 3. Skill + qualification mining from the description text ──
@@ -153,10 +233,28 @@
   }
 
   function parseJobFromPage() {
-    const base = fromJsonLd() || fromDom();
+    let base = fromJsonLd();
+    // Some ATS embed only a short teaser (or nothing) in the JSON-LD
+    // "description" field and render the real posting body in the DOM. If
+    // the JSON-LD description looks too thin to analyze, enrich it with
+    // whatever the DOM heuristic finds rather than trusting JSON-LD blindly.
+    if (base && base.description.length < 200) {
+      const domFallback = fromDom();
+      if (domFallback.description.length > base.description.length) {
+        base = { ...base, description: domFallback.description, source: `${base.source}+dom` };
+      }
+    }
+    base = base || fromDom();
     if (!base.title) return null;
 
     const description = base.description || '';
+
+    // A raw, unfiltered snapshot of the visible page text, capped to a
+    // sane size. Used only as a last-resort input to the AI backend if the
+    // chosen `description` above turns out to yield nothing (e.g. the wrong
+    // block was picked on an unusual page layout) — see content.js retry.
+    const rawPageText = (document.body.innerText || '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 20000);
+
     const skillsFound = detectSkills(description);
     const qualificationPhrases = detectQualificationPhrases(description);
     const highlights = detectHighlights(description);
@@ -168,7 +266,8 @@
       skillsFound,
       qualificationPhrases,
       highlights,
-      experience
+      experience,
+      rawPageText
     };
   }
 
