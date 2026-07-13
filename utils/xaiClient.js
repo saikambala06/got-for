@@ -52,20 +52,54 @@ async function callGrok(messages, maxTokens) {
 }
 
 // ─── Google Gemini (free tier) ───────────────────────────────────────────
-//
-// This used to be its own, weaker implementation: a single hardcoded key
-// (no pool), no retry on 429/403/5xx, no request timeout, and an older
-// model name than the rest of the app used. That's why job-page reading
-// could hang/be slow (a stuck request had nothing to time it out) and why
-// it looked "inaccurate" (any failure — including a transient overload —
-// fell straight back to the crude local regex extractor). It now shares
-// the exact same key-pooled, retrying, timed-out client as resume
-// tailoring/parsing — see ./geminiClient.js.
-const { callGemini: callSharedGemini } = require('./geminiClient');
-const { getKeyPool } = require('./geminiKeyPool');
+
+function toGeminiPayload(messages, maxTokens) {
+  const systemText = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
+  const contents = messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+  return {
+    ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
+    contents,
+    generationConfig: { temperature: 0, maxOutputTokens: maxTokens }
+  };
+}
 
 async function callGemini(messages, maxTokens) {
-  return callSharedGemini(messages, maxTokens);
+  const apiKey = process.env.GEMINI_API_KEY;
+  const payload = toGeminiPayload(messages, maxTokens);
+
+  const request = (model) =>
+    fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+  // gemini-2.0-flash has the most generous free-tier quota; fall back to
+  // gemini-1.5-flash for accounts where 2.0 isn't yet enabled.
+  let response = await request('gemini-2.0-flash');
+
+  if (!response.ok && (response.status === 400 || response.status === 404)) {
+    response = await request('gemini-1.5-flash');
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Gemini API ${response.status}: ${body.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+  if (!text) {
+    const blockReason = data.promptFeedback?.blockReason;
+    throw new Error(blockReason ? `Gemini blocked the request: ${blockReason}` : 'Empty response from Gemini');
+  }
+  return stripFences(text);
 }
 
 // ─── Provider-agnostic entry point ───────────────────────────────────────
@@ -87,7 +121,7 @@ async function callAI(messages, maxTokens = 8000) {
     }
   }
 
-  if (getKeyPool().hasKeys()) {
+  if (process.env.GEMINI_API_KEY) {
     try {
       return await callGemini(messages, maxTokens);
     } catch (err) {

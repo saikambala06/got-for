@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/app.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -79,43 +80,6 @@
 <script>
 let chart;
 
-/* Application Trends needs the Chart.js library, previously loaded from a
-   single hardcoded CDN <script> tag in <head>. If that one host was slow,
-   offline, or blocked (ad-blockers/corporate proxies commonly block
-   cdnjs.cloudflare.com), the global `Chart` never existed and the trend
-   chart crashed with "Chart is not defined" — which also silently killed
-   the "Jobs Viewed vs Jobs Applied" tracking data below it. This loads
-   Chart.js on demand and falls back across multiple CDNs instead of
-   depending on any single one. */
-const CHART_JS_SOURCES = [
-  'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
-  'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
-  'https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js'
-];
-let _chartJsLoadPromise = null;
-function loadChartJs() {
-  if (window.Chart) return Promise.resolve();
-  if (_chartJsLoadPromise) return _chartJsLoadPromise;
-
-  _chartJsLoadPromise = (async () => {
-    for (const src of CHART_JS_SOURCES) {
-      try {
-        await new Promise((resolve, reject) => {
-          const s = document.createElement('script');
-          s.src = src;
-          s.onload = resolve;
-          s.onerror = () => reject(new Error(`Could not load ${src}`));
-          document.head.appendChild(s);
-        });
-        if (window.Chart) return;
-      } catch (e) { /* try the next source */ }
-    }
-    throw new Error('Could not load the charting library. Check your connection and try again.');
-  })();
-
-  return _chartJsLoadPromise;
-}
-
 const TREND_COLORS = {
   applied: '#2e8b57',
   viewed: '#e69138'
@@ -168,9 +132,6 @@ async function loadDashboard() {
     document.getElementById('statTotal').textContent = stats.total;
     document.getElementById('statMonthly').textContent = stats.monthly;
     document.getElementById('statWeekly').textContent = stats.last7;
-
-    await loadChartJs();
-    document.getElementById('trendChartError')?.remove();
 
     // Trend chart — Jobs Viewed vs Jobs Applied only, styled to match the
     // reference design: light card, hollow-circle points, smooth lines with
@@ -256,18 +217,7 @@ async function loadDashboard() {
         <span style="width:8px;height:8px;border-radius:50%;background:${TREND_COLORS.viewed};"></span>Jobs Viewed
       </span>`;
   } catch (err) {
-    const canvas = document.getElementById('trendChart');
-    if (canvas && !window.Chart) {
-      document.getElementById('trendChartError')?.remove();
-      canvas.insertAdjacentHTML('afterend', `
-        <div id="trendChartError" style="padding:24px;text-align:center;color:#9ca3af;font-size:13px;">
-          Couldn't load the chart library, so job view/apply trends aren't shown right now.
-          <button onclick="document.getElementById('trendChartError').remove(); loadDashboard();"
-            style="display:block;margin:10px auto 0;background:none;border:1px solid var(--border);border-radius:8px;padding:6px 14px;cursor:pointer;color:inherit;">Retry</button>
-        </div>`);
-    } else {
-      showToast(err.message, 'error');
-    }
+    showToast(err.message, 'error');
   }
 
   // Recent jobs

@@ -62,33 +62,6 @@ skvk/
 
 The app gracefully degrades — if the key is absent, resume parsing falls back to a regex-based extractor and the "Tailor to Job" button returns a clear error.
 
-### Using multiple keys (recommended — avoids 429 quota errors)
-
-The free tier's daily quota is easy to hit. The app supports configuring several
-keys — when one runs out, it automatically rotates to the next. Use **any one**
-of these (they can also be combined):
-
-| Env var | Format | Example |
-|---|---|---|
-| `GEMINI_API_KEYS` | comma or newline separated list | `GEMINI_API_KEYS=AIzaSy...abc,AIzaSy...def,AIzaSy...ghi` |
-| `GEMINI_API_KEY_1`, `GEMINI_API_KEY_2`, ... | one key per numbered var | `GEMINI_API_KEY_1=AIzaSy...abc`<br>`GEMINI_API_KEY_2=AIzaSy...def` |
-| `GEMINI_API_KEY` | single key (still works, counts as one of the pool) | `GEMINI_API_KEY=AIzaSy...abc` |
-
-**Important:** the variable names must match exactly (`GEMINI_API_KEY_1`, not
-`GEMINI_KEY_1` or `GEMINI_API_KEY2` without the underscore) or that key silently
-won't be picked up.
-
-**Check what the server actually loaded** by calling (while logged in):
-
-```
-GET /api/resumes/ai-status
-```
-
-This returns how many keys were detected and each one's cooldown status — use
-it to confirm the count matches what you configured before assuming the app is
-broken. If `configuredKeys` is lower than expected, the extra vars aren't
-named correctly (or, on Vercel, weren't added/redeployed — see below).
-
 ## 3. Run locally
 
 ```bash
@@ -107,16 +80,9 @@ Visit `http://localhost:4000`. Create an account to get started.
 3. Under **Environment Variables** add:
    - `MONGODB_URI` — your MongoDB Atlas connection string
    - `JWT_SECRET` — any long random string
-   - `GEMINI_API_KEY` (and, optionally, `GEMINI_API_KEYS` or `GEMINI_API_KEY_1`, `GEMINI_API_KEY_2`, ... for multiple keys — see above)
+   - `GEMINI_API_KEY` — your Gemini API key
    - `NODE_ENV` — `production`
 4. Click **Deploy**.
-
-> **A local `.env` file only affects `npm run dev` on your machine.** Vercel
-> never reads it. If you add or change keys, add them in the Vercel project's
-> **Settings → Environment Variables** and then **redeploy** (or run
-> `vercel env add GEMINI_API_KEY_2`) — otherwise the running deployment keeps
-> using whatever it already had, no matter how many keys are sitting in a
-> local `.env`.
 
 ## AI resume features
 

@@ -4,7 +4,6 @@
  */
 const { parseResumeText } = require('./resumeParser');
 const { cleanSkill } = require('./skillUtils');
-const { jsonrepair } = require('jsonrepair');
 
 // ─── Shared Gemini caller ────────────────────────────────────────────────────
 //
@@ -426,16 +425,8 @@ function extractJSON(raw) {
     const candidate = s.slice(start, end + 1);
     try {
       return JSON.parse(candidate);
-    } catch (e) {
-      try {
-        return repairTruncatedJSON(candidate, extractErrorPosition(e));
-      } catch {
-        try {
-          return JSON.parse(jsonrepair(candidate));
-        } catch {
-          // Fall through and try the wider/truncation-repair path below.
-        }
-      }
+    } catch {
+      // Fall through and try the wider/truncation-repair path below.
     }
   }
 
@@ -453,32 +444,11 @@ function extractJSON(raw) {
     return JSON.parse(s);
   } catch (e) {
     try {
-      return repairTruncatedJSON(s, extractErrorPosition(e));
+      return repairTruncatedJSON(s);
     } catch {
-      // Last resort: jsonrepair handles cases our own repair logic doesn't —
-      // unescaped quotes inside string values, raw control characters,
-      // trailing commas, single-quoted strings, etc. This is what actually
-      // recovers responses that fail with errors like "Expected ',' or ']'
-      // after array element", which usually means a stray unescaped quote
-      // mid-string threw off parsing well before the true end of the
-      // response (not a truncation issue at all, so our bracket-counting
-      // repair can't fix it).
-      try {
-        return JSON.parse(jsonrepair(s));
-      } catch {
-        throw new Error(`JSON parse failed: ${e.message}`);
-      }
+      throw new Error(`JSON parse failed: ${e.message}`);
     }
   }
-}
-
-// JSON.parse's error message includes the character offset where parsing
-// broke, e.g. "Unexpected token x in JSON at position 123" or "Expected ','
-// or ']' after array element in JSON at position 123". Pull that number out
-// so repairTruncatedJSON can bound its scan to it.
-function extractErrorPosition(err) {
-  const m = /position (\d+)/.exec(err?.message || '');
-  return m ? parseInt(m[1], 10) : undefined;
 }
 
 /**
@@ -501,25 +471,13 @@ function extractErrorPosition(err) {
  * of a truncated array, which is exactly what happens when maxOutputTokens
  * is hit mid-way through a long bullet list.
  */
-function repairTruncatedJSON(s, errorPosition) {
-  // Bound the scan to where JSON.parse actually broke (if we know it). This
-  // matters for more than just true end-of-response truncation: if the
-  // model emitted a subtly malformed value mid-document (e.g. a stray
-  // unescaped character inside a string), the *rest* of the string can
-  // still contain well-formed-looking brackets that make it past a naive
-  // full-string scan as a "safe" cut point — even though it sits after the
-  // actual corruption. That produces a "repaired" string which still
-  // contains the bad content and fails to parse again. Stopping the walk at
-  // errorPosition guarantees the repaired result never includes anything
-  // past the point parsing is known to have gone wrong.
-  const limit = Number.isFinite(errorPosition) ? Math.min(errorPosition, s.length) : s.length;
-
+function repairTruncatedJSON(s) {
   const stack = [];
   let inString = false;
   let escape = false;
   let lastSafeCut = null;
 
-  for (let i = 0; i < limit; i++) {
+  for (let i = 0; i < s.length; i++) {
     const c = s[i];
     if (inString) {
       if (escape) escape = false;
@@ -672,8 +630,6 @@ async function tailorRawTextWithAI(resumeText, jobDescription) {
 
 const JOB_ANALYSIS_SYSTEM_PROMPT = `You are a precision job-posting analysis engine. Read the job posting text and output a single valid JSON object — nothing else. No markdown fences, no commentary.
 
-The input is raw text scraped from a live job-listing web page and may contain unrelated clutter mixed in with the real posting: navigation links, cookie/consent banners, "related jobs" or "similar jobs" carousels, footer boilerplate, other unrelated job listings on the same page, social-share widgets, or repeated site chrome. First mentally identify which portion of the text is the actual job posting (title, responsibilities, requirements, benefits for THIS specific role) and analyze only that portion — ignore everything else, even if it's the majority of the text by volume. If the text contains fragments of more than one job posting, only use the one matching the given Job Title / Company.
-
 Your job is to extract, in the candidate's own resume-matching vocabulary:
 
 1. "skills": EVERY concrete hard skill, tool, language, framework, platform, or technology explicitly required or preferred in the posting. Use short canonical names matching how they'd appear on a resume (e.g. "React", "AWS", "Python", "SQL", "Kubernetes", "Figma"). Do not include soft skills (e.g. "communication", "teamwork") in this list. Do not invent skills that aren't mentioned or clearly implied by the posting's requirements. Aim to be thorough — junior postings may have 3-5, senior/technical postings often have 15-25.
@@ -683,8 +639,6 @@ Your job is to extract, in the candidate's own resume-matching vocabulary:
 3. "highlights": ONLY the 3-4 MOST NOTABLE, CONCRETE benefits/perks/hiring-context callouts explicitly mentioned — the ones a candidate would actually care about (e.g. "Visa sponsorship available", "Fully remote", "Equity/stock options", "Unlimited PTO"). Rank by how compelling/distinctive they are and return ONLY the top 3-4; skip generic or minor ones (e.g. don't list "health insurance" if there are more distinctive callouts like sponsorship or a 4-day week). Only include ones actually supported by the text. Return [] if none are mentioned — do not invent generic ones.
 
 4. "experience": { "years": string like "5+ years" or "" if not stated, "seniority": one of "Entry-level"/"Junior"/"Mid-level"/"Senior"/"Lead"/"Principal"/"Staff"/"" if not stated }
-
-If, after filtering out clutter, the remaining text genuinely does not look like a job posting at all (e.g. it's just a homepage or search results page with no identifiable role), still return the full JSON schema below with empty arrays/strings rather than refusing to answer.
 
 === JSON SCHEMA ===
 {
@@ -724,7 +678,7 @@ async function analyzeJobWithAI(jobTitle, company, description) {
     throw new Error('GEMINI_API_KEY not configured');
   }
 
-  const trimmed = (description || '').slice(0, 16000);
+  const trimmed = (description || '').slice(0, 12000);
   if (!trimmed.trim()) {
     throw new Error('No job description text to analyze');
   }
@@ -744,7 +698,7 @@ async function analyzeJobWithAI(jobTitle, company, description) {
         ].join('\n')
       }
     ],
-    3500,
+    3000,
     { jsonMode: true }
   );
 
@@ -769,16 +723,6 @@ Rules:
 - You may also "add" a small number of brand new bullets per role (only at MEDIUM/HIGH level, and only synthesized from facts already present elsewhere in the resume — never invented)
 - Never invent facts, employers, dates, or achievements — only rephrase, reorder, and incorporate what already exists or what the candidate has explicitly confirmed
 - Follow the requested tailoring level intensity exactly as instructed
-- Score the ATS/recruiter match twice — see ATS SCORING RUBRIC below — once for the resume exactly as it stands today ("before"), and once assuming every change you just proposed above is fully accepted ("after")
-- Output must be a single valid JSON object: escape any double-quote characters or line breaks that occur inside a string value (e.g. write \" and \n), never leave a raw " or newline inside a string, and never add trailing commas
-
-ATS SCORING RUBRIC (apply this the same way every time, for both "before" and "after"):
-- Hard skills / tools / technologies overlap with the job description — 40% of the score
-- Job title & seniority alignment (does the candidate's level/title match what's asked?) — 20%
-- Relevant responsibilities/domain experience overlap — 25%
-- Keyword/terminology alignment (the exact language the job description uses) — 15%
-- Score 0–100 and calibrate realistically: a strong, well-aligned candidate typically lands 75–92; a partial/adjacent fit 45–70; a weak fit below 40. Do not default to a narrow band — genuinely differentiate based on the actual overlap.
-- "before" reflects ONLY the resume content exactly as given (ignore your own suggestions). "after" reflects the resume if literally every "modify"/"add"/"remove" decision above were applied — it must genuinely track how much those specific changes move the needle (a "low" tailoring pass with light edits should produce a smaller before→after lift than a "high" pass that rewrites aggressively; never report "after" lower than "before" unless the original resume is already a stronger match than any honest rewrite could achieve).
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
@@ -795,25 +739,8 @@ Return ONLY valid JSON, no markdown, no explanation:
       ]
     }
   ],
-  "atsScore": { "before": 62, "after": 87 },
   "suggestions": "1–2 sentence explanation of the key changes made"
 }`;
-
-// Clamp/validate the AI's before/after ATS scores. Returns null for a side
-// that the model omitted or returned as non-numeric, rather than silently
-// coercing to 0 — 0 is a real (if harsh) score and callers need to be able
-// to tell "AI scored this 0" apart from "AI didn't return a score at all"
-// so they can fall back to a client-side estimate only in the latter case.
-function sanitizeAtsScore(v) {
-  const clampScore = (n) => (Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null);
-  const before = clampScore(Number(v?.before));
-  let after = clampScore(Number(v?.after));
-  // Tailoring is meant to help, not hurt — if both scores came back, never
-  // let "after" render lower than "before" (rare model noise, not a real
-  // regression worth surfacing as "your tailored resume scores worse").
-  if (before !== null && after !== null && after < before) after = before;
-  return { before, after };
-}
 
 function splitBullets(description) {
   return String(description || '')
@@ -880,7 +807,6 @@ function sanitizeTailorResult(result, resume) {
   });
 
   out.suggestions = typeof out.suggestions === 'string' ? out.suggestions : '';
-  out.atsScore = sanitizeAtsScore(result.atsScore);
   return out;
 }
 
@@ -926,7 +852,7 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
     // than a plain rewrite would. Too tight a budget here truncates the
     // response mid-JSON, which is what caused "JSON parse failed: Expected
     // ',' or ']'..." errors on longer resumes.
-    16000,
+    12000,
     { jsonMode: true }
   );
 

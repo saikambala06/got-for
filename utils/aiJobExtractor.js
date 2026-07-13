@@ -1,15 +1,15 @@
 /**
- * AI-powered job posting extractor using Google Gemini (see
- * utils/geminiClient.js). Given a job title, company, and raw scraped page
- * text, returns clean, structured skills / qualifications / key-highlights
- * — the same fields the browser extension's side panel renders.
+ * AI-powered job posting extractor using xAI (Grok) or Google Gemini
+ * (whichever is configured — see utils/xaiClient.js). Given a job title,
+ * company, and raw scraped page text, returns clean, structured skills /
+ * qualifications / key-highlights — the same fields the browser extension's
+ * side panel renders.
  *
  * Falls back to a local, regex/taxonomy-based extraction (skillsLexicon.js)
- * whenever no Gemini key is configured or the call fails/returns something
+ * whenever no AI provider is configured or the call fails/returns something
  * malformed, so the panel is never left empty. Never throws.
  */
-const { callGemini, extractJSON } = require('./geminiClient');
-const { getKeyPool } = require('./geminiKeyPool');
+const { callAI, extractJSON } = require('./xaiClient');
 const { extractSkillsFromText } = require('./skillsLexicon');
 
 const SYSTEM_PROMPT = `You are a precision job-posting data extraction engine. Your ONLY job is to read raw, messy text scraped from a job listing web page and output a single valid JSON object — nothing else. No markdown fences, no commentary, no explanation before or after. Just raw JSON.
@@ -148,13 +148,13 @@ async function extractJobDetails(title, company, description) {
     return { skills: [], qualifications: [], highlights: [], employmentType: '', experienceLevel: '', salaryMin: 0, salaryMax: 0, salaryPeriod: '', usedAI: false };
   }
 
-  if (!getKeyPool().hasKeys()) {
-    console.warn('[aiJobExtractor] No Gemini API key configured (GEMINI_API_KEY) — using local extraction engine');
+  if (!process.env.XAI_API_KEY && !process.env.GEMINI_API_KEY) {
+    console.warn('[aiJobExtractor] No AI provider configured (XAI_API_KEY / GEMINI_API_KEY) — using local extraction engine');
     return localExtractJobDetails(title, company, text);
   }
 
   try {
-    const json = await callGemini(
+    const json = await callAI(
       [
         { role: 'system', content: SYSTEM_PROMPT },
         {
@@ -162,8 +162,7 @@ async function extractJobDetails(title, company, description) {
           content: `Job Title: ${title || 'Not specified'}\nCompany: ${company || 'Not specified'}\n\nRaw scraped page text:\n${text.slice(0, 6000)}`
         }
       ],
-      2000,
-      { jsonMode: true }
+      2000
     );
 
     const result = extractJSON(json);
