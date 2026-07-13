@@ -13,7 +13,7 @@ const SECTION_HEADERS = {
   education:      /^(education|academic\s+(background|history)|educational\s+(background|qualifications))$/i,
   skills:         /^(skills|technical\s+skills|core\s+competencies|key\s+skills|skill\s+set|technologies|tools?\s+&\s+technologies?)$/i,
   projects:       /^(projects?|personal\s+projects?|key\s+projects?|notable\s+projects?)$/i,
-  certifications: /^(certifications?|certificates?|certification?|licenses?\s*(&\s*certifications?)?)$/i,
+  certifications: /^(certifications?|certificates?|licenses?\s*(&\s*certifications?)?)$/i,
   achievements:   /^(achievements?|awards?|honors?|honours?|accomplishments?)$/i,
   languages:      /^(languages?)$/i,
   publications:   /^(publications?)$/i,
@@ -333,13 +333,6 @@ function parseResumeText(rawText) {
 
   // ── Certifications ──
   const certifications = (sections.certifications || []).filter(Boolean).slice(0, 10).map(line => ({
-    name:   line.replace(DATE_RE, '').trim(),
-    issuer: '',
-    date:   (() => { const d = extractDateRange(line); return d.endDate || d.startDate || ''; })()
-  }));
-
-   // ── Certification ──
-  const certification = (sections.certification || []).filter(Boolean).slice(0, 10).map(line => ({
     name:   line.replace(DATE_RE, '').trim(),
     issuer: '',
     date:   (() => { const d = extractDateRange(line); return d.endDate || d.startDate || ''; })()
