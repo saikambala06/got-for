@@ -4,7 +4,6 @@ const Resume  = require('../models/Resume');
 const User    = require('../models/User');
 const requireAuth = require('../middleware/auth');
 const { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI } = require('../utils/aiResumeParser');
-const { parseResumeWithApiLayer } = require('../utils/apiLayerResumeParser');
 const { normalizeDocxText } = require('../utils/resumeParser');
 const { getKeyPool } = require('../utils/geminiKeyPool');
 
@@ -100,29 +99,6 @@ router.post('/parse', (req, res) => {
     } catch (err2) {
       console.error('[/parse]', err2);
       res.status(500).json({ error: 'Could not process that file. Try Build from Scratch instead.' });
-    }
-  });
-});
-
-// ─── Parse uploaded resume via APILayer (server-side proxy) ──────────────────
-// The APILayer key (APILAYER_API_KEY) lives only in server env vars. The
-// browser sends us the file; we forward it to APILayer from here, so the
-// key is never exposed in client-side JS, DevTools, or page source.
-
-router.post('/parse-apilayer', (req, res) => {
-  upload.single('file')(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'Could not read that file' });
-    if (!req.file) return res.status(400).json({ error: 'Please choose a PDF or DOCX file' });
-
-    try {
-      const parsed = await parseResumeWithApiLayer(req.file.buffer);
-      res.json({ parsed });
-    } catch (err2) {
-      console.error('[/parse-apilayer]', err2.message);
-      if (err2.message.includes('APILAYER_API_KEY')) {
-        return res.status(503).json({ error: 'AI parsing is not enabled on this server (APILAYER_API_KEY is not configured).' });
-      }
-      res.status(502).json({ error: `Resume parsing failed: ${err2.message}` });
     }
   });
 });
