@@ -623,11 +623,12 @@ const TAILOR_TEXT_SYSTEM_PROMPT = `You are a resume tailoring assistant. Compare
   "match_score": number (0-100),
   "matched_keywords": [string],
   "missing_keywords": [string],
-  "tailored_summary": string (2-3 sentences, based only on real experience already in the resume),
+  "tailored_summary": string (2-3 sentences, based only on real experience already in the resume, written in a tone that matches the job description's own voice — formal for a formal posting, punchier for a casual/startup one),
   "tailored_bullets": [string] (3-5 rewritten bullets reframing real existing experience using language from the job description),
+  "suggested_certifications": [string] (0-4 specific, real, industry-recognized certifications that would meaningfully close the gap between this candidate and this job; [] if none would meaningfully help),
   "advice": string (2-3 sentences of concrete, honest advice)
 }
-Do not fabricate skills or experience the candidate doesn't have.`;
+Do not fabricate skills or experience the candidate doesn't have. Never claim the candidate already holds a certification you're suggesting.`;
 
 function sanitizeTailorTextResult(r) {
   const arr = (v, max) => (Array.isArray(v) ? v : [])
@@ -641,6 +642,7 @@ function sanitizeTailorTextResult(r) {
     missing_keywords: arr(r?.missing_keywords, 30),
     tailored_summary: typeof r?.tailored_summary === 'string' ? r.tailored_summary.trim() : '',
     tailored_bullets: arr(r?.tailored_bullets, 6),
+    suggested_certifications: arr(r?.suggested_certifications, 4),
     advice: typeof r?.advice === 'string' ? r.advice.trim() : ''
   };
 }
@@ -758,14 +760,26 @@ const TAILOR_LEVEL_INSTRUCTIONS = {
 const TAILOR_SYSTEM_PROMPT = `You are an expert resume writer and career coach. Tailor the provided resume content to better match the job description. This is a bullet-level, reviewable tailoring pass: the candidate will see every change as an old to new diff and accept or reject each one individually, so preserve a clear one-to-one mapping between original and rewritten content.
 
 Rules:
-- Rewrite the professional summary to reflect the target role
+- Rewrite the professional summary to reflect the target role. Match the tone/register the job description itself uses (e.g. a formal enterprise posting → polished, formal summary; a scrappy startup posting → punchier, more direct summary) — never make it sound out of place next to the posting's own voice.
 - Reorder and refine the skills list to prioritise the most relevant ones first
 - Fold in any items listed under "Candidate-confirmed additional skills" into the skills list (the candidate has explicitly confirmed they have these)
 - For EVERY bullet in EVERY role, decide one of: "modify" (rewrite it), "keep" (return it unchanged, old equals new), or "remove" (suggest removal — only at HIGH tailoring level and only for bullets truly irrelevant to this job)
 - You may also "add" a small number of brand new bullets per role (only at MEDIUM/HIGH level, and only synthesized from facts already present elsewhere in the resume — never invented)
+- For EVERY project in the "projects" array (if any are given), apply the same modify/keep treatment to its description — rewrite it to foreground relevant tech/impact for this job, or leave unchanged if it's already a strong fit. Never invent a project.
+- Identify "missingSkills": concrete hard skills/tools/technologies the job description clearly requires or strongly prefers that do NOT appear anywhere in the candidate's resume (skills, experience, or projects). List only real gaps — do not include anything the candidate already has under a different name/synonym. These are for the candidate's awareness only; never add them to the tailored skills list or fabricate experience with them.
+- Suggest "suggestedCertifications": 0-4 specific, real, industry-recognized certifications that would meaningfully strengthen this candidate's fit for this specific job, based on the gap between their background and the posting. Only suggest ones genuinely relevant to the role/domain — return [] if none would meaningfully help. Never claim the candidate already holds one.
 - Never invent facts, employers, dates, or achievements — only rephrase, reorder, and incorporate what already exists or what the candidate has explicitly confirmed
 - Follow the requested tailoring level intensity exactly as instructed
+- Score the ATS/recruiter match twice — see ATS SCORING RUBRIC below — once for the resume exactly as it stands today ("before"), and once assuming every change you just proposed above is fully accepted ("after")
 - Output must be a single valid JSON object: escape any double-quote characters or line breaks that occur inside a string value (e.g. write \" and \n), never leave a raw " or newline inside a string, and never add trailing commas
+
+ATS SCORING RUBRIC (apply this the same way every time, for both "before" and "after"):
+- Hard skills / tools / technologies overlap with the job description — 40% of the score
+- Job title & seniority alignment (does the candidate's level/title match what's asked?) — 20%
+- Relevant responsibilities/domain experience overlap — 25%
+- Keyword/terminology alignment (the exact language the job description uses) — 15%
+- Score 0–100 and calibrate realistically: a strong, well-aligned candidate typically lands 75–92; a partial/adjacent fit 45–70; a weak fit below 40. Do not default to a narrow band — genuinely differentiate based on the actual overlap.
+- "before" reflects ONLY the resume content exactly as given (ignore your own suggestions). "after" reflects the resume if literally every "modify"/"add"/"remove" decision above were applied — it must genuinely track how much those specific changes move the needle (a "low" tailoring pass with light edits should produce a smaller before→after lift than a "high" pass that rewrites aggressively; never report "after" lower than "before" unless the original resume is already a stronger match than any honest rewrite could achieve).
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
@@ -782,8 +796,33 @@ Return ONLY valid JSON, no markdown, no explanation:
       ]
     }
   ],
+  "projects": [
+    {
+      "index": 0,
+      "description": { "old": "original project description", "new": "rewritten project description", "action": "modify" }
+    }
+  ],
+  "missingSkills": ["skill the JD wants that the resume genuinely lacks"],
+  "suggestedCertifications": ["Specific real certification name"],
+  "atsScore": { "before": 62, "after": 87 },
   "suggestions": "1–2 sentence explanation of the key changes made"
 }`;
+
+// Clamp/validate the AI's before/after ATS scores. Returns null for a side
+// that the model omitted or returned as non-numeric, rather than silently
+// coercing to 0 — 0 is a real (if harsh) score and callers need to be able
+// to tell "AI scored this 0" apart from "AI didn't return a score at all"
+// so they can fall back to a client-side estimate only in the latter case.
+function sanitizeAtsScore(v) {
+  const clampScore = (n) => (Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null);
+  const before = clampScore(Number(v?.before));
+  let after = clampScore(Number(v?.after));
+  // Tailoring is meant to help, not hurt — if both scores came back, never
+  // let "after" render lower than "before" (rare model noise, not a real
+  // regression worth surfacing as "your tailored resume scores worse").
+  if (before !== null && after !== null && after < before) after = before;
+  return { before, after };
+}
 
 function splitBullets(description) {
   return String(description || '')
@@ -849,7 +888,32 @@ function sanitizeTailorResult(result, resume) {
     return { index: i, role: role.role, company: role.company, bullets };
   });
 
+  const projectsByIndex = new Map((out.projects || []).map((p) => [p.index, p]));
+  out.projects = (resume.projects || []).map((proj, i) => {
+    const aiEntry = projectsByIndex.get(i);
+    const originalDescription = proj.description || '';
+    let description;
+    if (aiEntry && aiEntry.description && typeof aiEntry.description === 'object') {
+      description = {
+        old: typeof aiEntry.description.old === 'string' ? aiEntry.description.old : originalDescription,
+        new: typeof aiEntry.description.new === 'string' ? aiEntry.description.new : originalDescription,
+        action: ['modify', 'keep'].includes(aiEntry.description.action) ? aiEntry.description.action : 'modify'
+      };
+    } else {
+      description = { old: originalDescription, new: originalDescription, action: 'keep' };
+    }
+    return { index: i, name: proj.name, description };
+  });
+
+  const strList = (v, max) => (Array.isArray(v) ? v : [])
+    .map((s) => (typeof s === 'string' ? s.trim() : String(s || '').trim()))
+    .filter(Boolean)
+    .slice(0, max);
+  out.missingSkills = strList(result.missingSkills, 20);
+  out.suggestedCertifications = strList(result.suggestedCertifications, 4);
+
   out.suggestions = typeof out.suggestions === 'string' ? out.suggestions : '';
+  out.atsScore = sanitizeAtsScore(result.atsScore);
   return out;
 }
 
@@ -869,6 +933,11 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
         role: e.role,
         company: e.company,
         description: e.description
+      })),
+      projects: (resume.projects || []).map((p, i) => ({
+        index: i,
+        name: p.name,
+        description: p.description
       }))
     },
     null,
@@ -894,8 +963,9 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
     // so a resume with several roles/many bullets needs a lot more headroom
     // than a plain rewrite would. Too tight a budget here truncates the
     // response mid-JSON, which is what caused "JSON parse failed: Expected
-    // ',' or ']'..." errors on longer resumes.
-    16000,
+    // ',' or ']'..." errors on longer resumes. Projects/missingSkills/
+    // suggestedCertifications add further headroom needs.
+    18000,
     { jsonMode: true }
   );
 
