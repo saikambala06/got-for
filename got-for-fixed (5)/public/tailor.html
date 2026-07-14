@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tailor Resume — SK VK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css" />
+<style>
+  .tl-tabs{ display:flex; gap:6px; margin-bottom:22px; border-bottom:1px solid var(--border); }
+  .tl-tab{
+    padding:11px 18px; font-size:13.5px; font-weight:600; color:var(--text-faint);
+    border:none; background:none; cursor:pointer; border-bottom:2px solid transparent;
+    position:relative; top:1px; font-family:var(--font-body);
+  }
+  .tl-tab.active{ color:var(--accent-2); border-bottom-color:var(--accent); }
+  .tl-tab:disabled{ opacity:.4; cursor:default; }
+  .tl-panel{ display:none; }
+  .tl-panel.active{ display:block; }
+
+  /* ---- picker (Tailor your resume) ---- */
+  .tl-picker{ max-width:560px; margin:26px auto; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:34px 38px; }
+  .tl-picker h1{ text-align:center; font-size:22px; margin-bottom:6px; }
+  .tl-picker p.sub{ text-align:center; font-size:13px; color:var(--text-faint); margin-bottom:24px; }
+  .field-label{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-faint); margin-bottom:6px; }
+  .tl-select{ width:100%; padding:11px 14px; border-radius:var(--radius-sm); border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text); font-size:13.5px; margin-bottom:20px; }
+  .tl-mode{ display:flex; align-items:flex-start; gap:12px; border:1.5px solid var(--border); border-radius:12px;
+    padding:14px 16px; margin-bottom:12px; cursor:pointer; transition:.15s; background:var(--surface-2); }
+  .tl-mode:hover{ border-color:var(--accent); }
+  .tl-mode.selected{ border-color:var(--green); background:rgba(54,211,153,0.08); }
+  .tl-mode-radio{ width:18px; height:18px; border-radius:50%; border:2px solid var(--border); flex-shrink:0; margin-top:2px;
+    display:flex; align-items:center; justify-content:center; }
+  .tl-mode.selected .tl-mode-radio{ border-color:var(--green); }
+  .tl-mode-radio-dot{ width:9px; height:9px; border-radius:50%; background:var(--green); display:none; }
+  .tl-mode.selected .tl-mode-radio-dot{ display:block; }
+  .tl-mode-title{ font-size:14.5px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  .tl-mode-badge{ font-size:11px; font-weight:700; color:var(--blue); }
+  .tl-mode-desc{ font-size:12.5px; color:var(--text-faint); margin-top:3px; line-height:1.45; }
+  .tl-continue{ width:100%; margin-top:10px; background:var(--green); color:#04140d; border:none; border-radius:10px;
+    padding:13px; font-size:14.5px; font-weight:700; cursor:pointer; }
+  .tl-continue:hover{ filter:brightness(1.06); }
+  .tl-continue:disabled{ opacity:.5; cursor:default; }
+
+  /* ---- review ---- */
+  .tl-review-top{ display:flex; align-items:center; gap:16px; margin-bottom:18px; flex-wrap:wrap; }
+  .tl-level-group{ display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .tl-level-btn{ border:none; background:var(--surface-2); color:var(--text-dim); padding:7px 15px; font-size:12.5px;
+    font-weight:600; cursor:pointer; border-right:1px solid var(--border); }
+  .tl-level-btn:last-child{ border-right:none; }
+  .tl-level-btn.active{ background:var(--green); color:#04140d; }
+  .tl-level-btn:disabled{ opacity:.6; cursor:default; }
+  .tl-sheet{ max-width:720px; margin:0 auto; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:30px 36px; position:relative; min-height:160px; }
+  .tl-tailor-loading{ position:fixed; inset:0; background:rgba(10,14,12,0.65); backdrop-filter:blur(4px);
+    -webkit-backdrop-filter:blur(4px); border-radius:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:9999; }
+  .tl-tailor-spinner{ width:34px; height:34px; border-radius:50%; border:3px solid var(--border);
+    border-top-color:var(--green); animation:tlSpin .8s linear infinite; }
+  .tl-tailor-loading-text{ font-size:13px; font-weight:600; color:var(--text-dim); }
+  @keyframes tlSpin{ to{ transform:rotate(360deg); } }
+  .qd-pill:disabled{ opacity:.6; cursor:default; }
+  .tl-sheet h2{ text-align:center; font-size:20px; margin-bottom:4px; }
+  .tl-sheet .contact{ text-align:center; font-size:12px; color:var(--text-faint); margin-bottom:16px; }
+  .tl-heading{ font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent-2);
+    margin:18px 0 8px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+  .tl-old{ font-size:13px; line-height:1.6; color:var(--text-faint); text-decoration:line-through;
+    background:rgba(255,107,129,0.08); padding:4px 8px; border-radius:6px; margin-bottom:2px; }
+  .tl-new{ font-size:13px; line-height:1.6; color:var(--text); background:rgba(54,211,153,0.08); padding:4px 8px; border-radius:6px; }
+  .tl-plain{ font-size:13px; line-height:1.6; color:var(--text); padding:3px 8px; }
+  .tl-skill{ display:inline-block; font-size:12px; padding:3px 10px; border-radius:100px; border:1px solid var(--border);
+    margin:3px 5px 3px 0; color:var(--text-dim); }
+  .tl-skill.added{ border-color:var(--green); color:var(--green); }
+  .tl-review-actions{ display:flex; justify-content:center; gap:12px; margin-top:22px; }
+
+  /* ---- match score + per-bullet accept/reject ---- */
+  .tl-score{ display:flex; align-items:center; gap:10px; }
+  .tl-score-copy{ font-size:11.5px; color:var(--text-faint); line-height:1.3; }
+  .tl-score-copy b{ color:var(--green); font-size:15px; }
+  .tl-diff-row{ display:flex; align-items:flex-start; gap:8px; background:rgba(54,211,153,0.08);
+    border-radius:6px; padding:4px 8px; margin-bottom:2px; }
+  .tl-diff-row .tl-new{ background:none; padding:0; flex:1; margin-bottom:0; }
+  .tl-diff-actions{ display:flex; gap:4px; flex-shrink:0; padding-top:1px; }
+  .tl-act{ width:24px; height:24px; border-radius:6px; border:1px solid var(--border); background:var(--surface-2);
+    cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); }
+  .tl-act:hover{ border-color:var(--accent); }
+  .tl-act.yes.active{ background:rgba(54,211,153,0.15); border-color:var(--green); color:var(--green); }
+  .tl-act.no.active{ background:rgba(255,107,129,0.15); border-color:#ff6b81; color:#ff6b81; }
+  .tl-removed-note{ font-size:11.5px; color:var(--text-faint); margin-bottom:6px; display:flex; align-items:center; gap:4px; }
+  .tl-bottombar{ position:sticky; bottom:14px; margin-top:20px; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:14px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    box-shadow:0 6px 24px rgba(0,0,0,.25); }
+  .tl-bottombar .link-btn{ background:none; border:none; color:var(--text-faint); font-size:12.5px; cursor:pointer; padding:0; }
+  .tl-bottombar .link-btn:hover{ color:var(--text); }
+  .tl-changes-note{ font-size:12px; color:var(--text-faint); }
+
+  /* ---- quick download (live preview + customizations) ---- */
+  .qd-body{ display:flex; gap:22px; align-items:flex-start; }
+  .qd-left{ flex:1; min-width:0; }
+  .qd-left-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .qd-badge{ font-size:11px; font-weight:700; color:var(--green); display:flex; align-items:center; gap:5px; }
+  .qd-badge::before{ content:''; width:7px; height:7px; border-radius:50%; background:var(--green); display:inline-block; }
+  .qd-preview-wrap{ background:var(--bg-soft); border:1px solid var(--border); border-radius:var(--radius);
+    display:flex; justify-content:center; padding:22px; position:relative; }
+  .qd-page{ width:100%; max-width:640px; background:#fff; border-radius:4px; box-shadow:0 8px 30px rgba(0,0,0,.4); }
+  .qd-page iframe{ width:100%; height:760px; border:none; display:block; border-radius:4px; }
+  .qd-foot{ text-align:center; font-size:11.5px; color:var(--text-faint); margin-top:10px; }
+
+  .qd-right{ width:340px; flex-shrink:0; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:20px; display:flex; flex-direction:column; gap:16px; }
+  .qd-right-head{ display:flex; align-items:center; gap:7px; }
+  .qd-dot{ width:7px; height:7px; border-radius:50%; background:var(--green); }
+  .qd-title{ font-size:15px; font-weight:700; }
+  .qd-sub{ font-size:11.5px; color:var(--text-faint); margin-top:4px; }
+  .qd-field label{ display:block; font-size:11px; font-weight:700; color:var(--text-faint); text-transform:uppercase;
+    letter-spacing:.04em; margin-bottom:7px; }
+  .qd-field select{ width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:9px; font-size:13px;
+    background:var(--surface-2); color:var(--text); }
+  .qd-row2{ display:flex; gap:12px; }
+  .qd-row2 > .qd-field{ flex:1; min-width:0; }
+  .qd-swatches{ display:flex; gap:9px; flex-wrap:wrap; }
+  .qd-swatch{ width:24px; height:24px; border-radius:50%; cursor:pointer; border:2px solid transparent;
+    display:flex; align-items:center; justify-content:center; }
+  .qd-swatch.selected{ border-color:var(--text); }
+  .qd-swatch .chk{ color:#fff; font-size:11px; font-weight:900; display:none; text-shadow:0 0 2px rgba(0,0,0,.6); }
+  .qd-swatch.selected .chk{ display:block; }
+  .qd-pillgroup{ display:flex; border:1px solid var(--border); border-radius:9px; overflow:hidden; }
+  .qd-pill{ flex:1; border:none; background:var(--surface-2); color:var(--text-dim); padding:8px; font-size:12.5px;
+    font-weight:600; cursor:pointer; border-right:1px solid var(--border); }
+  .qd-pill:last-child{ border-right:none; }
+  .qd-pill.active{ background:var(--green); color:#04140d; }
+  .qd-toggle-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; background:var(--surface-2);
+    border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .qd-toggle-copy .t1{ font-size:13px; font-weight:700; }
+  .qd-toggle-copy .t2{ font-size:11.5px; color:var(--text-faint); margin-top:3px; line-height:1.4; }
+  .qd-switch{ position:relative; width:38px; height:22px; flex-shrink:0; }
+  .qd-switch input{ opacity:0; width:0; height:0; }
+  .qd-switch .slider{ position:absolute; inset:0; background:var(--border); border-radius:999px; cursor:pointer; transition:.15s; }
+  .qd-switch .slider::before{ content:''; position:absolute; width:16px; height:16px; left:3px; top:3px; background:#fff;
+    border-radius:50%; transition:.15s; }
+  .qd-switch input:checked + .slider{ background:var(--green); }
+  .qd-switch input:checked + .slider::before{ transform:translateX(16px); }
+  .qd-download{ width:100%; background:var(--green); color:#04140d; border:none; border-radius:10px; padding:13px;
+    font-size:14px; font-weight:800; cursor:pointer; }
+  .qd-download:hover{ filter:brightness(1.06); }
+  .qd-note{ font-size:11px; color:var(--text-faint); line-height:1.5; }
+
+  @media (max-width:900px){ .qd-body{ flex-direction:column; } .qd-right{ width:100%; } }
+
+  /* ---- template chooser overlay ---- */
+  .tpl-overlay{ position:fixed; inset:0; background:var(--bg); z-index:200; overflow-y:auto; }
+  .tpl-overlay-inner{ max-width:1100px; margin:0 auto; padding:28px 32px 60px; }
+  .tpl-overlay h1{ font-size:24px; margin:20px 0 4px; }
+  .tpl-overlay .sub{ font-size:13.5px; color:var(--text-faint); margin-bottom:26px; }
+  .tpl-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:22px; }
+  .tpl-card{ cursor:pointer; border:1.5px solid var(--border); border-radius:var(--radius); overflow:hidden;
+    background:var(--surface); transition:.15s; }
+  .tpl-card:hover{ border-color:var(--green); transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.25); }
+  .tpl-thumb{ width:100%; height:280px; overflow:hidden; position:relative; background:#fff; }
+  .tpl-thumb iframe{ position:absolute; top:0; left:0; width:800px; height:1035px; border:none;
+    transform:scale(0.275); transform-origin:top left; pointer-events:none; }
+  .tpl-card-label{ padding:11px 14px; font-size:13.5px; font-weight:700; text-align:center; }
+
+  /* ---- document editor overlay ---- */
+  .doc-overlay{ position:fixed; inset:0; background:var(--bg); z-index:210; display:flex; flex-direction:column; }
+  .doc-toolbar{ display:flex; align-items:center; gap:18px; padding:12px 20px; border-bottom:1px solid var(--border);
+    background:var(--surface); flex-wrap:wrap; }
+  .doc-toolbar select{ padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2);
+    color:var(--text); font-size:13px; }
+  .doc-tool-group{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-faint); }
+  .doc-tool-group button{ width:26px; height:26px; border-radius:6px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text); cursor:pointer; font-size:14px; }
+  .doc-tool-group input[type="range"]{ width:110px; }
+  .doc-preview-wrap{ flex:1; overflow:auto; display:flex; justify-content:center; padding:30px; background:var(--bg-soft); }
+  .doc-page{ background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.4); overflow:hidden; }
+  .doc-page iframe{ width:794px; height:1123px; border:none; display:block; transform-origin:top left; }
+  .doc-bottombar{ display:flex; align-items:center; gap:12px; padding:14px 20px; border-top:1px solid var(--border);
+    background:var(--surface); }
+  .doc-filename-input{ flex:0 0 auto; width:280px; padding:9px 12px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text); font-size:13px; }
+  .doc-download-split{ display:flex; position:relative; }
+  .doc-download-split .btn{ border-radius:0; }
+  .doc-download-split .btn:first-child{ border-radius:10px 0 0 10px; }
+  .doc-download-caret{ border-radius:0 10px 10px 0 !important; border-left:1px solid rgba(0,0,0,.15) !important; padding:10px 10px !important; }
+  .doc-download-menu{ position:absolute; bottom:calc(100% + 6px); right:0; background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.35); overflow:hidden; min-width:180px; }
+  .doc-download-menu button{ display:flex; align-items:center; gap:8px; width:100%; padding:11px 14px; background:none;
+    border:none; color:var(--text); font-size:13px; cursor:pointer; text-align:left; }
+  .doc-download-menu button:hover{ background:var(--surface-2); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="sidebar-root" data-active="resumes"></div>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Tailor Resume</div>
+        <div class="page-sub" id="jobSubline">Match your resume against a job description, then download.</div>
+      </div>
+    </div>
+
+    <div class="card section-card">
+      <div class="tl-tabs">
+        <button class="tl-tab active" data-tab="picker">Tailor your resume</button>
+        <button class="tl-tab" data-tab="quick" id="qdTabBtn" disabled>Quick Download</button>
+      </div>
+
+      <!-- TAB 1: picker + review -->
+      <div class="tl-panel active" id="panel-picker">
+        <div id="pickerCard" class="tl-picker">
+          <h1>Tailor your resume</h1>
+          <p class="sub">Pick a resume, then choose how to apply AI suggestions.</p>
+
+          <div class="field-label">Resume</div>
+          <select class="tl-select" id="tl-resume"></select>
+
+          <div class="tl-mode selected" data-mode="review">
+            <div class="tl-mode-radio"><div class="tl-mode-radio-dot"></div></div>
+            <div>
+              <div class="tl-mode-title">Review &amp; edit <span class="tl-mode-badge">☑ Full tailoring</span></div>
+              <div class="tl-mode-desc">Full tailoring — review the AI's changes before downloading.</div>
+            </div>
+          </div>
+          <div class="tl-mode" data-mode="quick">
+            <div class="tl-mode-radio"><div class="tl-mode-radio-dot"></div></div>
+            <div>
+              <div class="tl-mode-title">Quick Download <span class="tl-mode-badge">⚡ Fastest</span></div>
+              <div class="tl-mode-desc">Auto-apply every AI suggestion, then download with your saved defaults.</div>
+            </div>
+          </div>
+
+          <button class="tl-continue" id="tl-continue">Continue →</button>
+        </div>
+
+        <div id="reviewOut" style="display:none;position:relative;">
+          <div class="tl-review-top">
+            <span class="field-label" style="margin:0;">Tailoring level</span>
+            <div class="tl-level-group" id="reviewLevels">
+              <button class="tl-level-btn" data-level="low">Low</button>
+              <button class="tl-level-btn" data-level="medium">Med</button>
+              <button class="tl-level-btn active" data-level="high">High</button>
+            </div>
+            <div style="flex:1;"></div>
+            <div class="tl-score" id="tl-score"></div>
+          </div>
+          <div class="tl-sheet" id="reviewSheet"></div>
+          <div class="tl-bottombar">
+            <button class="btn btn-primary" id="tl-apply-all">Apply all changes</button>
+            <button class="link-btn" id="tl-reset-changes">Reset</button>
+            <span class="tl-changes-note" id="tl-changes-note"></span>
+            <div style="flex:1;"></div>
+            <button class="btn btn-primary" id="tl-go-download">Download resume →</button>
+          </div>
+          <div class="tl-tailor-loading" id="reviewTailorLoading" style="display:none;">
+            <div class="tl-tailor-spinner"></div>
+            <div class="tl-tailor-loading-text" id="reviewTailorLoadingText">Tailoring in progress…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: quick download -->
+      <div class="tl-panel" id="panel-quick" style="position:relative;">
+        <div class="qd-body">
+          <div class="qd-left">
+            <div class="qd-left-head">
+              <span class="field-label" style="margin:0;">Live preview</span>
+              <span class="qd-badge">Auto-tailored</span>
+            </div>
+            <div class="qd-preview-wrap">
+              <div class="qd-page"><iframe id="qdFrame"></iframe></div>
+            </div>
+            <div class="qd-foot" id="qdFoot"></div>
+          </div>
+
+          <div class="qd-right">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div class="qd-right-head"><span class="qd-dot"></span><span class="qd-title">Quick Download</span></div>
+              <div class="qd-sub">Saved defaults applied to every quick download.</div>
+            </div>
+
+            <div class="qd-row2">
+              <div class="qd-field">
+                <label>Resume</label>
+                <select id="qdResume"></select>
+              </div>
+              <div class="qd-field">
+                <label>Template</label>
+                <select id="qdTemplate">
+                  <option>Classic</option><option>Harvard</option><option>Jake's</option><option>Modern</option><option>Minimal</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="qd-field">
+              <label>Text color</label>
+              <div class="qd-swatches" id="qdTextColors"></div>
+            </div>
+
+            <div class="qd-field">
+              <label>Accent color</label>
+              <div class="qd-swatches" id="qdAccents"></div>
+            </div>
+
+            <div class="qd-row2">
+              <div class="qd-field">
+                <label>Format</label>
+                <div class="qd-pillgroup" id="qdFormat">
+                  <button class="qd-pill active" data-value="pdf">PDF</button>
+                  <button class="qd-pill" data-value="docx">DOCX</button>
+                </div>
+              </div>
+              <div class="qd-field">
+                <label>Tailoring level</label>
+                <div class="qd-pillgroup" id="qdLevel">
+                  <button class="qd-pill" data-value="low">Low</button>
+                  <button class="qd-pill" data-value="medium">Med</button>
+                  <button class="qd-pill active" data-value="high">High</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="qd-toggle-row">
+              <div class="qd-toggle-copy">
+                <div class="t1">No metrics</div>
+                <div class="t2">When off, AI adds numbers (like "20%" or "500 users") to bullet points. Toggle on to keep bullets number-free.</div>
+              </div>
+              <label class="qd-switch">
+                <input type="checkbox" id="qdNoMetrics" />
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <button class="qd-download" id="qdDownload">↓ Download PDF</button>
+            <div class="qd-note">Every quick download uses these settings. Change them anytime — we'll remember.</div>
+          </div>
+        </div>
+        <div class="tl-tailor-loading" id="qdTailorLoading" style="display:none;">
+          <div class="tl-tailor-spinner"></div>
+          <div class="tl-tailor-loading-text" id="qdTailorLoadingText">Tailoring in progress…</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Template chooser overlay -->
+<div id="templateChooserOverlay" class="tpl-overlay" style="display:none;">
+  <div class="tpl-overlay-inner">
+    <button class="btn" id="tplBackBtn">← Back to tailor resume</button>
+    <h1>Choose your resume template</h1>
+    <p class="sub">Select a design that fits your professional style. You can preview and download in PDF or Word.</p>
+    <div class="tpl-grid" id="tplGrid"></div>
+  </div>
+</div>
+
+<!-- Document editor / final download overlay -->
+<div id="docEditorOverlay" class="doc-overlay" style="display:none;">
+  <div class="doc-toolbar">
+    <select id="docFont">
+      <option value="Georgia, 'Times New Roman', serif">Crimson Text</option>
+      <option value="'Times New Roman', Times, serif">Times New Roman</option>
+      <option value="Calibri, Arial, sans-serif">Calibri</option>
+      <option value="'Segoe UI', Arial, sans-serif">Segoe UI</option>
+      <option value="Helvetica, Arial, sans-serif">Helvetica</option>
+    </select>
+    <div class="doc-tool-group">
+      <button id="docFontMinus">−</button><span id="docFontSizeLabel">10</span><button id="docFontPlus">+</button>
+    </div>
+    <div class="doc-tool-group">
+      <label>Line spacing</label><input type="range" id="docLineHeight" min="1" max="2" step="0.05" value="1.25">
+    </div>
+    <div class="doc-tool-group">
+      <label>Zoom</label><input type="range" id="docZoom" min="50" max="150" step="5" value="100"><span id="docZoomLabel">100%</span>
+    </div>
+    <div style="flex:1;"></div>
+    <button class="btn" id="docBackBtn">← Templates</button>
+  </div>
+  <div class="doc-preview-wrap">
+    <div class="doc-page"><iframe id="docFrame" scrolling="no"></iframe></div>
+  </div>
+  <div class="doc-bottombar">
+    <input type="text" id="docFilename" class="doc-filename-input" />
+    <div style="flex:1;"></div>
+    <button class="btn" id="docCancelBtn">Cancel</button>
+    <div class="doc-download-split">
+      <button class="btn btn-primary" id="docDownloadBtn">⬇ Download</button>
+      <button class="btn btn-primary doc-download-caret" id="docDownloadCaret">▾</button>
+      <div class="doc-download-menu" id="docDownloadMenu" style="display:none;">
+        <button data-format="pdf">📄 Download PDF</button>
+        <button data-format="docx">📄 Download DOCX</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+const qp = new URLSearchParams(location.search);
+const job = {
+  title: qp.get('jobTitle') || '',
+  company: qp.get('company') || '',
+  description: qp.get('jobDescription') || '',
+  resumeId: qp.get('resumeId') || ''
+};
+if (job.title) {
+  document.getElementById('jobSubline').textContent =
+    `Tailoring against “${job.title}”${job.company ? ' at ' + job.company : ''}.`;
+}
+
+const TEMPLATES = ['Classic', 'Harvard', "Jake's", 'Modern', 'Minimal'];
+const ACCENTS = ['#2563eb', '#16a34a', '#0ea5a4', '#dc2626', '#ec4899', '#d946ef', '#ea580c', '#f59e0b', '#0f172a', '#7c3aed'];
+const TEXT_COLORS = ['#0f172a', '#000000'];
+
+const state = {
+  resumes: [],
+  selectedResumeId: job.resumeId || null,
+  mode: 'review',
+  diff: null,
+  resume: null,
+  decisions: {},
+  qd: { template: 'Classic', textColor: TEXT_COLORS[0], accent: '#16a34a', format: 'pdf', tailoringLevel: 'high', noMetrics: false },
+  jobKeywords: [],
+  // AI-computed ATS match score for the current diff — { before, after } as
+  // returned by the tailor endpoint. Populated by runTailor(); see
+  // resolveAtsScore() for the keyword-overlap fallback used only if the AI
+  // didn't return usable numbers.
+  atsScore: { before: 0, after: 0 },
+  editor: { fontFamily: null, fontSize: 10, lineHeight: 1.25, zoom: 100, filename: '' }
+};
+
+function scoreRing(percent, size = 46) {
+  const r = (size - 8) / 2, c = 2 * Math.PI * r;
+  const p = Math.max(0, Math.min(100, percent));
+  const offset = c - (p / 100) * c;
+  const color = p >= 70 ? 'var(--green)' : p >= 40 ? '#d97706' : '#ff6b81';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="var(--border)" stroke-width="5" fill="none"/>
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="${color}" stroke-width="5" fill="none"
+      stroke-dasharray="${c}" stroke-dashoffset="${offset}" stroke-linecap="round" transform="rotate(-90 ${size / 2} ${size / 2})"/>
+    <text x="${size / 2}" y="${size / 2 + 4}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text)">${Math.round(p)}</text>
+  </svg>`;
+}
+
+/* ---- animated ATS match-score badge ----
+   Same ring+number as scoreRing(), but keeps the SVG node persistent
+   across re-renders so the score can smoothly count up/down between
+   values instead of jumping instantly. Used so the badge starts at the
+   resume's real "before any AI changes" score and only animates to the
+   tailored score once the person actually applies changes. */
+let _scoreAnimFrame = null;
+function _setScoreRingValue(fillEl, textEl, numEl, val, c) {
+  const p = Math.max(0, Math.min(100, val));
+  const offset = c - (p / 100) * c;
+  const color = p >= 70 ? 'var(--green)' : p >= 40 ? '#d97706' : '#ff6b81';
+  fillEl.setAttribute('stroke-dashoffset', offset);
+  fillEl.setAttribute('stroke', color);
+  const rounded = Math.round(p);
+  textEl.textContent = rounded;
+  numEl.textContent = rounded;
+}
+
+function updateScoreBadge(currentScore, baselineScore, allAcceptedScore, animate) {
+  const container = document.getElementById('tl-score');
+  const size = 46, r = (size - 8) / 2, c = 2 * Math.PI * r;
+  let fill = document.getElementById('tl-score-fill');
+
+  if (!fill) {
+    container.innerHTML = `
+      <div><svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+        <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="var(--border)" stroke-width="5" fill="none"/>
+        <circle id="tl-score-fill" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="var(--green)" stroke-width="5" fill="none"
+          stroke-dasharray="${c}" stroke-dashoffset="${c}" stroke-linecap="round" transform="rotate(-90 ${size / 2} ${size / 2})"/>
+        <text id="tl-score-text" x="${size / 2}" y="${size / 2 + 4}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text)">0</text>
+      </svg></div>
+      <div class="tl-score-copy">MATCH SCORE<br/><b id="tl-score-num">0</b><span id="tl-score-extra"></span></div>`;
+    fill = document.getElementById('tl-score-fill');
+    state.badgeDisplayedScore = 0;
+  }
+
+  const textEl = document.getElementById('tl-score-text');
+  const numEl = document.getElementById('tl-score-num');
+  const extraEl = document.getElementById('tl-score-extra');
+  extraEl.innerHTML = `
+    ${currentScore !== baselineScore ? ` <span style="color:var(--text-faint);font-weight:400;">(was ${baselineScore})</span>` : ''}
+    ${allAcceptedScore > currentScore ? ` → ~${allAcceptedScore} if you accept all` : ''}`;
+
+  const startScore = state.badgeDisplayedScore ?? currentScore;
+  if (_scoreAnimFrame) cancelAnimationFrame(_scoreAnimFrame);
+
+  if (!animate || startScore === currentScore) {
+    _setScoreRingValue(fill, textEl, numEl, currentScore, c);
+    state.badgeDisplayedScore = currentScore;
+    return;
+  }
+
+  const duration = 700;
+  const t0 = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    const val = startScore + (currentScore - startScore) * eased;
+    _setScoreRingValue(fill, textEl, numEl, val, c);
+    if (t < 1) {
+      _scoreAnimFrame = requestAnimationFrame(step);
+    } else {
+      state.badgeDisplayedScore = currentScore;
+      _scoreAnimFrame = null;
+    }
+  };
+  _scoreAnimFrame = requestAnimationFrame(step);
+}
+
+/* ---- real ATS-style match score ----
+   Extracts significant keywords straight from the job description, then
+   measures how many actually show up anywhere in the resume's text
+   (summary, skills, and every experience bullet). Computed fresh for both
+   the original resume and the "projected" resume (the tailored resume with
+   the person's current accept/reject decisions applied), so the score
+   genuinely moves as changes are accepted or reverted. */
+const ATS_STOPWORDS = new Set([
+  'the','and','for','are','with','that','this','from','have','will','you','your','our','their','who',
+  'what','which','all','any','can','not','but','was','were','has','had','been','into','than','then',
+  'they','them','also','using','use','used','including','include','across','role','roles','job','jobs',
+  'team','teams','work','working','years','year','experience','experienced','strong','ability','abilities',
+  'skills','skill','required','requirements','requirement','preferred','plus','etc','about','other','such',
+  'both','more','most','some','each','per','within','ensure','ensuring','support','supporting','responsible',
+  'responsibilities','description','looking','candidate','candidates','company','position','opportunity',
+  'ideal','join','joining','new','well','high','best','good','great','able','need','needs','must','like',
+  'help','helping','make','making','level','levels','part','full','time'
+]);
+
+function extractKeywords(text) {
+  const counts = {};
+  const words = String(text || '').toLowerCase().match(/[a-z][a-z0-9+#.\-]{2,}/g) || [];
+  words.forEach(raw => {
+    const w = raw.replace(/^[-.]+|[-.]+$/g, '');
+    if (!w || w.length < 3 || ATS_STOPWORDS.has(w) || /^\d+$/.test(w)) return;
+    counts[w] = (counts[w] || 0) + 1;
+  });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 40).map(([w]) => w);
+}
+
+function resumeFullText(resume) {
+  const parts = [resume.summary || '', (resume.skills || []).join(' ')];
+  (resume.experience || []).forEach(e => parts.push(e.role || '', e.description || ''));
+  (resume.education || []).forEach(ed => parts.push(ed.degree || '', ed.field || ''));
+  return parts.join(' \n ').toLowerCase();
+}
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function computeAtsScore(resume) {
+  const keywords = state.jobKeywords || [];
+  if (!keywords.length) return 0;
+  const text = resumeFullText(resume);
+  const matched = keywords.filter(k => new RegExp(`\\b${escapeRegex(k)}\\b`).test(text));
+  return Math.round((matched.length / keywords.length) * 100);
+}
+
+// The AI tailor call scores the resume's real ATS/recruiter match (skills,
+// title/seniority, domain overlap, terminology — see the server-side
+// rubric) for both "before" (resume as-is) and "after" (if every suggestion
+// were accepted). That's the accurate score and should always be preferred.
+// The local keyword-overlap computeAtsScore() above is only a safety-net
+// fallback for the rare case the AI response is missing/invalid scores
+// (e.g. an older cached response), so the badge never breaks.
+function resolveAtsScore(tailored, resume) {
+  const before = tailored?.atsScore?.before;
+  const after = tailored?.atsScore?.after;
+  if (Number.isFinite(before) && Number.isFinite(after)) {
+    return { before, after };
+  }
+  if (!state.jobKeywords.length) state.jobKeywords = extractKeywords(`${job.title} ${job.description}`);
+  const fallbackBefore = computeAtsScore(resume);
+  const fallbackAfter = computeAtsScore(projectedResume({ acceptAll: true }));
+  return { before: fallbackBefore, after: Math.max(fallbackBefore, fallbackAfter) };
+}
+
+function resetDecisions() {
+  state.decisions = { summary: true };
+  (state.diff.experience || []).forEach(role => {
+    role.bullets.forEach((b, bi) => { state.decisions[`exp:${role.index}:${bi}`] = true; });
+  });
+}
+
+// Reverts every suggestion back to its original/unaccepted state — used by
+// the "Reset" button. Explicitly sets every key to false rather than just
+// clearing the decisions object, because an unset key defaults to "accepted"
+// elsewhere (so clearing it used to be indistinguishable from Apply All).
+function rejectAllDecisions() {
+  state.decisions = { summary: false };
+  (state.diff.experience || []).forEach(role => {
+    role.bullets.forEach((b, bi) => { state.decisions[`exp:${role.index}:${bi}`] = false; });
+  });
+}
+
+function countChanges(diff) {
+  let n = diff.summary.old.trim() !== diff.summary.new.trim() ? 1 : 0;
+  diff.experience.forEach(r => r.bullets.forEach(b => { if (b.action !== 'keep') n++; }));
+  return n;
+}
+
+function countAccepted(diff, decisions) {
+  let n = 0;
+  if (diff.summary.old.trim() !== diff.summary.new.trim() && decisions.summary !== false) n++;
+  diff.experience.forEach(r => r.bullets.forEach((b, bi) => {
+    if (b.action === 'keep') return;
+    if (decisions[`exp:${r.index}:${bi}`] !== false) n++;
+  }));
+  return n;
+}
+
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function stripMetrics(text) {
+  return String(text || '')
+    .replace(/\$[\d,]+(\.\d+)?\s*[kKmMbB]?\+?/g, '')
+    .replace(/\b\d[\d,]*(\.\d+)?\s*%/g, '')
+    .replace(/\b\d[\d,]*(\.\d+)?\s*(x|X)\b/g, '')
+    .replace(/\b\d[\d,]*(\.\d+)?\+?\s*(users?|customers?|clients?|engineers?|members?|teams?|hours?|days?|weeks?|months?|years?|projects?|releases?|deployments?|servers?|nodes?|requests?|incidents?|tickets?)\b/gi, '$1')
+    .replace(/\s{2,}/g, ' ').replace(/\s+([.,;])/g, '$1').replace(/\(\s*\)/g, '').trim();
+}
+
+// Each named template has its own genuine layout/markup (not just a font swap):
+// Classic = centered single column, Harvard = education-first formal OCS format,
+// Jake's = the well-known compact ATS single-column "Jake's Resume" layout,
+// Modern = a real two-column layout with a colored sidebar,
+// Minimal = whitespace-driven, rule-free design.
+const TEMPLATE_STYLES = {
+  'Classic': { font: "Georgia, 'Times New Roman', serif" },
+  'Harvard': { font: "'Times New Roman', Times, serif" },
+  "Jake's": { font: "Calibri, 'Segoe UI', Arial, sans-serif" },
+  'Modern': { font: "'Segoe UI', Arial, sans-serif" },
+  'Minimal': { font: 'Helvetica, Arial, sans-serif' }
+};
+
+// Turns the raw resume record into the plain fields every template needs,
+// applying the shared metric-stripping/escaping rules once up front.
+function buildResumeModel(resume, opts) {
+  const p = withProfileFallback(resume.personal);
+  const noMetrics = !!opts.noMetrics;
+  const clean = s => esc(noMetrics ? stripMetrics(s) : s);
+  const contactParts = [p.email, p.phone, p.location, p.linkedin, p.portfolio].filter(Boolean).map(esc);
+  const experience = (resume.experience || []).map(e => ({
+    role: esc(e.role || ''),
+    company: esc(e.company || ''),
+    dates: esc(e.dates || e.endDate || ''),
+    bullets: (e.description || '').split('\n').filter(Boolean).map(l => clean(l.replace(/^[-•*]\s*/, '')))
+  }));
+  const education = (resume.education || []).map(ed => ({
+    school: esc(ed.school || ''),
+    degree: esc(ed.degree || ''),
+    field: esc(ed.field || ''),
+    dates: esc(ed.dates || ed.endDate || '')
+  }));
+  return {
+    name: esc(p.name || ''),
+    contactParts,
+    summary: clean(resume.summary || ''),
+    skills: (resume.skills || []).map(esc),
+    experience,
+    education
+  };
+}
+
+function baseDocStyles(fontFamily, textColor, fontSize, lineHeight, extra) {
+  return `
+    * { box-sizing:border-box; }
+    body{ font-family:${fontFamily}; color:${textColor}; margin:0; padding:32px;
+      font-size:${fontSize}pt; line-height:${lineHeight}; }
+    ul{ margin:0; padding-left:18px; } li{ margin-bottom:2px; }
+    ${extra || ''}
+  `;
+}
+
+function renderClassic(m, opts, fontFamily, textColor, fontSize, lineHeight) {
+  const accent = opts.accent || '#16a34a';
+  const contact = m.contactParts.join(' &nbsp;|&nbsp; ');
+  const expHtml = m.experience.map(e => `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${e.role}</span><span>${e.dates}</span>
+      </div>
+      <div style="font-style:italic;color:#444;margin-bottom:4px;">${e.company}</div>
+      <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>`).join('');
+  const eduHtml = m.education.map(ed => `
+    <div style="margin-bottom:8px;display:flex;justify-content:space-between;">
+      <span><strong>${ed.school}</strong> — ${ed.degree} ${ed.field}</span><span>${ed.dates}</span>
+    </div>`).join('');
+  return `<style>${baseDocStyles(fontFamily, textColor, fontSize, lineHeight, `
+    .page{ max-width:720px; margin:0 auto; }
+    h1{ text-align:center; margin:0 0 2px; font-size:22px; letter-spacing:.03em; }
+    .contact{ text-align:center; font-size:12px; color:#555; margin-bottom:16px; }
+    h2{ font-size:13px; text-transform:uppercase; letter-spacing:.08em; border-bottom:2px solid ${accent}; padding-bottom:3px; margin:20px 0 8px; }
+  `)}</style>
+  <div class="page">
+    <h1>${m.name}</h1><div class="contact">${contact}</div>
+    <h2>Summary</h2><p>${m.summary}</p>
+    <h2>Skills</h2><p>${m.skills.join(', ')}</p>
+    <h2>Experience</h2>${expHtml}
+    <h2>Education</h2>${eduHtml}
+  </div>`;
+}
+
+function renderHarvard(m, opts, fontFamily, textColor, fontSize, lineHeight) {
+  // Harvard OCS-style: name in small caps, education listed before experience,
+  // bold institution/company with dates flush right on the same line.
+  const contact = m.contactParts.join(' &nbsp;•&nbsp; ');
+  const eduHtml = m.education.map(ed => `
+    <div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${ed.school}</span><span>${ed.dates}</span>
+      </div>
+      <div>${ed.degree}${ed.field ? ', ' + ed.field : ''}</div>
+    </div>`).join('');
+  const expHtml = m.experience.map(e => `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${e.company}</span><span>${e.dates}</span>
+      </div>
+      <div style="font-style:italic;margin-bottom:4px;">${e.role}</div>
+      <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>`).join('');
+  return `<style>${baseDocStyles(fontFamily, textColor, fontSize, lineHeight, `
+    .page{ max-width:700px; margin:0 auto; }
+    h1{ text-align:center; margin:0; font-size:20px; letter-spacing:.12em; text-transform:uppercase; }
+    .contact{ text-align:center; font-size:11.5px; margin:4px 0 18px; }
+    h2{ font-size:12.5px; text-transform:uppercase; letter-spacing:.1em; font-weight:700;
+        border-bottom:1.5px solid ${textColor}; padding-bottom:2px; margin:18px 0 8px; }
+  `)}</style>
+  <div class="page">
+    <h1>${m.name}</h1><div class="contact">${contact}</div>
+    <h2>Education</h2>${eduHtml}
+    <h2>Experience</h2>${expHtml}
+    <h2>Skills</h2><p>${m.skills.join(', ')}</p>
+    <h2>Summary</h2><p>${m.summary}</p>
+  </div>`;
+}
+
+function renderJakes(m, opts, fontFamily, textColor, fontSize, lineHeight) {
+  // The well-known "Jake's Resume" layout: dense, ATS-friendly, section
+  // heading immediately followed by a full-width rule, tight vertical rhythm.
+  const contact = m.contactParts.join(' &nbsp;|&nbsp; ');
+  const expHtml = m.experience.map(e => `
+    <div style="margin-bottom:9px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${e.role}</span><span>${e.dates}</span>
+      </div>
+      <div style="font-style:italic;font-size:0.95em;margin-bottom:2px;">${e.company}</div>
+      <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>`).join('');
+  const eduHtml = m.education.map(ed => `
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+      <span><strong>${ed.school}</strong> — ${ed.degree} ${ed.field}</span><span>${ed.dates}</span>
+    </div>`).join('');
+  return `<style>${baseDocStyles(fontFamily, textColor, fontSize, lineHeight, `
+    .page{ max-width:720px; margin:0 auto; }
+    h1{ text-align:center; margin:0; font-size:19px; }
+    .contact{ text-align:center; font-size:11px; color:#333; margin:2px 0 12px; }
+    h2{ font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; font-weight:700;
+        border-bottom:1px solid #000; padding-bottom:1px; margin:12px 0 5px; }
+    p{ margin:0 0 6px; }
+  `)}</style>
+  <div class="page">
+    <h1>${m.name}</h1><div class="contact">${contact}</div>
+    <h2>Education</h2>${eduHtml}
+    <h2>Experience</h2>${expHtml}
+    <h2>Skills</h2><p>${m.skills.join(', ')}</p>
+    <h2>Summary</h2><p>${m.summary}</p>
+  </div>`;
+}
+
+function renderModern(m, opts, fontFamily, textColor, fontSize, lineHeight) {
+  // A genuine two-column layout: colored sidebar for contact/skills, main
+  // column for summary/experience/education — structurally different from
+  // the single-column templates above.
+  const accent = opts.accent || '#16a34a';
+  const expHtml = m.experience.map(e => `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;font-weight:700;">
+        <span>${e.role}</span><span style="color:#555;">${e.dates}</span>
+      </div>
+      <div style="font-style:italic;color:${accent};margin-bottom:4px;">${e.company}</div>
+      <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>`).join('');
+  const eduHtml = m.education.map(ed => `
+    <div style="margin-bottom:8px;"><strong>${ed.school}</strong><br>${ed.degree} ${ed.field}<br><span style="color:#777;">${ed.dates}</span></div>`).join('');
+  return `<style>${baseDocStyles(fontFamily, textColor, fontSize, lineHeight, `
+    .page{ display:flex; min-height:100%; }
+    .sidebar{ width:34%; background:${accent}; color:#fff; padding:26px 18px; }
+    .sidebar h1{ font-size:19px; margin:0 0 12px; line-height:1.2; }
+    .sidebar h3{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin:16px 0 6px; opacity:.85; }
+    .sidebar .contact-item{ font-size:11px; margin-bottom:5px; word-break:break-word; }
+    .sidebar .skill-pill{ display:inline-block; background:rgba(255,255,255,.18); border-radius:10px; padding:2px 8px; font-size:10.5px; margin:0 4px 4px 0; }
+    .main{ width:66%; padding:26px 24px; }
+    .main h2{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:${accent}; margin:0 0 8px; }
+    .main h2:not(:first-child){ margin-top:18px; }
+  `)}</style>
+  <div class="page">
+    <div class="sidebar">
+      <h1>${m.name}</h1>
+      ${m.contactParts.map(c => `<div class="contact-item">${c}</div>`).join('')}
+      <h3>Skills</h3>
+      ${m.skills.map(s => `<span class="skill-pill">${s}</span>`).join('')}
+      <h3>Education</h3>
+      ${eduHtml}
+    </div>
+    <div class="main">
+      <h2>Summary</h2><p>${m.summary}</p>
+      <h2>Experience</h2>${expHtml}
+    </div>
+  </div>`;
+}
+
+function renderMinimal(m, opts, fontFamily, textColor, fontSize, lineHeight) {
+  // Rule-free, whitespace-driven layout — the deliberate opposite of the
+  // bordered/sectioned templates above.
+  const accent = opts.accent || '#16a34a';
+  const contact = m.contactParts.join('   ');
+  const expHtml = m.experience.map(e => `
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-weight:600;">${e.role}</span><span style="color:#999;font-size:0.9em;">${e.dates}</span>
+      </div>
+      <div style="color:#888;margin-bottom:8px;">${e.company}</div>
+      <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+    </div>`).join('');
+  const eduHtml = m.education.map(ed => `
+    <div style="margin-bottom:10px;">${ed.school} &nbsp;·&nbsp; ${ed.degree} ${ed.field} <span style="color:#999;">${ed.dates}</span></div>`).join('');
+  return `<style>${baseDocStyles(fontFamily, textColor, fontSize, lineHeight, `
+    .page{ max-width:680px; margin:0 auto; }
+    h1{ font-weight:300; font-size:26px; letter-spacing:.02em; margin:0 0 4px; color:${accent}; }
+    .contact{ font-size:11px; color:#999; margin-bottom:28px; }
+    h2{ font-size:10.5px; text-transform:uppercase; letter-spacing:.18em; font-weight:600; color:#aaa; margin:26px 0 10px; }
+  `)}</style>
+  <div class="page">
+    <h1>${m.name}</h1><div class="contact">${contact}</div>
+    <h2>Summary</h2><p>${m.summary}</p>
+    <h2>Experience</h2>${expHtml}
+    <h2>Education</h2>${eduHtml}
+    <h2>Skills</h2><p>${m.skills.join(' &nbsp;·&nbsp; ')}</p>
+  </div>`;
+}
+
+const TEMPLATE_RENDERERS = {
+  'Classic': renderClassic,
+  'Harvard': renderHarvard,
+  "Jake's": renderJakes,
+  'Modern': renderModern,
+  'Minimal': renderMinimal
+};
+
+function resumeToHtml(resume, opts) {
+  const textColor = opts.textColor || '#0f172a';
+  const fontFamily = opts.fontFamily || (TEMPLATE_STYLES[opts.template] || TEMPLATE_STYLES.Classic).font;
+  const fontSize = opts.fontSize || 10.5;
+  const lineHeight = opts.lineHeight || 1.25;
+  const model = buildResumeModel(resume, opts);
+  const renderer = TEMPLATE_RENDERERS[opts.template] || renderClassic;
+  const bodyHtml = renderer(model, opts, fontFamily, textColor, fontSize, lineHeight);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/></head><body>${bodyHtml}</body></html>`;
+}
+
+function downloadResume(resume, opts, filenameOverride) {
+  const html = resumeToHtml(resume, opts);
+  const fileBase = (filenameOverride || withProfileFallback(resume.personal).name || 'resume').replace(/\.(pdf|docx?|doc)$/i, '').replace(/\s+/g, '_');
+  if (opts.format === 'docx') {
+    const wrapped = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>${html}</html>`;
+    const blob = new Blob(['\ufeff', wrapped], { type: 'application/msword' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${fileBase}.doc`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } else {
+    downloadHtmlAsPdf(html, fileBase);
+  }
+}
+
+/* Renders the resume HTML off-screen and saves it as an actual PDF file
+   (instead of opening the browser print dialog). Uses html2pdf.js (html2canvas + jsPDF),
+   loaded lazily from CDN on first use. Falls back across multiple CDNs and
+   times out cleanly instead of hanging, since a single blocked/unreachable
+   host (ad-blockers and some corporate networks block cdnjs.cloudflare.com)
+   used to leave PDF download permanently broken with a generic error. */
+const HTML2PDF_SOURCES = [
+  'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js',
+  'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js',
+  'https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js'
+];
+let _html2pdfLoading = null;
+function loadScriptWithTimeout(src, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    const timer = setTimeout(() => { s.remove(); reject(new Error(`Timed out loading ${src}`)); }, timeoutMs);
+    s.src = src;
+    s.onload = () => { clearTimeout(timer); resolve(); };
+    s.onerror = () => { clearTimeout(timer); s.remove(); reject(new Error(`Could not load ${src}`)); };
+    document.head.appendChild(s);
+  });
+}
+function loadHtml2Pdf() {
+  if (window.html2pdf) return Promise.resolve();
+  if (_html2pdfLoading) return _html2pdfLoading;
+
+  _html2pdfLoading = (async () => {
+    for (const src of HTML2PDF_SOURCES) {
+      try {
+        await loadScriptWithTimeout(src);
+        if (window.html2pdf) return;
+      } catch (e) { /* try the next source */ }
+    }
+    _html2pdfLoading = null; // allow a later retry once the network recovers
+    throw new Error('Could not load the PDF generator — check your connection and try again.');
+  })();
+
+  return _html2pdfLoading;
+}
+
+async function downloadHtmlAsPdf(html, fileBase) {
+  const btn = document.getElementById('docDownloadBtn') || document.getElementById('qdDownload') || document.getElementById('tl-go-download');
+  const prevText = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
+  // A4 width in CSS px at 96dpi.
+  const PAGE_WIDTH_PX = 794;
+  let outer = null;
+  let genOverlay = null;
+  try {
+    await loadHtml2Pdf();
+
+    // The capture target has to be genuinely laid out in the document (not
+    // display:none/visibility:hidden) or html2canvas renders it blank — but
+    // it doesn't need to be visible to the person. Older versions of this
+    // page rendered it on-screen at full size behind a plain white div,
+    // which caused a distracting flash of the resume across the whole
+    // screen (a different-looking "animation" every time depending on
+    // scroll position) and, because that div sat on top of everything,
+    // blocked scrolling/clicks on the real page for the second or so it
+    // took to capture. Clipping it inside a zero-size, overflow-hidden,
+    // pointer-events-none wrapper keeps it fully laid out (so the capture
+    // is correct) while making it completely invisible and non-blocking.
+    outer = document.createElement('div');
+    outer.style.position = 'fixed';
+    outer.style.top = '0';
+    outer.style.left = '0';
+    outer.style.width = '0';
+    outer.style.height = '0';
+    outer.style.overflow = 'hidden';
+    outer.style.pointerEvents = 'none';
+    outer.style.zIndex = '-1';
+
+    const inner = document.createElement('div');
+    inner.style.position = 'static';
+    inner.style.width = `${PAGE_WIDTH_PX}px`;
+    inner.style.background = '#ffffff';
+    inner.innerHTML = html;
+
+    outer.appendChild(inner);
+    document.body.appendChild(outer);
+
+    // Show one consistent, intentional loading state instead of whatever
+    // flashed on screen before.
+    genOverlay = document.createElement('div');
+    genOverlay.innerHTML = `
+      <div style="position:fixed;inset:0;z-index:999999;background:rgba(15,17,23,.35);
+        display:flex;align-items:center;justify-content:center;">
+        <div style="background:var(--surface,#fff);color:var(--text,#111);border-radius:12px;
+          padding:22px 30px;display:flex;align-items:center;gap:12px;box-shadow:0 12px 32px rgba(0,0,0,.3);
+          font-size:13.5px;font-weight:600;">
+          <span style="width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(0,0,0,.15);
+            border-top-color:#16a34a;display:inline-block;animation:pdfSpin .8s linear infinite;"></span>
+          Generating your PDF…
+        </div>
+      </div>
+      <style>@keyframes pdfSpin{ to{ transform:rotate(360deg); } }</style>`;
+    document.body.appendChild(genOverlay);
+
+    // Give the browser a frame to lay out content, then wait for fonts and
+    // any images to actually finish loading — capturing mid-load is the
+    // other reason the output looked inconsistent/blurry between runs.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (document.fonts && document.fonts.ready) {
+      try { await document.fonts.ready; } catch (e) { /* non-fatal */ }
+    }
+    const images = Array.from(inner.querySelectorAll('img'));
+    await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(res => {
+      img.addEventListener('load', res, { once: true });
+      img.addEventListener('error', res, { once: true });
+    })));
+
+    const target = inner.querySelector('body') || inner;
+
+    try {
+      await window.html2pdf()
+        .set({
+          margin: 0,
+          filename: `${fileBase}.pdf`,
+          html2canvas: {
+            scale: 3, useCORS: true, backgroundColor: '#ffffff', windowWidth: PAGE_WIDTH_PX,
+            x: 0, y: 0, letterRendering: true, imageTimeout: 15000
+          },
+          image: { type: 'jpeg', quality: 1 },
+          jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'] }
+        })
+        .from(target)
+        .save();
+    } catch (captureErr) {
+      // A tainted/blocked canvas (e.g. a cross-origin profile photo) throws a
+      // cryptic SecurityError here — surface something the person can act on.
+      const msg = /tainted|cross-origin|SecurityError/i.test(String(captureErr?.message || captureErr))
+        ? 'Could not generate the PDF because an image on the resume blocked capture. Try removing or re-uploading it.'
+        : (captureErr?.message || 'Could not generate the PDF. Please try again.');
+      throw new Error(msg);
+    }
+  } catch (e) {
+    showToast(e.message || 'Could not generate PDF', 'error');
+  } finally {
+    if (outer && outer.parentNode) document.body.removeChild(outer);
+    if (genOverlay && genOverlay.parentNode) document.body.removeChild(genOverlay);
+    if (btn) { btn.disabled = false; btn.textContent = prevText; }
+  }
+}
+
+function projectedResume(opts = {}) {
+  const { diff, resume, decisions } = state;
+  const acceptAll = !!opts.acceptAll;
+  const isAccepted = key => acceptAll ? true : decisions[key] !== false;
+
+  const summary = isAccepted('summary') ? diff.summary.new : diff.summary.old;
+  const experience = diff.experience.map((role, ri) => {
+    const original = resume.experience[ri] || {};
+    const lines = [];
+    role.bullets.forEach((b, bi) => {
+      const key = `exp:${role.index}:${bi}`;
+      const accepted = isAccepted(key);
+      if (b.action === 'remove') { if (!accepted) lines.push(b.old); return; }
+      if (b.action === 'keep') { lines.push(b.new); return; }
+      if (b.action === 'add') { if (accepted) lines.push(b.new); return; }
+      lines.push(accepted ? b.new : (b.old || b.new));
+    });
+    return { ...original, description: lines.join('\n') };
+  });
+  return { ...resume, summary, skills: diff.skills, experience };
+}
+
+async function loadUserProfile() {
+  try {
+    const user = await requireSession();
+    state.userProfile = user || null;
+  } catch (e) {
+    state.userProfile = null;
+  }
+}
+
+/* fills any blank personal fields on a resume with the user's account profile,
+   so a resume that was never prefilled still shows a name/email/etc. */
+function withProfileFallback(personal) {
+  const p = personal || {};
+  const u = state.userProfile || {};
+  return {
+    name: p.name || u.name || '',
+    email: p.email || u.email || '',
+    phone: p.phone || u.phone || '',
+    location: p.location || u.location || '',
+    linkedin: p.linkedin || u.linkedin || '',
+    portfolio: p.portfolio || u.portfolio || ''
+  };
+}
+
+async function loadResumes() {
+  try {
+    await loadUserProfile();
+    const { resumes } = await api.get('/api/resumes');
+    state.resumes = resumes || [];
+    if (!state.selectedResumeId) state.selectedResumeId = state.resumes.find(r => r.isDefault)?._id || state.resumes[0]?._id;
+    const opts = state.resumes.map(r => `<option value="${r._id}" ${r._id === state.selectedResumeId ? 'selected' : ''}>${esc(r.title || 'Untitled resume')}${r.isDefault ? ' (Default)' : ''}</option>`).join('');
+    document.getElementById('tl-resume').innerHTML = opts;
+    document.getElementById('qdResume').innerHTML = opts;
+  } catch (e) {
+    showToast('Log in to load your resumes', 'error');
+  }
+}
+
+/* ---- top-level tabs ---- */
+document.querySelectorAll('.tl-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    document.querySelectorAll('.tl-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tl-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ---- picker ---- */
+document.getElementById('tl-resume').addEventListener('change', e => { state.selectedResumeId = e.target.value; });
+document.querySelectorAll('.tl-mode').forEach(opt => {
+  opt.addEventListener('click', () => {
+    document.querySelectorAll('.tl-mode').forEach(o => o.classList.remove('selected'));
+    opt.classList.add('selected');
+    state.mode = opt.dataset.mode;
+  });
+});
+
+const LEVEL_LABELS = { low: 'Low', medium: 'Medium', high: 'High' };
+
+function showTailorLoading(scope, level) {
+  const loadingEl = document.getElementById(scope === 'quick' ? 'qdTailorLoading' : 'reviewTailorLoading');
+  const textEl = document.getElementById(scope === 'quick' ? 'qdTailorLoadingText' : 'reviewTailorLoadingText');
+  if (textEl) textEl.textContent = `${LEVEL_LABELS[level] || 'High'} tailoring in progress…`;
+  if (loadingEl) loadingEl.style.display = 'flex';
+  const group = document.getElementById(scope === 'quick' ? 'qdLevel' : 'reviewLevels');
+  if (group) group.querySelectorAll('button').forEach(b => b.disabled = true);
+}
+
+function hideTailorLoading(scope) {
+  const loadingEl = document.getElementById(scope === 'quick' ? 'qdTailorLoading' : 'reviewTailorLoading');
+  if (loadingEl) loadingEl.style.display = 'none';
+  const group = document.getElementById(scope === 'quick' ? 'qdLevel' : 'reviewLevels');
+  if (group) group.querySelectorAll('button').forEach(b => b.disabled = false);
+}
+
+async function runTailor(level) {
+  const resume = state.resumes.find(r => r._id === state.selectedResumeId);
+  if (!resume) { showToast('Pick a resume first', 'error'); return null; }
+  state.resume = resume;
+  const { tailored } = await api.post(`/api/resumes/${state.selectedResumeId}/tailor`, {
+    jobTitle: job.title, jobDescription: job.description, tailoringLevel: level || 'high'
+  });
+  state.diff = tailored;
+  state.atsScore = resolveAtsScore(tailored, resume);
+  return tailored;
+}
+
+function renderReviewSheet(opts = {}) {
+  const diff = state.diff, decisions = state.decisions, p = withProfileFallback(state.resume.personal);
+
+  const summaryChanged = diff.summary.old.trim() !== diff.summary.new.trim();
+  const sumAccepted = decisions.summary !== false;
+  const summaryHtml = !summaryChanged ? `<div class="tl-plain">${esc(diff.summary.new)}</div>` : `
+    ${sumAccepted ? `<div class="tl-old">${esc(diff.summary.old)}</div>` : ''}
+    <div class="tl-diff-row">
+      <div class="tl-new">${esc(sumAccepted ? diff.summary.new : diff.summary.old)}</div>
+      <div class="tl-diff-actions">
+        <button class="tl-act yes ${sumAccepted ? 'active' : ''}" data-kind="summary" data-value="true">✓</button>
+        <button class="tl-act no ${!sumAccepted ? 'active' : ''}" data-kind="summary" data-value="false">✗</button>
+      </div>
+    </div>`;
+
+  const origSkills = new Set((state.resume.skills || []).map(s => s.toLowerCase()));
+  const skillsHtml = diff.skills.map(s => `<span class="tl-skill ${origSkills.has(s.toLowerCase()) ? '' : 'added'}">${esc(s)}</span>`).join('');
+
+  const expHtml = diff.experience.map(role => {
+    const bullets = role.bullets.map((b, bi) => {
+      const key = `exp:${role.index}:${bi}`;
+      const accepted = decisions[key] !== false;
+      if (b.action === 'keep') return `<div class="tl-plain">${esc(b.new)}</div>`;
+      if (b.action === 'remove') {
+        return accepted
+          ? `<div class="tl-old">${esc(b.old)}</div><div class="tl-removed-note">Suggested removal
+              <button class="tl-act no active" style="display:inline-flex;" data-kind="${key}" data-value="false">✗ keep</button></div>`
+          : `<div class="tl-plain">${esc(b.old)} <button class="tl-act yes" style="display:inline-flex;" data-kind="${key}" data-value="true">✓ remove</button></div>`;
+      }
+      if (b.action === 'add') {
+        return `
+          <div class="tl-diff-row">
+            <div class="tl-new">${accepted ? esc(b.new) : '<span style="color:var(--text-faint);font-style:italic;">Not added</span>'}</div>
+            <div class="tl-diff-actions">
+              <button class="tl-act yes ${accepted ? 'active' : ''}" data-kind="${key}" data-value="true">✓</button>
+              <button class="tl-act no ${!accepted ? 'active' : ''}" data-kind="${key}" data-value="false">✗</button>
+            </div>
+          </div>`;
+      }
+      return `
+        ${accepted && b.old ? `<div class="tl-old">${esc(b.old)}</div>` : ''}
+        <div class="tl-diff-row">
+          <div class="tl-new">${esc(accepted ? b.new : (b.old || b.new))}</div>
+          <div class="tl-diff-actions">
+            <button class="tl-act yes ${accepted ? 'active' : ''}" data-kind="${key}" data-value="true">✓</button>
+            <button class="tl-act no ${!accepted ? 'active' : ''}" data-kind="${key}" data-value="false">✗</button>
+          </div>
+        </div>`;
+    }).join('');
+    return `<div class="tl-heading" style="margin-bottom:2px;">${esc(role.role)}</div>
+      <div style="font-size:12px;color:var(--text-faint);margin-bottom:6px;">${esc(role.company)}</div>${bullets}`;
+  }).join('');
+
+  document.getElementById('reviewSheet').innerHTML = `
+    <h2>${esc(p.name || 'Your Name')}</h2>
+    <div class="contact">${[p.email, p.phone, p.location, p.linkedin].filter(Boolean).map(esc).join(' | ')}</div>
+    <div class="tl-heading">Summary</div>${summaryHtml}
+    <div class="tl-heading">Skills</div><div>${skillsHtml}</div>
+    <div class="tl-heading">Experience</div>${expHtml}`;
+
+  document.getElementById('reviewSheet').querySelectorAll('[data-kind]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.decisions[btn.dataset.kind] = btn.dataset.value === 'true';
+      renderReviewSheet({ animateScore: true });
+    });
+  });
+
+  // "Before" / "after" come straight from the AI's ATS scoring pass for
+  // this tailoring level (see resolveAtsScore()) — real skills/title/domain/
+  // keyword alignment, not naive word matching.
+  // "Current" = the score at today's accept/reject mix, interpolated
+  // between before (0 changes accepted) and after (all changes accepted)
+  // by the fraction of suggestions actually accepted right now, so it moves
+  // live as bullets are toggled without needing another AI call per click.
+  const total = countChanges(diff);
+  const accepted = countAccepted(diff, decisions);
+  const baselineScore = state.atsScore.before;
+  const allAcceptedScore = state.atsScore.after;
+  const currentScore = total > 0
+    ? Math.round(baselineScore + (allAcceptedScore - baselineScore) * (accepted / total))
+    : baselineScore;
+  updateScoreBadge(currentScore, baselineScore, allAcceptedScore, !!opts.animateScore);
+
+  document.getElementById('tl-apply-all').textContent = `Apply all ${total} changes → ~${allAcceptedScore}`;
+  document.getElementById('tl-changes-note').textContent = `${accepted} of ${total} changes accepted`;
+}
+
+document.getElementById('tl-continue').addEventListener('click', async () => {
+  const btn = document.getElementById('tl-continue');
+  btn.disabled = true; btn.textContent = 'Matching against your resume…';
+  try {
+    if (state.mode === 'quick') {
+      await runTailor(state.qd.tailoringLevel);
+      document.getElementById('qdTabBtn').disabled = false;
+      document.querySelector('[data-tab="quick"]').click();
+      renderQuickDownload();
+    } else {
+      await runTailor('high');
+      rejectAllDecisions(); // nothing accepted yet — badge should reflect the real, untailored ATS score
+      document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.toggle('active', b.dataset.level === 'high'));
+      state.badgeDisplayedScore = undefined; // force the very first paint to snap in, not animate from a stale 0
+      renderReviewSheet({ animateScore: false });
+      document.getElementById('pickerCard').style.display = 'none';
+      document.getElementById('reviewOut').style.display = 'block';
+      document.getElementById('qdTabBtn').disabled = false;
+    }
+  } catch (e) {
+    showToast(e.message || 'Tailoring failed', 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Continue →';
+});
+
+document.getElementById('reviewLevels').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.tl-level-btn');
+  if (!btn || btn.disabled) return;
+  document.getElementById('reviewLevels').querySelectorAll('.tl-level-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  showTailorLoading('review', btn.dataset.level);
+  try {
+    await runTailor(btn.dataset.level);
+    rejectAllDecisions();
+    renderReviewSheet({ animateScore: true });
+  } catch (e2) {
+    showToast(e2.message || 'Tailoring failed', 'error');
+  } finally {
+    hideTailorLoading('review');
+  }
+});
+
+// "Apply all changes" is the moment the person actually opts into the AI's
+// suggestions — this is when the badge should animate from the real,
+// untailored ATS score up to the real recomputed score with every change applied.
+document.getElementById('tl-apply-all').addEventListener('click', () => {
+  resetDecisions();
+  renderReviewSheet({ animateScore: true });
+});
+
+document.getElementById('tl-reset-changes').addEventListener('click', () => {
+  rejectAllDecisions();
+  renderReviewSheet({ animateScore: true });
+});
+
+document.getElementById('tl-go-download').addEventListener('click', () => {
+  openTemplateChooser();
+});
+
+/* ---- quick download tab ---- */
+function renderQuickDownload() {
+  document.getElementById('qdFrame').srcdoc = resumeToHtml(projectedResume(), state.qd);
+  document.getElementById('qdFoot').textContent = `${state.qd.template} · ${state.qd.format.toUpperCase()} · ${state.qd.tailoringLevel[0].toUpperCase()}${state.qd.tailoringLevel.slice(1)} tailoring`;
+  document.getElementById('qdDownload').textContent = `↓ Download ${state.qd.format.toUpperCase()}`;
+  document.getElementById('qdResume').value = state.selectedResumeId;
+  document.getElementById('qdTemplate').value = state.qd.template;
+  document.querySelectorAll('#qdFormat .qd-pill').forEach(b => b.classList.toggle('active', b.dataset.value === state.qd.format));
+  document.querySelectorAll('#qdLevel .qd-pill').forEach(b => b.classList.toggle('active', b.dataset.value === state.qd.tailoringLevel));
+  document.getElementById('qdNoMetrics').checked = state.qd.noMetrics;
+  document.getElementById('qdTextColors').innerHTML = TEXT_COLORS.map(c =>
+    `<span class="qd-swatch ${c === state.qd.textColor ? 'selected' : ''}" data-color="${c}" style="background:${c}"><span class="chk">✓</span></span>`).join('');
+  document.getElementById('qdAccents').innerHTML = ACCENTS.map(c =>
+    `<span class="qd-swatch ${c === state.qd.accent ? 'selected' : ''}" data-color="${c}" style="background:${c}"><span class="chk">✓</span></span>`).join('');
+  document.getElementById('qdTextColors').querySelectorAll('.qd-swatch').forEach(sw =>
+    sw.addEventListener('click', () => { state.qd.textColor = sw.dataset.color; renderQuickDownload(); }));
+  document.getElementById('qdAccents').querySelectorAll('.qd-swatch').forEach(sw =>
+    sw.addEventListener('click', () => { state.qd.accent = sw.dataset.color; renderQuickDownload(); }));
+}
+
+document.getElementById('qdResume').addEventListener('change', async (e) => {
+  state.selectedResumeId = e.target.value;
+  await runTailor(state.qd.tailoringLevel);
+  renderQuickDownload();
+});
+document.getElementById('qdTemplate').addEventListener('change', e => { state.qd.template = e.target.value; renderQuickDownload(); });
+document.getElementById('qdNoMetrics').addEventListener('change', e => { state.qd.noMetrics = e.target.checked; renderQuickDownload(); });
+document.getElementById('qdFormat').addEventListener('click', e => {
+  const btn = e.target.closest('.qd-pill'); if (!btn) return;
+  state.qd.format = btn.dataset.value; renderQuickDownload();
+});
+document.getElementById('qdLevel').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.qd-pill'); if (!btn || btn.disabled) return;
+  if (btn.dataset.value === state.qd.tailoringLevel) return;
+  state.qd.tailoringLevel = btn.dataset.value;
+  showTailorLoading('quick', state.qd.tailoringLevel);
+  try {
+    await runTailor(state.qd.tailoringLevel);
+    renderQuickDownload();
+  } catch (e2) {
+    showToast(e2.message || 'Tailoring failed', 'error');
+  } finally {
+    hideTailorLoading('quick');
+  }
+});
+document.getElementById('qdDownload').addEventListener('click', () => openTemplateChooser());
+
+/* ---- template chooser overlay ---- */
+function openTemplateChooser() {
+  const resume = projectedResume();
+  const grid = document.getElementById('tplGrid');
+  grid.innerHTML = TEMPLATES.map(t => `
+    <div class="tpl-card" data-template="${esc(t)}">
+      <div class="tpl-thumb"><iframe srcdoc="${esc(resumeToHtml(resume, { ...state.qd, template: t }))}"></iframe></div>
+      <div class="tpl-card-label">${esc(t)}</div>
+    </div>`).join('');
+  grid.querySelectorAll('.tpl-card').forEach(card => {
+    card.addEventListener('click', () => selectTemplateAndOpenEditor(card.dataset.template));
+  });
+  document.getElementById('templateChooserOverlay').style.display = 'block';
+}
+
+document.getElementById('tplBackBtn').addEventListener('click', () => {
+  document.getElementById('templateChooserOverlay').style.display = 'none';
+});
+
+/* ---- document editor overlay ---- */
+function selectTemplateAndOpenEditor(templateName) {
+  state.qd.template = templateName;
+  document.getElementById('templateChooserOverlay').style.display = 'none';
+  document.getElementById('docEditorOverlay').style.display = 'flex';
+
+  const p = withProfileFallback(state.resume.personal);
+  state.editor.filename = `${(p.name || 'Resume').replace(/\s+/g, '_')}_Resume`;
+  document.getElementById('docFilename').value = state.editor.filename;
+  document.getElementById('docFont').value = TEMPLATE_STYLES[templateName]?.font || TEMPLATE_STYLES.Classic.font;
+  state.editor.fontFamily = document.getElementById('docFont').value;
+  document.getElementById('docFontSizeLabel').textContent = state.editor.fontSize;
+  document.getElementById('docLineHeight').value = state.editor.lineHeight;
+  document.getElementById('docZoom').value = state.editor.zoom;
+  document.getElementById('docZoomLabel').textContent = `${state.editor.zoom}%`;
+  renderDocEditor();
+}
+
+function renderDocEditor() {
+  const resume = projectedResume();
+  const html = resumeToHtml(resume, {
+    ...state.qd,
+    fontFamily: state.editor.fontFamily,
+    fontSize: state.editor.fontSize,
+    lineHeight: state.editor.lineHeight
+  });
+  const frame = document.getElementById('docFrame');
+  frame.onload = fitDocFrameToContent;
+  frame.srcdoc = html;
+  updateDownloadBtnLabel();
+}
+
+// Measures the actual rendered height of the resume document inside the
+// iframe (it may be taller than one A4 page) and sizes both the iframe and
+// its .doc-page wrapper to match — so there's no internal iframe scrollbar
+// ("scroll bar in white sheet"), and zooming resizes the real layout box
+// instead of just visually stretching past the container's edges.
+function fitDocFrameToContent() {
+  const frame = document.getElementById('docFrame');
+  const page = frame.closest('.doc-page');
+  let contentHeight = 1123;
+  try {
+    const doc = frame.contentDocument;
+    if (doc && doc.documentElement) {
+      contentHeight = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight, 1123);
+    }
+  } catch (e) { /* cross-origin safety net, keep default */ }
+
+  const zoom = state.editor.zoom / 100;
+  frame.style.width = '794px';
+  frame.style.height = `${contentHeight}px`;
+  frame.style.transform = `scale(${zoom})`;
+  if (page) {
+    page.style.width = `${794 * zoom}px`;
+    page.style.height = `${contentHeight * zoom}px`;
+  }
+}
+
+document.getElementById('docBackBtn').addEventListener('click', () => {
+  document.getElementById('docEditorOverlay').style.display = 'none';
+  openTemplateChooser();
+});
+
+document.getElementById('docCancelBtn').addEventListener('click', () => {
+  document.getElementById('docEditorOverlay').style.display = 'none';
+});
+
+document.getElementById('docFont').addEventListener('change', e => {
+  state.editor.fontFamily = e.target.value;
+  renderDocEditor();
+});
+
+document.getElementById('docFontMinus').addEventListener('click', () => {
+  state.editor.fontSize = Math.max(7, state.editor.fontSize - 0.5);
+  document.getElementById('docFontSizeLabel').textContent = state.editor.fontSize;
+  renderDocEditor();
+});
+document.getElementById('docFontPlus').addEventListener('click', () => {
+  state.editor.fontSize = Math.min(16, state.editor.fontSize + 0.5);
+  document.getElementById('docFontSizeLabel').textContent = state.editor.fontSize;
+  renderDocEditor();
+});
+
+document.getElementById('docLineHeight').addEventListener('input', e => {
+  state.editor.lineHeight = parseFloat(e.target.value);
+  renderDocEditor();
+});
+
+document.getElementById('docZoom').addEventListener('input', e => {
+  state.editor.zoom = parseInt(e.target.value, 10);
+  document.getElementById('docZoomLabel').textContent = `${state.editor.zoom}%`;
+  fitDocFrameToContent();
+});
+
+document.getElementById('docFilename').addEventListener('input', e => {
+  state.editor.filename = e.target.value;
+});
+
+function updateDownloadBtnLabel() {
+  const fmt = (state.qd.format || 'pdf').toUpperCase();
+  document.getElementById('docDownloadBtn').textContent = `⬇ Download ${fmt}`;
+}
+
+document.getElementById('docDownloadCaret').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const menu = document.getElementById('docDownloadMenu');
+  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+});
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('docDownloadMenu');
+  if (menu.style.display === 'block' && !e.target.closest('.doc-download-split')) menu.style.display = 'none';
+});
+// Clicking a format in the menu only SELECTS it (updates the main button's
+// label) — it does not download. The actual download happens when the
+// main "Download" button is clicked, using whichever format was selected.
+document.getElementById('docDownloadMenu').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-format]');
+  if (!btn) return;
+  document.getElementById('docDownloadMenu').style.display = 'none';
+  state.qd.format = btn.dataset.format;
+  updateDownloadBtnLabel();
+});
+document.getElementById('docDownloadBtn').addEventListener('click', () => {
+  downloadResume(projectedResume(), {
+    ...state.qd,
+    fontFamily: state.editor.fontFamily,
+    fontSize: state.editor.fontSize,
+    lineHeight: state.editor.lineHeight
+  }, state.editor.filename);
+});
+updateDownloadBtnLabel();
+
+loadResumes().then(() => {
+  if (qp.get('mode') === 'quick') {
+    document.querySelectorAll('.tl-mode').forEach(o => o.classList.toggle('selected', o.dataset.mode === 'quick'));
+    state.mode = 'quick';
+    document.getElementById('tl-continue').click();
+  }
+});
+</script>
+</body>
+</html>

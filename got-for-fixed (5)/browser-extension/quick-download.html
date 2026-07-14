@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Quick Download — JobTrail</title>
+<link rel="stylesheet" href="pages.css" />
+<style>
+  .qd-body { display: flex; gap: 24px; width: 100%; max-width: 1180px; align-items: flex-start; }
+  .qd-panel { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .qd-panel-head {
+    display: flex; align-items: center; justify-content: space-between; padding: 14px 20px;
+    border-bottom: 1px solid var(--border); font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-dim);
+  }
+  .qd-badge { display: inline-flex; align-items: center; gap: 6px; color: var(--accent-dark); }
+  .qd-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+  /* live preview sheet */
+  .qd-sheet { padding: 28px 30px; font-family: Georgia, 'Times New Roman', serif; }
+  .qd-sheet h1 { font-size: 19px; margin: 0 0 2px; }
+  .qd-sheet .qd-role { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #555; }
+  .qd-sheet .qd-contact { font-size: 11px; color: #777; margin: 4px 0 12px; }
+  .qd-sheet hr { border: none; border-top: 2px solid var(--qd-accent, #16a34a); margin: 10px 0 14px; }
+  .qd-sheet h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; margin: 16px 0 6px; color: #333; }
+  .qd-sheet ul { margin: 0; padding-left: 18px; }
+  .qd-sheet li { font-size: 12.5px; line-height: 1.55; margin-bottom: 4px; }
+  .qd-sheet p { font-size: 12.5px; line-height: 1.6; margin: 0; }
+  .qd-sheet .qd-role-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 13px; }
+  .qd-sheet .qd-company { font-style: italic; color: #555; font-size: 12px; margin-bottom: 4px; }
+
+  /* customization panel */
+  .qd-cust { width: 420px; flex-shrink: 0; }
+  .qd-cust-body { padding: 22px 22px 24px; }
+  .qd-cust h1 { font-size: 20px; margin: 0 0 4px; }
+  .qd-cust p.sub { margin: 0 0 20px; font-size: 12.5px; color: var(--text-dim); }
+  .qd-row { display: flex; gap: 14px; margin-bottom: 18px; }
+  .qd-field { flex: 1; min-width: 0; }
+  .qd-field label { display: block; font-size: 11.5px; font-weight: 700; color: #4b5160; margin-bottom: 6px; }
+  .qd-field select { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: #fff; }
+  .qd-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .qd-swatch { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
+    display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; }
+  .qd-swatch.selected { outline: 2px solid #1a1d29; outline-offset: 2px; }
+  .qd-format-group, .qd-level-group { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .qd-format-btn, .qd-level-btn { flex: 1; border: none; background: #fff; padding: 9px; font-size: 12.5px; font-weight: 700;
+    cursor: pointer; border-right: 1px solid var(--border); color: #4b5160; }
+  .qd-format-btn:last-child, .qd-level-btn:last-child { border-right: none; }
+  .qd-format-btn.active, .qd-level-btn.active { background: var(--accent); color: #fff; }
+  .qd-toggle-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; }
+  .qd-toggle-row .t-title { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+  .qd-toggle-row .t-desc { font-size: 11.5px; color: var(--text-dim); line-height: 1.4; }
+  .qd-switch { width: 38px; height: 22px; border-radius: 999px; background: var(--border); position: relative; cursor: pointer; flex-shrink: 0; }
+  .qd-switch.on { background: var(--accent); }
+  .qd-switch .knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff;
+    transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+  .qd-switch.on .knob { left: 18px; }
+  .qd-download-btn { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    padding: 13px; font-size: 14.5px; font-weight: 700; cursor: pointer; }
+  .qd-download-btn:hover { filter: brightness(1.05); }
+  .qd-download-btn:disabled { opacity: 0.6; cursor: default; }
+  .qd-note { display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; color: var(--text-dim); margin-top: 14px; line-height: 1.45; }
+  .err-box { color: #dc2626; text-align: center; font-size: 13.5px; padding: 40px 20px; }
+</style>
+</head>
+<body>
+<script src="pages-common.js"></script>
+<script src="quick-download.js"></script>
+</body>
+</html>

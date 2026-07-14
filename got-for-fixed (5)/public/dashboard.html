@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard — SK VK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<div class="app">
+  <div id="sidebar-root" data-active="dashboard"></div>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Overview</div>
+        <div class="page-sub">A snapshot of your job search, updated in real time.</div>
+      </div>
+      <select class="field" id="periodSelect" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:13.5px;">
+        <option value="30">Last 30 days</option>
+        <option value="7">Last 7 days</option>
+      </select>
+    </div>
+
+    <div class="grid cards-row" id="statCards">
+      <div class="card stat-card">
+        <div class="stat-label">All time</div>
+        <div class="stat-value" id="statTotal">—</div>
+        <div class="stat-foot">Total applications</div>
+      </div>
+      <div class="card stat-card accent">
+        <div class="stat-label">This month</div>
+        <div class="stat-value" id="statMonthly">—</div>
+        <div class="stat-foot">Applications in the last 30 days</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Last 7 days</div>
+        <div class="stat-value" id="statWeekly">—</div>
+        <div class="stat-foot">Recent momentum</div>
+      </div>
+    </div>
+
+    <div class="card section-card" id="trendCard" style="background:#fff;color:#1a1a1a;">
+      <div class="section-head">
+        <div>
+          <h3 style="color:#1a1a1a;">Application Trends</h3>
+          <p style="color:#6b7280;">Track the number of jobs viewed and jobs applied over time</p>
+        </div>
+      </div>
+      <div style="position:relative;">
+        <canvas id="trendChart" height="95"></canvas>
+        <div id="trendTooltip" style="position:absolute;pointer-events:none;opacity:0;transition:opacity .1s ease;
+             background:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,0.14);
+             border:1px solid #eee;font-family:inherit;z-index:5;min-width:170px;">
+          <div id="trendTooltipTitle" style="font-weight:700;font-size:14px;color:#1a1a1a;margin-bottom:8px;"></div>
+          <div id="trendTooltipRows"></div>
+        </div>
+      </div>
+      <div id="trendLegend" style="display:flex;justify-content:center;gap:24px;margin-top:14px;font-size:13.5px;font-weight:600;"></div>
+    </div>
+
+    <div class="card section-card" style="margin-top:20px;">
+      <div class="section-head">
+        <div>
+          <h3>Recently added</h3>
+          <p>Your latest tracked applications.</p>
+        </div>
+        <a href="/tracker.html" class="btn btn-ghost btn-sm">View all →</a>
+      </div>
+      <div id="recentList"></div>
+    </div>
+  </main>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+let chart;
+
+/* Application Trends needs the Chart.js library, previously loaded from a
+   single hardcoded CDN <script> tag in <head>. If that one host was slow,
+   offline, or blocked (ad-blockers/corporate proxies commonly block
+   cdnjs.cloudflare.com), the global `Chart` never existed and the trend
+   chart crashed with "Chart is not defined" — which also silently killed
+   the "Jobs Viewed vs Jobs Applied" tracking data below it. This loads
+   Chart.js on demand and falls back across multiple CDNs instead of
+   depending on any single one. */
+const CHART_JS_SOURCES = [
+  'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
+  'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
+  'https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js'
+];
+let _chartJsLoadPromise = null;
+function loadChartJs() {
+  if (window.Chart) return Promise.resolve();
+  if (_chartJsLoadPromise) return _chartJsLoadPromise;
+
+  _chartJsLoadPromise = (async () => {
+    for (const src of CHART_JS_SOURCES) {
+      try {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = src;
+          s.onload = resolve;
+          s.onerror = () => reject(new Error(`Could not load ${src}`));
+          document.head.appendChild(s);
+        });
+        if (window.Chart) return;
+      } catch (e) { /* try the next source */ }
+    }
+    throw new Error('Could not load the charting library. Check your connection and try again.');
+  })();
+
+  return _chartJsLoadPromise;
+}
+
+const TREND_COLORS = {
+  applied: '#2e8b57',
+  viewed: '#e69138'
+};
+
+// Custom HTML tooltip drawn to match the reference design: a white rounded
+// card with a bold date title, then one row per series — a small hollow
+// dot in that series' color, its label, and its value in bold.
+function externalTrendTooltip(context) {
+  const { chart, tooltip } = context;
+  const tooltipEl = document.getElementById('trendTooltip');
+  const titleEl = document.getElementById('trendTooltipTitle');
+  const rowsEl = document.getElementById('trendTooltipRows');
+
+  if (tooltip.opacity === 0) {
+    tooltipEl.style.opacity = 0;
+    return;
+  }
+
+  titleEl.textContent = tooltip.title?.[0] || '';
+  rowsEl.innerHTML = (tooltip.dataPoints || []).map((dp) => {
+    const color = dp.dataset.borderColor;
+    return `
+      <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;color:#374151;padding:3px 0;">
+        <span style="width:9px;height:9px;border-radius:50%;border:2px solid ${color};background:#fff;flex-shrink:0;"></span>
+        <span>${dp.dataset.label}:</span>
+        <strong style="color:#111;">${dp.formattedValue}</strong>
+      </div>`;
+  }).join('');
+
+  const { offsetLeft, offsetTop } = chart.canvas;
+  let left = offsetLeft + tooltip.caretX + 14;
+  let top = offsetTop + tooltip.caretY - tooltip.height / 2;
+  // Keep the tooltip on-canvas near the right edge.
+  if (left + tooltipEl.offsetWidth > offsetLeft + chart.width) {
+    left = offsetLeft + tooltip.caretX - tooltipEl.offsetWidth - 14;
+  }
+
+  tooltipEl.style.left = left + 'px';
+  tooltipEl.style.top = Math.max(0, top) + 'px';
+  tooltipEl.style.opacity = 1;
+}
+
+async function loadDashboard() {
+  await requireSession();
+  const period = document.getElementById('periodSelect').value;
+
+  try {
+    const stats = await api.get('/api/jobs/stats');
+    document.getElementById('statTotal').textContent = stats.total;
+    document.getElementById('statMonthly').textContent = stats.monthly;
+    document.getElementById('statWeekly').textContent = stats.last7;
+
+    await loadChartJs();
+    document.getElementById('trendChartError')?.remove();
+
+    // Trend chart — Jobs Viewed vs Jobs Applied only, styled to match the
+    // reference design: light card, hollow-circle points, smooth lines with
+    // a soft fill, and a custom tooltip card (see externalTrendTooltip).
+    const trend = period === '7' ? stats.trend.slice(-7) : stats.trend;
+    const labels = trend.map((p) => new Date(p.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+    const appliedData = trend.map((p) => p.count);
+    const viewedData = trend.map((p) => p.viewed || 0);
+
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    if (chart) chart.destroy();
+    const appliedGradient = ctx.createLinearGradient(0, 0, 0, 260);
+    appliedGradient.addColorStop(0, 'rgba(46,139,87,0.18)');
+    appliedGradient.addColorStop(1, 'rgba(46,139,87,0)');
+    const viewedGradient = ctx.createLinearGradient(0, 0, 0, 260);
+    viewedGradient.addColorStop(0, 'rgba(230,145,56,0.18)');
+    viewedGradient.addColorStop(1, 'rgba(230,145,56,0)');
+
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Jobs Viewed',
+            data: viewedData,
+            borderColor: TREND_COLORS.viewed,
+            backgroundColor: viewedGradient,
+            fill: true,
+            tension: 0.3,
+            pointStyle: 'circle',
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: '#fff',
+            pointBorderColor: TREND_COLORS.viewed,
+            pointBorderWidth: 2,
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: TREND_COLORS.viewed,
+            pointHoverBorderWidth: 2,
+            borderWidth: 2
+          },
+          {
+            label: 'Jobs Applied',
+            data: appliedData,
+            borderColor: TREND_COLORS.applied,
+            backgroundColor: appliedGradient,
+            fill: true,
+            tension: 0.3,
+            pointStyle: 'circle',
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: '#fff',
+            pointBorderColor: TREND_COLORS.applied,
+            pointBorderWidth: 2,
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: TREND_COLORS.applied,
+            pointHoverBorderWidth: 2,
+            borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        animation: { duration: 900, easing: 'easeOutQuart' },
+        interaction: { mode: 'index', intersect: false },
+        hover: { mode: 'index', intersect: false, animationDuration: 200 },
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: false, external: externalTrendTooltip }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#9ca3af', maxTicksLimit: 8, font: { size: 11 } } },
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#9ca3af', precision: 0, font: { size: 11 } } }
+        }
+      }
+    });
+
+    // Legend below the chart, styled like the reference (colored dot + label).
+    document.getElementById('trendLegend').innerHTML = `
+      <span style="display:inline-flex;align-items:center;gap:6px;color:${TREND_COLORS.applied};">
+        <span style="width:8px;height:8px;border-radius:50%;background:${TREND_COLORS.applied};"></span>Jobs Applied
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:6px;color:${TREND_COLORS.viewed};">
+        <span style="width:8px;height:8px;border-radius:50%;background:${TREND_COLORS.viewed};"></span>Jobs Viewed
+      </span>`;
+  } catch (err) {
+    const canvas = document.getElementById('trendChart');
+    if (canvas && !window.Chart) {
+      document.getElementById('trendChartError')?.remove();
+      canvas.insertAdjacentHTML('afterend', `
+        <div id="trendChartError" style="padding:24px;text-align:center;color:#9ca3af;font-size:13px;">
+          Couldn't load the chart library, so job view/apply trends aren't shown right now.
+          <button onclick="document.getElementById('trendChartError').remove(); loadDashboard();"
+            style="display:block;margin:10px auto 0;background:none;border:1px solid var(--border);border-radius:8px;padding:6px 14px;cursor:pointer;color:inherit;">Retry</button>
+        </div>`);
+    } else {
+      showToast(err.message, 'error');
+    }
+  }
+
+  // Recent jobs
+  try {
+    const { jobs } = await api.get('/api/jobs');
+    const recentEl = document.getElementById('recentList');
+    const recent = jobs.slice(0, 5);
+    if (!recent.length) {
+      recentEl.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">🗂️</div>
+          <h4>No applications yet</h4>
+          <p>Add your first job application to see it show up here.</p>
+          <a href="/tracker.html" class="btn btn-primary btn-sm" style="margin-top:14px;display:inline-flex;">Add application</a>
+        </div>`;
+      return;
+    }
+    recentEl.innerHTML = recent.map((j) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);">
+        <div style="min-width:0">
+          <div style="font-weight:600;font-size:14px;">${escapeHtml(j.title)}</div>
+          <div style="font-size:12.5px;color:var(--text-dim);">${escapeHtml(j.company)}${j.location ? ' · ' + escapeHtml(j.location) : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;flex-shrink:0;">
+          <span class="pill pill-${j.status}"><span class="pill-dot"></span>${j.status}</span>
+          <span style="font-size:12px;color:var(--text-faint);width:70px;text-align:right;">${timeAgo(j.appliedOn)}</span>
+        </div>
+      </div>`).join('');
+  } catch (err) { /* already toasted above if relevant */ }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+document.getElementById('periodSelect').addEventListener('change', loadDashboard);
+loadDashboard();
+
+// Job views and applications logged by the browser extension land in the
+// database immediately, but this tab has no live-push connection to know
+// that happened — so poll periodically and also refresh the moment the tab
+// regains focus (the common case: applying from the extension in another
+// tab, then switching back here). Silent on failure since loadDashboard
+// already toasts real errors; we don't want a background poll to spam.
+setInterval(() => { loadDashboard().catch(() => {}); }, 30000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') loadDashboard().catch(() => {});
+});
+</script>
+</body>
+</html>

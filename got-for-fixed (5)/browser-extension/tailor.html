@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Tailor your resume — JobTrail</title>
+<link rel="stylesheet" href="pages.css" />
+<style>
+  .tailor-card {
+    width: 560px; max-width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 40px 48px 34px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .tailor-card h1 { font-size: 26px; margin: 0 0 8px; text-align: center; }
+  .tailor-card p.sub { margin: 0 0 26px; font-size: 14px; color: var(--text-dim); text-align: center; }
+  .field-label { display: block; font-size: 12.5px; font-weight: 700; color: #4b5160; margin-bottom: 6px; }
+  select.field {
+    width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; font-size: 14px;
+    margin-bottom: 20px; background: #fff; color: var(--text);
+  }
+  .mode-option {
+    display: flex; align-items: flex-start; gap: 12px; border: 1.5px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 14px; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .mode-option:hover { background: #f9fafb; }
+  .mode-option.selected { border-color: var(--accent); background: #f0fdf4; }
+  .mode-radio {
+    width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); flex-shrink: 0; margin-top: 1px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mode-option.selected .mode-radio { border-color: var(--accent); }
+  .mode-radio-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: none; }
+  .mode-option.selected .mode-radio-dot { display: block; }
+  .mode-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 9px; }
+  .mode-badge { font-size: 11.5px; font-weight: 700; color: #2563eb; background: #eff6ff; padding: 2px 8px; border-radius: 999px; }
+  .mode-desc { font-size: 13px; color: var(--text-dim); margin-top: 3px; line-height: 1.45; }
+  .continue-btn {
+    width: 100%; margin-top: 8px; background: var(--accent); color: #fff; border: none; border-radius: 11px;
+    padding: 15px; font-size: 15.5px; font-weight: 700; cursor: pointer;
+  }
+  .continue-btn:hover { filter: brightness(1.05); }
+  .continue-btn:disabled { opacity: 0.6; cursor: default; }
+  .err-box { color: #dc2626; text-align: center; font-size: 13.5px; padding: 40px 20px; }
+</style>
+</head>
+<body>
+<script src="pages-common.js"></script>
+<script src="tailor.js"></script>
+</body>
+</html>
