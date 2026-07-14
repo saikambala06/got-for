@@ -177,7 +177,12 @@
   // the panel. Only "Yes, I applied" (mark + reload) triggers a reload.
   function confirmReload() {
     panel.showReloadConfirm({
-      onYes: async () => { await markApplied(); loadAndRender(); }
+      onYes: async () => { await markApplied(); loadAndRender(); },
+      // "No, not yet" only means "don't mark this applied" — it doesn't
+      // mean "do nothing". The person clicked Reload job details because
+      // they want a fresh read of the page, so still re-parse and
+      // re-render; just skip the markApplied() call.
+      onNo: () => loadAndRender()
     });
   }
 
