@@ -159,13 +159,7 @@ async function extractJobDetails(title, company, description) {
         { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
-          // 6000 chars used to cut off mid-posting on anything with a full
-          // responsibilities + requirements + benefits + "about us" section
-          // — frequently truncating right before the qualifications list,
-          // which is exactly the part the extractor most needs to see.
-          // 16000 chars comfortably covers the long tail of real postings
-          // while staying well within the model's context budget.
-          content: `Job Title: ${title || 'Not specified'}\nCompany: ${company || 'Not specified'}\n\nRaw scraped page text:\n${text.slice(0, 16000)}`
+          content: `Job Title: ${title || 'Not specified'}\nCompany: ${company || 'Not specified'}\n\nRaw scraped page text:\n${text.slice(0, 6000)}`
         }
       ],
       2000

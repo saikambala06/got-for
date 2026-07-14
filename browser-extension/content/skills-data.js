@@ -37,70 +37,11 @@
 
     // Business / soft
     'Project management', 'Product management', 'Stakeholder management', 'Agile', 'Scrum',
-    'Kanban', 'Cross-functional collaboration', 'Communication skills', 'Leadership', 'Consulting',
+    'Cross-functional collaboration', 'Communication skills', 'Leadership', 'Consulting',
     'Enterprise software', 'Business intelligence', 'Risk management', 'Financial modeling',
-    'Vendor management', 'Change management', 'Strategic planning', 'Operations management',
-    'Supply chain management', 'Process improvement', 'Budgeting',
-
-    // Office / productivity / collaboration tools
-    'Microsoft Office', 'Microsoft Word', 'PowerPoint', 'Google Workspace', 'Google Sheets',
-    'Slack', 'Asana', 'Trello', 'Notion', 'Confluence', 'Monday.com', 'Airtable', 'Zoom',
-    'SharePoint', 'Outlook',
-
-    // Sales / CRM / marketing
-    'Salesforce', 'HubSpot', 'CRM', 'Lead generation', 'Cold calling', 'Account management',
-    'Business development', 'Negotiation', 'Sales forecasting', 'Pipeline management',
-    'Customer relationship management', 'SEO', 'SEM', 'Google Analytics', 'Google Ads',
-    'Facebook Ads', 'Content marketing', 'Email marketing', 'Social media marketing',
-    'Copywriting', 'Marketing automation', 'Marketo', 'Mailchimp', 'Brand management',
-    'Market research', 'Growth marketing', 'Public relations',
-
-    // Design / creative
-    'UX design', 'UI design', 'UX/UI design', 'Figma', 'Sketch', 'Adobe XD', 'InVision',
-    'Wireframing', 'Prototyping', 'User research', 'Usability testing', 'Adobe Creative Suite',
-    'Photoshop', 'Illustrator', 'InDesign', 'After Effects', 'Premiere Pro', 'Canva',
-    'Graphic design', 'Video editing', 'Typography',
-
-    // Customer support / service
-    'Customer service', 'Customer support', 'Technical support', 'Zendesk', 'Intercom',
-    'Help desk', 'Ticketing systems', 'Live chat support',
-
-    // HR / recruiting
-    'Recruiting', 'Talent acquisition', 'Onboarding', 'HRIS', 'Workday', 'Payroll',
-    'Employee relations', 'Performance management', 'Compensation and benefits',
-    'Applicant tracking systems', 'DEI',
-
-    // Finance / accounting
-    'QuickBooks', 'SAP', 'GAAP', 'Bookkeeping', 'Accounts payable', 'Accounts receivable',
-    'Financial analysis', 'Financial reporting', 'Forecasting', 'Auditing', 'Tax preparation',
-    'Bloomberg Terminal', 'Underwriting',
-
-    // Healthcare
-    'EHR', 'EMR', 'HIPAA', 'Patient care', 'Clinical research', 'ICD-10', 'CPT coding',
-    'Medical terminology', 'Nursing', 'Phlebotomy', 'BLS', 'CPR certification',
-
-    // Legal
-    'Contract review', 'Legal research', 'Litigation', 'Compliance', 'Regulatory compliance',
-    'Paralegal',
-
-    // Manufacturing / operations / logistics
-    'Lean manufacturing', 'Quality assurance', 'Quality control', 'Inventory management',
-    'Warehouse management', 'Forklift operation', 'OSHA', 'Logistics',
-
-    // Engineering (non-software)
-    'AutoCAD', 'SolidWorks', 'Mechanical engineering', 'Electrical engineering',
-    'Civil engineering',
-
-    // Education
-    'Curriculum development', 'Classroom management', 'Lesson planning', 'Tutoring',
-
-    // Additional common tech tools not already covered above
-    'HTML', 'CSS', 'REST API', 'GraphQL', 'Microservices', 'Linux', 'Selenium', 'Jenkins',
-    'Ansible', 'Elasticsearch', 'Firebase', 'Webpack', 'Unit testing',
 
     // Certifications / degrees (used for highlight detection too)
-    'PMP', 'CFA', 'Six Sigma', "Bachelor's degree", "Master's degree", 'MBA', 'PhD', 'CPA',
-    'SHRM'
+    'PMP', 'CFA', 'Six Sigma', "Master's degree", 'PhD', 'CPA'
   ];
 
   function toPattern(term) {
@@ -178,13 +119,7 @@
     'node': 'node.js', 'nodejs': 'node.js', 'node.js': 'node.js',
     'golang': 'go', 'go': 'go',
     'dotnet': '.net', '.net': '.net',
-    'ci/cd': 'ci/cd', 'cicd': 'ci/cd', 'ci cd': 'ci/cd',
-    'ms office': 'microsoft office', 'microsoft office': 'microsoft office',
-    'gsuite': 'google workspace', 'google suite': 'google workspace', 'google workspace': 'google workspace',
-    'crm software': 'crm', 'crm': 'crm',
-    'ppt': 'powerpoint', 'powerpoint': 'powerpoint', 'microsoft powerpoint': 'powerpoint',
-    'ux': 'ux design', 'ux design': 'ux design', 'user experience design': 'ux design',
-    'ui': 'ui design', 'ui design': 'ui design', 'user interface design': 'ui design'
+    'ci/cd': 'ci/cd', 'cicd': 'ci/cd', 'ci cd': 'ci/cd'
   };
 
   function canonicalSkill(raw) {
@@ -192,67 +127,13 @@
     return SKILL_ALIASES[norm] || norm;
   }
 
-  // ── Whole-word fallback matching ───────────────────────────────────────
-  //
-  // Exact canonical match (below) only catches a skill that's spelled
-  // identically (or is in the small hand-curated SKILL_ALIASES map) on
-  // both sides. In practice the job's skills come from one AI extraction
-  // pass and the resume's skills come from a separate one, so the same
-  // real-world skill often comes back phrased slightly differently on
-  // each side — "Azure" vs "Microsoft Azure", "API" vs "REST APIs",
-  // "CI/CD" vs "CI/CD pipelines". An exact-only check silently drops all
-  // of these as "not matched" even though they plainly are, which is why
-  // the panel could show 0 matches out of a dozen-plus detected skills.
-  //
-  // The fallback below matches when one skill's words appear as a
-  // contiguous, whole-word run inside the other's words — never a raw
-  // substring. That distinction is what keeps the earlier bug fixed:
-  // "Java" is one whole word and "JavaScript" is a different single word,
-  // so they still never match; "Azure" is a whole word inside the two
-  // words "Microsoft Azure", so that now correctly matches.
-  function singularizeToken(t) {
-    if (t.length > 4 && t.endsWith('ies')) return t.slice(0, -3) + 'y';
-    if (t.length > 4 && /(?:sh|ch|x|s|z)es$/.test(t)) return t.slice(0, -2);
-    if (t.length > 3 && t.endsWith('s') && !t.endsWith('ss')) return t.slice(0, -1);
-    return t;
-  }
-
-  function tokenize(s) {
-    return s
-      .split(/[^a-z0-9+#.]+/i)
-      .filter(Boolean)
-      .map((t) => singularizeToken(t.toLowerCase()));
-  }
-
-  // Single tokens short/common enough that a bare whole-word "contains"
-  // match is more likely a coincidence than a real skill match (e.g. the
-  // token "go" turning up inside an unrelated multi-word phrase). Exact
-  // and alias matches above are unaffected by this list — it only guards
-  // the fuzzy contains-fallback below.
-  const AMBIGUOUS_SOLO_TOKENS = new Set(['go', 'r', 'c', 'j', 'ai', 'ml', 'bi', 'io', 'os', 'ui', 'ux', 'qa', 'ir']);
-
-  function containsWholeWordRun(shortToks, longToks) {
-    if (!shortToks.length || shortToks.length > longToks.length) return false;
-    if (shortToks.length === 1 && AMBIGUOUS_SOLO_TOKENS.has(shortToks[0])) return false;
-    for (let i = 0; i <= longToks.length - shortToks.length; i++) {
-      if (shortToks.every((t, j) => longToks[i + j] === t)) return true;
-    }
-    return false;
-  }
-
+  // Exact (post-canonicalisation) match — replaces the old bidirectional
+  // .includes() check, which matched any skill that merely contained (or
+  // was contained by) another as a substring.
   function skillsMatch(a, b) {
     const ca = canonicalSkill(a);
     const cb = canonicalSkill(b);
-    if (!ca || !cb) return false;
-    if (ca === cb) return true;
-
-    const tokensA = tokenize(ca);
-    const tokensB = tokenize(cb);
-    if (!tokensA.length || !tokensB.length) return false;
-
-    return tokensA.length <= tokensB.length
-      ? containsWholeWordRun(tokensA, tokensB)
-      : containsWholeWordRun(tokensB, tokensA);
+    return !!ca && ca === cb;
   }
 
   // Signals used to build the "Key Highlights" chips (benefits, sponsorship, work model).

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Verascan — Resume Parser</title>
+<title>Parse resume — SK VK</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -55,6 +55,15 @@
     display:flex;align-items:center;gap:6px;
   }
   .privacy-note .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);}
+
+  .topbar-right{display:flex;align-items:center;gap:18px;}
+  .back-link{
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:0.03em;
+    color:var(--ink);text-decoration:none;border:1px solid var(--ink);border-radius:4px;
+    padding:7px 12px;transition:.15s ease;white-space:nowrap;
+  }
+  .back-link:hover{background:var(--ink);color:var(--paper);}
+  @media (max-width:640px){ .privacy-note{display:none;} }
 
   /* ---------- Layout ---------- */
   .wrap{display:grid;grid-template-columns:360px 1fr;min-height:calc(100vh - 65px);}
@@ -247,7 +256,10 @@
     <svg class="seal" viewBox="0 0 24 24" fill="none"><path d="M12 2 L21 7 V17 L12 22 L3 17 V7 Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 12.5 L11 15.5 L16 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <span class="name">Verascan<small>/ resume parser</small></span>
   </div>
-  <div class="privacy-note"><span class="dot"></span>Runs locally · files never leave your browser</div>
+  <div class="topbar-right">
+    <div class="privacy-note"><span class="dot"></span>Runs locally · files never leave your browser</div>
+    <a class="back-link" href="/resumes.html">← Back to Resumes</a>
+  </div>
 </div>
 
 <div class="wrap">
@@ -335,11 +347,11 @@
 
       <div class="download-row">
         <button class="btn-ghost" id="downloadJson">Download as JSON</button>
-        <button class="btn-ghost" id="rescanBtn">Parse another file</button>
         <div class="save-group">
           <input type="text" id="saveTitleInput" class="save-input" placeholder="Resume name">
           <button class="btn-gold" id="saveResumeBtn">Save to My Resumes</button>
         </div>
+        <button class="btn-ghost" id="rescanBtn">Parse another file</button>
       </div>
       <div class="save-status" id="saveStatus"></div>
     </div>
@@ -667,6 +679,7 @@ function structureHeader(headerBlockLines, fallbackLines){
   const github = (joined.match(/(https?:\/\/)?(www\.)?github\.com\/[a-zA-Z0-9\-_\/]+/i) || [])[0] || '';
   const website = (joined.match(/(?<!@)(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9\-]+\.(?:dev|me|io|com|net)\b\/?[a-zA-Z0-9\-_\/]*/ig) || [])
     .filter(u => !/linkedin|github/i.test(u) && !(email && email.toLowerCase().endsWith(u.toLowerCase())))[0] || '';
+  const location = (joined.match(/[A-Z][a-zA-Z.]+(?:\s[A-Z][a-zA-Z.]+)?,\s?[A-Z]{2,}(?:\s\d{4,6})?/) || [])[0] || '';
 
   const candidates = src.slice(0,8).filter(l =>
     l.text && !l.text.includes('@') && !/https?:\/\//i.test(l.text) &&
@@ -689,49 +702,7 @@ function structureHeader(headerBlockLines, fallbackLines){
     }
   }
 
-  return { name, title, email, phone, linkedin, github, website };
-}
-
-/* ============================================================
-   Location extraction (ported from resume-parser.html)
-   ============================================================ */
-function extractLocation(text){
-  const lines = text.split('\n');
-
-  // Check pipe-separated contact lines
-  for (let i=0; i<Math.min(10, lines.length); i++){
-    const line = lines[i];
-    if (line.includes('|')){
-      const parts = line.split('|').map(p=>p.trim());
-      for (const part of parts){
-        if (part.includes('@') || /^[\d\s\-\+\(\)]+$/.test(part)) continue;
-        if (/^[A-Z][a-zA-Z\s]+,\s*[A-Z]{2}$/.test(part)) return part;
-        const countries = ['India','USA','UK','Canada','Australia','Germany','France','Japan','Singapore','UAE'];
-        if (countries.some(c=>part.endsWith(c))) return part;
-      }
-    }
-  }
-
-  // Look for location indicators
-  const patterns = [
-    /(?:Address|Location|Based\s*in|City|Based)[:\s]*([^\n,]+(?:,\s*[^\n,]+)*)/i,
-    /\b([A-Z][a-zA-Z\s]+,\s*[A-Z]{2}(?:\s*\d{5}(?:\-\d{4})?)?)\b/,
-  ];
-
-  for (const pattern of patterns){
-    const match = text.match(pattern);
-    if (match){
-      const loc = match[1].trim();
-      if (loc.length > 3 && loc.length < 100){
-        const lower = loc.toLowerCase();
-        if (!lower.includes('email') && !lower.includes('phone') && !lower.includes('@') && !lower.includes('http')){
-          return loc;
-        }
-      }
-    }
-  }
-
-  return '';
+  return { name, title, email, phone, linkedin, github, website, location };
 }
 
 /* ============================================================
@@ -741,6 +712,7 @@ const MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?\\s+
 const DATE_RANGE_RE = new RegExp('('+MONTH+'|\\d{1,2}\\/\\d{4}|\\d{4})\\s*(?:-|–|—|to)\\s*('+MONTH+'|\\d{1,2}\\/\\d{4}|\\d{4}|present|current|ongoing|now)', 'i');
 const YEAR_RE = /\b(19|20)\d{2}\b/;
 const LOCATION_RE = /\b[A-Z][a-zA-Z.]+(?:\s[A-Z][a-zA-Z.]+)?,\s?[A-Z]{2}\b/;
+const GPA_RE = /\b(?:GPA|CGPA)\s*[:\-]?\s*(\d(?:\.\d{1,2})?(?:\s?\/\s?\d(?:\.\d)?)?)/i;
 const SEP_SPLIT_RE = /\s[|•·]\s|,\s(?=[A-Z])| — | – /;
 
 function stripDate(s){
@@ -822,128 +794,58 @@ function structureExperience(block){
   };
 }
 
-/* ============================================================
-   Education / Certification extraction (ported from resume-parser.html)
-   ============================================================ */
-function extractEducation(eduText){
-  if (!eduText) return [];
+function structureEducation(block){
+  const nonBulletLines = block.filter(l=>!l.listItem);
+  const bulletLines = block.filter(l=>l.listItem);
+  const degreeLine = (nonBulletLines[0] && nonBulletLines[0].text) || (block[0] && block[0].text) || '';
+  const instLine = (nonBulletLines[1] && nonBulletLines[1].text) || '';
+  const joined = block.map(l=>l.text).join('\n');
+  const dm = joined.match(DATE_RANGE_RE);
+  const ym = !dm ? joined.match(YEAR_RE) : null;
 
-  const entries = [];
-  const lines = eduText.split('\n');
-  let currentEntry = {};
-
-  const degreeKeywords = [
-    /\b(?:Bachelor|Master|Ph\.?D|MBA|B\.?[A-Z]\.?|M\.?[A-Z]\.?|Diploma|Associate|Doctor)\b/i,
-    /\b(?:B\.?Tech|M\.?Tech|B\.?E\.?|M\.?E\.?|B\.?Sc|M\.?Sc|B\.?Com|M\.?Com|B\.?A|M\.?A)\b/i,
-  ];
-
-  const yearPattern = /(?:19|20)\d{2}/g;
-
-  for (const line of lines){
-    const stripped = line.trim();
-    if (!stripped) continue;
-
-    const isDegree = degreeKeywords.some(p=>p.test(stripped));
-    const yearMatches = stripped.match(yearPattern) || [];
-    const hasYear = yearMatches.length > 0;
-    const isBullet = /^[\s]*[•\-–—*▪]/.test(stripped);
-
-    if ((isDegree || hasYear) && !isBullet && stripped.length < 200){
-      if (currentEntry.degree || currentEntry.institution) entries.push(currentEntry);
-
-      currentEntry = { institution:'', degree:'', field:'', year:'', grade:'' };
-
-      if (yearMatches.length > 0){
-        currentEntry.year = yearMatches.length > 1 ? yearMatches.join(' - ') : yearMatches[0];
-      }
-
-      const gradeMatch = stripped.match(/(?:GPA|CGPA|Grade|Score|Percentage|Marks)[:\s]*(\d+\.?\d*\s*%?)/i);
-      if (gradeMatch) currentEntry.grade = gradeMatch[1].trim();
-
-      if (isDegree) currentEntry.degree = stripped;
-      else currentEntry.institution = stripped;
-    } else if (isBullet){
-      const bulletText = stripped.replace(/^[\s]*[•\-–—*▪]\s*/,'').trim();
-      if (bulletText){
-        if (!currentEntry.institution){
-          if (/university|college|institute|school|academy/i.test(bulletText)){
-            currentEntry.institution = bulletText;
-          } else if (degreeKeywords.some(p=>p.test(bulletText))){
-            currentEntry.degree = bulletText;
-          } else {
-            if (!currentEntry.details) currentEntry.details = [];
-            currentEntry.details.push(bulletText);
-          }
-        } else {
-          if (!currentEntry.details) currentEntry.details = [];
-          currentEntry.details.push(bulletText);
-        }
-      }
-    } else {
-      if (currentEntry.institution && !currentEntry.degree && isDegree){
-        currentEntry.degree = stripped;
-      } else if (currentEntry.institution){
-        if (degreeKeywords.some(p=>p.test(stripped))) currentEntry.degree = stripped;
-        else if (/university|college|institute/i.test(stripped)) currentEntry.institution = stripped;
-      } else if (!currentEntry.institution){
-        if (/university|college|institute/i.test(stripped)) currentEntry.institution = stripped;
-        else currentEntry.degree = stripped;
-      }
-    }
+  let degree = degreeLine, institution = instLine;
+  const sepSplit = degreeLine.split(SEP_SPLIT_RE);
+  if (!institution && sepSplit.length >= 2){
+    degree = sepSplit[0].trim();
+    institution = sepSplit.slice(1).join(', ').trim();
   }
+  degree = stripDate(degree);
+  institution = stripDate(institution);
+  const gpaMatch = joined.match(GPA_RE);
+  const locMatch = (degreeLine+' '+instLine).match(LOCATION_RE);
+  const bullets = bulletLines.map(l=>l.text.replace(/^[-•▪‣*]\s?/,''));
 
-  if (currentEntry.degree || currentEntry.institution) entries.push(currentEntry);
-
-  // Merge entries
-  const merged = [];
-  let i = 0;
-  while (i < entries.length){
-    const entry = Object.assign({}, entries[i]);
-    if (entry.degree && !entry.institution && i+1 < entries.length){
-      const next = entries[i+1];
-      if (next.institution && !next.degree){
-        entry.institution = next.institution;
-        if (next.year && !entry.year) entry.year = next.year;
-        if (next.grade && !entry.grade) entry.grade = next.grade;
-        i += 2;
-        merged.push(entry);
-        continue;
-      }
-    } else if (entry.institution && !entry.degree && i+1 < entries.length){
-      const next = entries[i+1];
-      if (next.degree && !next.institution){
-        entry.degree = next.degree;
-        if (next.year && !entry.year) entry.year = next.year;
-        if (next.grade && !entry.grade) entry.grade = next.grade;
-        i += 2;
-        merged.push(entry);
-        continue;
-      }
-    }
-    merged.push(entry);
-    i++;
-  }
-
-  // Clean year from institution
-  for (const entry of merged){
-    if (entry.institution && entry.year){
-      entry.institution = entry.institution.replace(new RegExp(',?\\s*' + entry.year.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\s*$'), '').trim();
-      entry.institution = entry.institution.replace(/,?\s*\d{4}\s*$/, '').trim();
-    }
-  }
-
-  return merged.filter(e => e.institution || e.degree);
+  return {
+    degree: degree || 'Program',
+    institution: institution || '',
+    date: dm ? formatDateRange(dm) : (ym ? ym[0] : ''),
+    location: locMatch ? locMatch[0] : '',
+    gpa: gpaMatch ? gpaMatch[1] : '',
+    bullets,
+    raw: joined
+  };
 }
 
-function extractCertifications(certText){
-  if (!certText) return [];
-  const certs = [];
-  const lines = certText.split('\n');
-  for (const line of lines){
-    const stripped = line.trim().replace(/^[\s]*[•\-–—*▪►:]\s*/,'');
-    if (stripped && stripped.length > 3) certs.push(stripped);
-  }
-  return certs;
+function structureCertification(lines){
+  const items = lines.map(l=>l.text.replace(/^[-•▪‣*]\s?/,'').trim()).filter(Boolean);
+  return items.map(t=>{
+    const dm = t.match(DATE_RANGE_RE);
+    const ym = !dm ? t.match(YEAR_RE) : null;
+    const date = dm ? formatDateRange(dm) : (ym ? ym[0] : '');
+    let rest = t;
+    if (dm) rest = rest.replace(dm[0],'');
+    else if (ym) rest = rest.replace(ym[0],'');
+    rest = rest.trim();
+    const sepMatch = rest.match(/\s\|\s|\s[–—]\s|\s-\s(?=[A-Z])|,\s(?=[A-Z])/);
+    let name = rest, issuer = '';
+    if (sepMatch){
+      name = rest.slice(0, sepMatch.index).trim();
+      issuer = rest.slice(sepMatch.index + sepMatch[0].length).trim();
+    }
+    name = name.replace(/[,|–—-]\s*$/,'').trim();
+    issuer = issuer.replace(/[,|–—-]\s*$/,'').trim();
+    return { name: name || t, issuer, date, raw: t };
+  });
 }
 
 function structureSkills(lines){
@@ -1013,12 +915,13 @@ function buildResume(allLines, rawText){
   const expBlocks = splitByDateAnchors(sections.experience || []);
   const experience = expBlocks.map(structureExperience).filter(e=>e.title!=='Role' || e.company || e.bullets.length);
 
-  const education = extractEducation((sections.education || []).map(l=>l.text).join('\n'));
-  const certifications = extractCertifications((sections.certifications || []).map(l=>l.text).join('\n'));
-  const location = extractLocation(rawText);
+  const eduBlocks = splitByDateAnchors(sections.education || []);
+  const education = eduBlocks.map(structureEducation).filter(e=>e.degree!=='Program' || e.institution);
+
+  const certifications = structureCertification(sections.certifications || []);
 
   const resume = Object.assign({}, header, {
-    location, summary, skills, experience, education, certifications, rawText
+    summary, skills, experience, education, certifications, rawText
   });
   const conf = scoreConfidence(resume);
   resume.confidence = conf.score;
@@ -1069,8 +972,9 @@ function renderCertifications(list){
   if (!list.length) return emptyNote('No certifications section detected.');
   return '<div class="entry-list">' + list.map(c=>
     '<div class="cert-card"><div class="cert-seal">'+SEAL_SVG+'</div><div class="cert-body">'+
-    '<div class="cert-name">'+escapeHtml(c)+'</div>'+
-    '</div></div>'
+    '<div class="cert-name">'+escapeHtml(c.name)+'</div>'+
+    (c.issuer ? '<div class="cert-issuer">'+escapeHtml(c.issuer)+'</div>' : '')+
+    '</div>'+(c.date ? '<div class="cert-date">'+escapeHtml(c.date)+'</div>' : '')+'</div>'
   ).join('') + '</div>';
 }
 
@@ -1078,14 +982,15 @@ function renderEducation(list){
   if (!list.length) return emptyNote('No education section detected.');
   return '<div class="entry-list">' + list.map(e=>
     '<div class="entry-card"><div class="entry-top"><div>'+
-    '<div class="entry-title">'+escapeHtml(e.degree || 'Program')+'</div>'+
+    '<div class="entry-title">'+escapeHtml(e.degree)+'</div>'+
     (e.institution ? '<div class="entry-org">'+escapeHtml(e.institution)+'</div>' : '')+
     '</div><div class="entry-meta">'+
-    (e.year ? '<span>'+escapeHtml(e.year)+'</span>' : '')+
+    (e.date ? '<span>'+escapeHtml(e.date)+'</span>' : '')+
+    (e.location ? '<span>'+escapeHtml(e.location)+'</span>' : '')+
     '</div></div>'+
-    (e.grade ? '<div class="entry-gpa">'+escapeHtml(e.grade)+'</div>' : '')+
-    (e.details && e.details.length ? '<ul class="entry-bullets">'+e.details.map(b=>'<li>'+escapeHtml(b)+'</li>').join('')+'</ul>' : '')+
-    '</div>'
+    (e.gpa ? '<div class="entry-gpa">GPA '+escapeHtml(e.gpa)+'</div>' : '')+
+    (e.bullets.length ? '<ul class="entry-bullets">'+e.bullets.map(b=>'<li>'+escapeHtml(b)+'</li>').join('')+'</ul>' : '')+
+    rawToggle(e.raw)+'</div>'
   ).join('') + '</div>';
 }
 
@@ -1224,21 +1129,21 @@ function mapToResumePayload(d, title){
       };
     }),
     education: (d.education || []).map(ed => {
-      const { startDate, endDate, current } = splitDateRange(ed.year);
+      const { startDate, endDate, current } = splitDateRange(ed.date);
       const descParts = [];
-      if (ed.grade) descParts.push('Grade: ' + ed.grade);
-      if (ed.details && ed.details.length) descParts.push(...ed.details);
+      if (ed.gpa) descParts.push('GPA: ' + ed.gpa);
+      if (ed.bullets && ed.bullets.length) descParts.push(...ed.bullets);
       return {
         school: ed.institution || '',
         degree: ed.degree || '',
-        field: ed.field || '',
-        location: '',
+        field: '',
+        location: ed.location || '',
         startDate, endDate, current,
         description: descParts.join('\n')
       };
     }),
     certifications: (d.certifications || []).map(c => ({
-      name: c || '', issuer: '', date: ''
+      name: c.name || '', issuer: c.issuer || '', date: c.date || ''
     })),
     projects: [],
     achievements: [],

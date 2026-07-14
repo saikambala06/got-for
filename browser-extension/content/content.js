@@ -6,7 +6,7 @@
   if (window.__skvkAssistantLoaded) return;
   window.__skvkAssistantLoaded = true;
 
-  const { parseJobFromPageWithRetry, isLikelyJobPosting } = window.SKVKParser;
+  const { parseJobFromPage } = window.SKVKParser;
   const { SKVKPanel } = window.SKVKPanelUI;
   const { TailorStudio } = window.SKVKTailorStudio;
   const { cleanSkill, skillsMatch } = window.SKVKSkillsData;
@@ -78,18 +78,10 @@
   async function loadAndRender() {
     const myToken = ++loadToken;
     panel.renderLoading('Reading this job posting…');
-    // Retries for a couple seconds on SPA boards that hydrate their
-    // description after the initial page load, then checks the result
-    // against several independent signals (JSON-LD, known ATS containers,
-    // URL hints, detected requirements/skills) rather than gating on a
-    // fixed URL allowlist before ever attempting to read the page — the
-    // old pre-check missed boards like Indeed, ZipRecruiter, Glassdoor,
-    // Ashby, and SmartRecruiters whenever their URL didn't literally
-    // contain "job" or "career".
-    const parsed = await parseJobFromPageWithRetry();
+    const parsed = parseJobFromPage();
     if (myToken !== loadToken) return;
-    if (!isLikelyJobPosting(parsed)) {
-      renderNotJobPage();
+    if (!parsed) {
+      panel.renderError("This doesn't look like a job posting page.", () => window.location.reload(), 'Refresh');
       return;
     }
     state.job = parsed;
@@ -177,12 +169,7 @@
   // the panel. Only "Yes, I applied" (mark + reload) triggers a reload.
   function confirmReload() {
     panel.showReloadConfirm({
-      onYes: async () => { await markApplied(); loadAndRender(); },
-      // "No, not yet" only means "don't mark this applied" — it doesn't
-      // mean "do nothing". The person clicked Reload job details because
-      // they want a fresh read of the page, so still re-parse and
-      // re-render; just skip the markApplied() call.
-      onNo: () => loadAndRender()
+      onYes: async () => { await markApplied(); loadAndRender(); }
     });
   }
 
@@ -615,30 +602,54 @@
     }
   }
 
+  // Heuristic: only auto-open on pages that look like an actual job posting,
+  // so the launcher tab (not the full panel) is what shows up everywhere else.
+  function looksLikeJobPage() {
+    if (document.querySelector('script[type="application/ld+json"]')) {
+      const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+      for (const s of scripts) {
+        if (/jobposting/i.test(s.textContent)) return true;
+      }
+    }
+    const url = location.href.toLowerCase();
+    if (/job|career|greenhouse|lever\.co|workday|jobright/.test(url)) return true;
+    return false;
+  }
+
   // The panel never opens on its own. It only appears in response to the
-  // user clicking the toolbar icon (see background.js). Every open attempts
-  // a real parse of the current page (see loadAndRender/isLikelyJobPosting)
-  // rather than pre-filtering by URL — that used to block the panel from
-  // even trying on boards whose URL didn't happen to contain "job" or
-  // "career". Shown when the assistant is opened on a page that doesn't
-  // look like a job posting: the panel opens and stays docked as a sidebar
-  // (it does NOT auto-close), with the notice centered in the body and a
-  // Reload button underneath so the user can re-check after navigating to
-  // a listing.
+  // user clicking the toolbar icon (see background.js), and only if this
+  // particular page looks like a job posting — otherwise we tell them so
+  // and leave the page untouched.
+  // Shown when the assistant is opened on a page that doesn't look like a
+  // job posting: the panel opens and stays docked as a sidebar (it does NOT
+  // auto-close), with the notice centered in the body and a Reload button
+  // underneath so the user can re-check after navigating to a listing.
   function renderNotJobPage() {
     state.job = null;
     panel.renderEmptyState(
       "This doesn't look like a job posting page.",
       'Open a job listing, then reload job details.',
-      loadAndRender
+      recheckPage
     );
+  }
+
+  function recheckPage() {
+    if (looksLikeJobPage()) {
+      loadAndRender();
+    } else {
+      renderNotJobPage();
+    }
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'panel:toggle') {
       if (!panel.isOpen) {
         panel.open();
-        loadAndRender();
+        if (looksLikeJobPage()) {
+          loadAndRender();
+        } else {
+          renderNotJobPage();
+        }
       } else {
         panel.close();
       }
