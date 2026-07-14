@@ -6,7 +6,7 @@
   if (window.__skvkAssistantLoaded) return;
   window.__skvkAssistantLoaded = true;
 
-  const { parseJobFromPage } = window.SKVKParser;
+  const { parseJobFromPageWithRetry, isLikelyJobPosting } = window.SKVKParser;
   const { SKVKPanel } = window.SKVKPanelUI;
   const { TailorStudio } = window.SKVKTailorStudio;
   const { cleanSkill, skillsMatch } = window.SKVKSkillsData;
@@ -78,10 +78,18 @@
   async function loadAndRender() {
     const myToken = ++loadToken;
     panel.renderLoading('Reading this job posting…');
-    const parsed = parseJobFromPage();
+    // Retries for a couple seconds on SPA boards that hydrate their
+    // description after the initial page load, then checks the result
+    // against several independent signals (JSON-LD, known ATS containers,
+    // URL hints, detected requirements/skills) rather than gating on a
+    // fixed URL allowlist before ever attempting to read the page — the
+    // old pre-check missed boards like Indeed, ZipRecruiter, Glassdoor,
+    // Ashby, and SmartRecruiters whenever their URL didn't literally
+    // contain "job" or "career".
+    const parsed = await parseJobFromPageWithRetry();
     if (myToken !== loadToken) return;
-    if (!parsed) {
-      panel.renderError("This doesn't look like a job posting page.", () => window.location.reload(), 'Refresh');
+    if (!isLikelyJobPosting(parsed)) {
+      renderNotJobPage();
       return;
     }
     state.job = parsed;
@@ -134,34 +142,15 @@
     panel.renderLoading('Analyzing job requirements with AI…');
     try {
       const jobForAnalysis = state.job;
-      let analysis = await send('job:analyze', {
+      const analysis = await send('job:analyze', {
         jobTitle: jobForAnalysis.title,
         company: jobForAnalysis.company,
         jobDescription: jobForAnalysis.description
-      }).catch(() => null);
-
+      });
       // A newer load may have replaced state.job while this request was in
       // flight. Only apply the result if it still belongs to the job that's
       // actually on screen right now.
       if (myToken !== loadToken || state.job !== jobForAnalysis) return;
-
-      const isEmpty = (a) => !a || (!a.skills?.length && !a.qualifications?.length && !a.highlights?.length);
-
-      // If the primary description came back empty — usually because the
-      // page's DOM structure caused the wrong block to be scraped (e.g. a
-      // cookie banner or nav wrapper instead of the actual posting) — retry
-      // once against the raw, unfiltered page text. Gemini is instructed to
-      // find and ignore clutter itself, so this is a real second chance
-      // rather than just resending the same bad input.
-      if (isEmpty(analysis) && jobForAnalysis.rawPageText && jobForAnalysis.rawPageText.length > jobForAnalysis.description.length) {
-        analysis = await send('job:analyze', {
-          jobTitle: jobForAnalysis.title,
-          company: jobForAnalysis.company,
-          jobDescription: jobForAnalysis.rawPageText
-        }).catch(() => null);
-        if (myToken !== loadToken || state.job !== jobForAnalysis) return;
-      }
-
       if (analysis) {
         if (analysis.skills?.length) state.job.skillsFound = analysis.skills;
         if (analysis.qualifications?.length) state.job.qualificationPhrases = analysis.qualifications;
@@ -621,54 +610,30 @@
     }
   }
 
-  // Heuristic: only auto-open on pages that look like an actual job posting,
-  // so the launcher tab (not the full panel) is what shows up everywhere else.
-  function looksLikeJobPage() {
-    if (document.querySelector('script[type="application/ld+json"]')) {
-      const scripts = document.querySelectorAll('script[type="application/ld+json"]');
-      for (const s of scripts) {
-        if (/jobposting/i.test(s.textContent)) return true;
-      }
-    }
-    const url = location.href.toLowerCase();
-    if (/job|career|greenhouse|lever\.co|workday|jobright/.test(url)) return true;
-    return false;
-  }
-
   // The panel never opens on its own. It only appears in response to the
-  // user clicking the toolbar icon (see background.js), and only if this
-  // particular page looks like a job posting — otherwise we tell them so
-  // and leave the page untouched.
-  // Shown when the assistant is opened on a page that doesn't look like a
-  // job posting: the panel opens and stays docked as a sidebar (it does NOT
-  // auto-close), with the notice centered in the body and a Reload button
-  // underneath so the user can re-check after navigating to a listing.
+  // user clicking the toolbar icon (see background.js). Every open attempts
+  // a real parse of the current page (see loadAndRender/isLikelyJobPosting)
+  // rather than pre-filtering by URL — that used to block the panel from
+  // even trying on boards whose URL didn't happen to contain "job" or
+  // "career". Shown when the assistant is opened on a page that doesn't
+  // look like a job posting: the panel opens and stays docked as a sidebar
+  // (it does NOT auto-close), with the notice centered in the body and a
+  // Reload button underneath so the user can re-check after navigating to
+  // a listing.
   function renderNotJobPage() {
     state.job = null;
     panel.renderEmptyState(
       "This doesn't look like a job posting page.",
       'Open a job listing, then reload job details.',
-      recheckPage
+      loadAndRender
     );
-  }
-
-  function recheckPage() {
-    if (looksLikeJobPage()) {
-      loadAndRender();
-    } else {
-      renderNotJobPage();
-    }
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'panel:toggle') {
       if (!panel.isOpen) {
         panel.open();
-        if (looksLikeJobPage()) {
-          loadAndRender();
-        } else {
-          renderNotJobPage();
-        }
+        loadAndRender();
       } else {
         panel.close();
       }

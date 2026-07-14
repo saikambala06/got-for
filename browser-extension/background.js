@@ -137,11 +137,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true; // keep the message channel open for the async response
 });
 
+// Pages the extension genuinely cannot script — browser-internal pages,
+// the Web Store, and other extensions. Bailing out early here avoids a
+// confusing no-op click where executeScript throws and nothing happens.
+const RESTRICTED_URL_PREFIXES = [
+  'chrome://', 'chrome-extension://', 'edge://', 'about:', 'devtools://',
+  'https://chrome.google.com/webstore', 'https://chromewebstore.google.com'
+];
+
 // SKVK Assistant only ever runs on the single tab the user actively clicked
 // the toolbar icon on — there is no content script running in the background
 // on any other tab, and no page is read or has data loaded until this fires.
 chrome.action.onClicked?.addListener(async (tab) => {
   if (!tab?.id) return;
+  const url = tab.url || '';
+  if (RESTRICTED_URL_PREFIXES.some((p) => url.startsWith(p))) return;
+
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -153,6 +164,28 @@ chrome.action.onClicked?.addListener(async (tab) => {
         'content/content.js'
       ]
     });
-  } catch (_) { /* already injected on this tab */ }
-  chrome.tabs.sendMessage(tab.id, { type: 'panel:toggle' }).catch(() => {});
+  } catch (err) {
+    // Genuinely un-injectable page (mid-navigation, a PDF viewer, etc) —
+    // nothing to toggle in that case. Previously this was silently
+    // swallowed and the icon click just did nothing with no clue why;
+    // logging it means it's at least visible in the service worker
+    // console (chrome://extensions → Service worker → Inspect) when
+    // debugging a report of "the extension won't open".
+    console.warn('[SKVK Assistant] could not inject content scripts:', err.message);
+    return;
+  }
+
+  // The content script's top-level code registers its onMessage listener
+  // synchronously, so this normally succeeds on the very first try. The
+  // one retry below only matters for a page that was still finishing its
+  // own navigation at the exact moment executeScript resolved — without
+  // it, that edge case looked identical to "the extension didn't open".
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: 'panel:toggle' });
+  } catch (_) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    chrome.tabs.sendMessage(tab.id, { type: 'panel:toggle' }).catch((err) => {
+      console.warn('[SKVK Assistant] could not reach content script:', err.message);
+    });
+  }
 });
