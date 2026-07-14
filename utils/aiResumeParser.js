@@ -349,20 +349,11 @@ function sanitizeParsed(p) {
       link:        str(x?.link, x?.url, x?.github, x?.website),
       description: str(x?.description, x?.summary, x?.details),
     })),
-    certifications: arr(p?.certifications ?? p?.certificates ?? p?.credentials).map((x) => {
-      // The schema asks the model for {name, issuer, date} objects, but for
-      // resumes that just list bare cert names it sometimes returns plain
-      // strings instead. Optional chaining on a string silently returns
-      // undefined for every field, so without this check a string entry
-      // like "AWS Certified Solutions Architect" collapsed to
-      // {name: '', issuer: '', date: ''} — the whole certification lost.
-      if (typeof x === 'string') return { name: x.trim(), issuer: '', date: '' };
-      return {
-        name:   str(x?.name, x?.title, x?.certification),
-        issuer: str(x?.issuer, x?.issuedBy, x?.organization, x?.provider),
-        date:   str(x?.date, x?.year, x?.issued),
-      };
-    }).filter((c) => c.name),
+    certifications: arr(p?.certifications ?? p?.certificates ?? p?.credentials).map((x) => ({
+      name:   str(x?.name, x?.title, x?.certification),
+      issuer: str(x?.issuer, x?.issuedBy, x?.organization, x?.provider),
+      date:   str(x?.date, x?.year, x?.issued),
+    })),
     achievements: arr(p?.achievements ?? p?.honors ?? p?.awards).map(a => {
       if (typeof a === 'string') return a.trim();
       if (typeof a === 'object' && a !== null) return str(a?.title, a?.name, a?.description);
@@ -681,8 +672,6 @@ async function tailorRawTextWithAI(resumeText, jobDescription) {
 
 const JOB_ANALYSIS_SYSTEM_PROMPT = `You are a precision job-posting analysis engine. Read the job posting text and output a single valid JSON object — nothing else. No markdown fences, no commentary.
 
-The input is raw text scraped from a live job-listing web page and may contain unrelated clutter mixed in with the real posting: navigation links, cookie/consent banners, "related jobs" or "similar jobs" carousels, footer boilerplate, other unrelated job listings on the same page, social-share widgets, or repeated site chrome. First mentally identify which portion of the text is the actual job posting (title, responsibilities, requirements, benefits for THIS specific role) and analyze only that portion — ignore everything else, even if it's the majority of the text by volume. If the text contains fragments of more than one job posting, only use the one matching the given Job Title / Company.
-
 Your job is to extract, in the candidate's own resume-matching vocabulary:
 
 1. "skills": EVERY concrete hard skill, tool, language, framework, platform, or technology explicitly required or preferred in the posting. Use short canonical names matching how they'd appear on a resume (e.g. "React", "AWS", "Python", "SQL", "Kubernetes", "Figma"). Do not include soft skills (e.g. "communication", "teamwork") in this list. Do not invent skills that aren't mentioned or clearly implied by the posting's requirements. Aim to be thorough — junior postings may have 3-5, senior/technical postings often have 15-25.
@@ -692,8 +681,6 @@ Your job is to extract, in the candidate's own resume-matching vocabulary:
 3. "highlights": ONLY the 3-4 MOST NOTABLE, CONCRETE benefits/perks/hiring-context callouts explicitly mentioned — the ones a candidate would actually care about (e.g. "Visa sponsorship available", "Fully remote", "Equity/stock options", "Unlimited PTO"). Rank by how compelling/distinctive they are and return ONLY the top 3-4; skip generic or minor ones (e.g. don't list "health insurance" if there are more distinctive callouts like sponsorship or a 4-day week). Only include ones actually supported by the text. Return [] if none are mentioned — do not invent generic ones.
 
 4. "experience": { "years": string like "5+ years" or "" if not stated, "seniority": one of "Entry-level"/"Junior"/"Mid-level"/"Senior"/"Lead"/"Principal"/"Staff"/"" if not stated }
-
-If, after filtering out clutter, the remaining text genuinely does not look like a job posting at all (e.g. it's just a homepage or search results page with no identifiable role), still return the full JSON schema below with empty arrays/strings rather than refusing to answer.
 
 === JSON SCHEMA ===
 {
@@ -733,7 +720,7 @@ async function analyzeJobWithAI(jobTitle, company, description) {
     throw new Error('GEMINI_API_KEY not configured');
   }
 
-  const trimmed = (description || '').slice(0, 16000);
+  const trimmed = (description || '').slice(0, 12000);
   if (!trimmed.trim()) {
     throw new Error('No job description text to analyze');
   }
@@ -753,7 +740,7 @@ async function analyzeJobWithAI(jobTitle, company, description) {
         ].join('\n')
       }
     ],
-    3500,
+    3000,
     { jsonMode: true }
   );
 

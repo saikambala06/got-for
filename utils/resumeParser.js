@@ -7,26 +7,16 @@ const { cleanSkill } = require('./skillUtils');
 
 // ─── Section header patterns ──────────────────────────────────────────────────
 
-// NOTE: every pattern ends with `\s*:?$` (not a bare `$`) so a header with a
-// trailing colon — "Certifications:", "Skills:", etc., very common in real
-// resumes — still matches instead of silently falling through to "no
-// section detected" and losing the whole block underneath it.
 const SECTION_HEADERS = {
-  summary:        /^(summary|professional\s+summary|objective|career\s+objective|profile|about\s+me|professional\s+profile|executive\s+summary)\s*:?$/i,
-  experience:     /^(experience|work\s+experience|employment\s+history|professional\s+experience|relevant\s+experience|career\s+history|work\s+history)\s*:?$/i,
-  education:      /^(education|academic\s+(background|history)|educational\s+(background|qualifications))\s*:?$/i,
-  skills:         /^(skills|technical\s+skills|core\s+competencies|key\s+skills|skill\s+set|technologies|tools?\s+&\s+technologies?)\s*:?$/i,
-  projects:       /^(projects?|personal\s+projects?|key\s+projects?|notable\s+projects?)\s*:?$/i,
-  // Certifications headers vary a lot in the wild: the two nouns can appear
-  // in either order ("Certifications & Licenses" vs "Licenses & Certifications"),
-  // joined by "&", "/", "," or the word "and" (not just "&"), and often have
-  // a "Professional " prefix or a trailing colon. The old pattern only
-  // matched a bare "Certifications"/"Certificates"/"Licenses", so anything
-  // else silently fell through and the whole section was dropped.
-  certifications: /^(?:professional\s+)?(?:certifications?|certificates?|licenses?)(?:\s*(?:&|and|\/|,)\s*(?:certifications?|licenses?))?\s*:?$/i,
-  achievements:   /^(achievements?|awards?|honors?|honours?|accomplishments?)\s*:?$/i,
-  languages:      /^(languages?)\s*:?$/i,
-  publications:   /^(publications?)\s*:?$/i,
+  summary:        /^(summary|professional\s+summary|objective|career\s+objective|profile|about\s+me|professional\s+profile|executive\s+summary)$/i,
+  experience:     /^(experience|work\s+experience|employment\s+history|professional\s+experience|relevant\s+experience|career\s+history|work\s+history)$/i,
+  education:      /^(education|academic\s+(background|history)|educational\s+(background|qualifications))$/i,
+  skills:         /^(skills|technical\s+skills|core\s+competencies|key\s+skills|skill\s+set|technologies|tools?\s+&\s+technologies?)$/i,
+  projects:       /^(projects?|personal\s+projects?|key\s+projects?|notable\s+projects?)$/i,
+  certifications: /^(certifications?|certificates?|licenses?\s*(&\s*certifications?)?)$/i,
+  achievements:   /^(achievements?|awards?|honors?|honours?|accomplishments?)$/i,
+  languages:      /^(languages?)$/i,
+  publications:   /^(publications?)$/i,
 };
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -119,13 +109,7 @@ function extractName(nonEmpty) {
 
 // ─── Location extraction ──────────────────────────────────────────────────────
 
-// The region/country part used to be a single word only ([A-Za-z]{3,20}),
-// which silently truncated any multi-word state or country — "London,
-// United Kingdom" came out as "London, United", "Dallas, United States" as
-// "Dallas, United". Allow up to 3 Title-Case words (state/country names
-// like "United Kingdom", "New South Wales", "United Arab Emirates") in
-// addition to the original 2-letter state-code case.
-const LOCATION_RE = /\b([A-Za-z][A-Za-z.\s]{1,25},\s*(?:[A-Z]{2}\b|[A-Z][a-zA-Z]{2,20}(?:\s+[A-Z][a-zA-Z]{2,20}){0,2}))/;
+const LOCATION_RE = /\b([A-Za-z][A-Za-z.\s]{1,25},\s*(?:[A-Z]{2}|[A-Za-z]{3,20}))\b/;
 
 function extractLocation(nonEmpty) {
   for (const line of nonEmpty.slice(0, 10)) {
@@ -348,14 +332,11 @@ function parseResumeText(rawText) {
   }));
 
   // ── Certifications ──
-  const certifications = (sections.certifications || []).filter(Boolean).slice(0, 10).map(line => {
-    const clean = line.replace(/^[-•*▪▸\u2022\u25AA\u25CF\u2713\u2714\u25BA\u27A2\u27B3]\s*/, '').trim();
-    return {
-      name:   clean.replace(DATE_RE, '').replace(/[\s,|–—-]+$/, '').trim(),
-      issuer: '',
-      date:   (() => { const d = extractDateRange(clean); return d.endDate || d.startDate || ''; })()
-    };
-  });
+  const certifications = (sections.certifications || []).filter(Boolean).slice(0, 10).map(line => ({
+    name:   line.replace(DATE_RE, '').trim(),
+    issuer: '',
+    date:   (() => { const d = extractDateRange(line); return d.endDate || d.startDate || ''; })()
+  }));
 
   // ── Other ──
   const publications = (sections.publications || []).filter(Boolean).slice(0, 10).map(line => ({
