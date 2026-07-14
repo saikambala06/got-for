@@ -196,10 +196,10 @@ router.delete('/:id', async (req, res) => {
 // its baseline and just skips the AI enhancement in that case.
 router.post('/analyze', async (req, res) => {
   try {
-    const { jobTitle = '', company = '', jobDescription = '' } = req.body;
-    if (!jobDescription.trim()) return res.status(400).json({ error: 'Job description is required' });
+    const { jobTitle = '', company = '', jobDescription = '', rawText = '' } = req.body;
+    if (!jobDescription.trim() && !rawText.trim()) return res.status(400).json({ error: 'Job description is required' });
 
-    const analysis = await analyzeJobWithAI(jobTitle, company, jobDescription);
+    const analysis = await analyzeJobWithAI(jobTitle, company, jobDescription, rawText);
     res.json({ analysis });
   } catch (err) {
     console.error('[/jobs/analyze]', err.message);

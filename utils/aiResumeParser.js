@@ -674,7 +674,11 @@ async function tailorRawTextWithAI(resumeText, jobDescription) {
 
 const JOB_ANALYSIS_SYSTEM_PROMPT = `You are a precision job-posting analysis engine. Read the job posting text and output a single valid JSON object — nothing else. No markdown fences, no commentary.
 
+You may be given two inputs: a "BEST-GUESS DESCRIPTION" (already extracted by a simple heuristic, which is sometimes wrong — e.g. it may actually be page navigation, a related-jobs rail, a cookie banner, or an unrelated article instead of the real posting) and/or "FULL RAW PAGE TEXT" (the entire scraped page, noisy but complete).
+
 Your job is to extract, in the candidate's own resume-matching vocabulary:
+
+0. "description": The actual, complete job posting description — responsibilities, requirements, qualifications, benefits, everything belonging to the posting itself — reproduced verbatim from whichever input actually contains it. If FULL RAW PAGE TEXT is provided, use it to locate and extract the true posting content, discarding navigation links, cookie/privacy banners, "Apply now" buttons, related/similar-job listings, footer boilerplate, and any other page clutter. If the BEST-GUESS DESCRIPTION already correctly matches the real posting, you may return it unchanged. Preserve the original wording, section headings, and bullet structure — this is extraction, not summarization or rewriting. If neither input contains a real job posting, return "".
 
 1. "skills": EVERY concrete hard skill, tool, language, framework, platform, or technology explicitly required or preferred in the posting. Use short canonical names matching how they'd appear on a resume (e.g. "React", "AWS", "Python", "SQL", "Kubernetes", "Figma"). Do not include soft skills (e.g. "communication", "teamwork") in this list. Do not invent skills that aren't mentioned or clearly implied by the posting's requirements. Aim to be thorough — junior postings may have 3-5, senior/technical postings often have 15-25.
 
@@ -686,6 +690,7 @@ Your job is to extract, in the candidate's own resume-matching vocabulary:
 
 === JSON SCHEMA ===
 {
+  "description": "",
   "skills": [],
   "qualifications": [],
   "highlights": [],
@@ -701,6 +706,7 @@ function sanitizeJobAnalysis(a) {
       .slice(0, max);
   };
   return {
+    description: typeof a?.description === 'string' ? a.description.trim().slice(0, 20000) : '',
     skills: arrStr(a?.skills, 30),
     qualifications: arrStr(a?.qualifications, 4),
     highlights: arrStr(a?.highlights, 4),
@@ -717,14 +723,23 @@ function sanitizeJobAnalysis(a) {
  * configured or the call fails — callers should fall back to the
  * regex-based extraction already computed client-side.
  */
-async function analyzeJobWithAI(jobTitle, company, description) {
+async function analyzeJobWithAI(jobTitle, company, description, rawText = '') {
   if (!getKeyPool().hasKeys()) {
     throw new Error('GEMINI_API_KEY not configured');
   }
 
-  const trimmed = (description || '').slice(0, 12000);
-  if (!trimmed.trim()) {
+  const trimmedDescription = (description || '').slice(0, 12000);
+  const trimmedRaw = (rawText || '').slice(0, 16000);
+  if (!trimmedDescription.trim() && !trimmedRaw.trim()) {
     throw new Error('No job description text to analyze');
+  }
+
+  const textBlocks = [];
+  if (trimmedDescription.trim()) {
+    textBlocks.push('=== BEST-GUESS DESCRIPTION (may be wrong — could be nav/clutter instead of the real posting) ===', trimmedDescription, '=== END BEST-GUESS DESCRIPTION ===');
+  }
+  if (trimmedRaw.trim() && trimmedRaw.trim() !== trimmedDescription.trim()) {
+    textBlocks.push('', '=== FULL RAW PAGE TEXT (noisy but complete — use this to find/verify the real posting) ===', trimmedRaw, '=== END FULL RAW PAGE TEXT ===');
   }
 
   const json = await callGemini(
@@ -736,13 +751,11 @@ async function analyzeJobWithAI(jobTitle, company, description) {
           `Job Title: ${jobTitle || 'Not specified'}`,
           `Company: ${company || 'Not specified'}`,
           '',
-          '=== JOB POSTING TEXT START ===',
-          trimmed,
-          '=== JOB POSTING TEXT END ==='
+          ...textBlocks
         ].join('\n')
       }
     ],
-    3000,
+    8000,
     { jsonMode: true }
   );
 
