@@ -425,11 +425,6 @@ const state = {
   decisions: {},
   qd: { template: 'Classic', textColor: TEXT_COLORS[0], accent: '#16a34a', format: 'pdf', tailoringLevel: 'high', noMetrics: false },
   jobKeywords: [],
-  // AI-computed ATS match score for the current diff — { before, after } as
-  // returned by the tailor endpoint. Populated by runTailor(); see
-  // resolveAtsScore() for the keyword-overlap fallback used only if the AI
-  // didn't return usable numbers.
-  atsScore: { before: 0, after: 0 },
   editor: { fontFamily: null, fontSize: 10, lineHeight: 1.25, zoom: 100, filename: '' }
 };
 
@@ -562,25 +557,6 @@ function computeAtsScore(resume) {
   const text = resumeFullText(resume);
   const matched = keywords.filter(k => new RegExp(`\\b${escapeRegex(k)}\\b`).test(text));
   return Math.round((matched.length / keywords.length) * 100);
-}
-
-// The AI tailor call scores the resume's real ATS/recruiter match (skills,
-// title/seniority, domain overlap, terminology — see the server-side
-// rubric) for both "before" (resume as-is) and "after" (if every suggestion
-// were accepted). That's the accurate score and should always be preferred.
-// The local keyword-overlap computeAtsScore() above is only a safety-net
-// fallback for the rare case the AI response is missing/invalid scores
-// (e.g. an older cached response), so the badge never breaks.
-function resolveAtsScore(tailored, resume) {
-  const before = tailored?.atsScore?.before;
-  const after = tailored?.atsScore?.after;
-  if (Number.isFinite(before) && Number.isFinite(after)) {
-    return { before, after };
-  }
-  if (!state.jobKeywords.length) state.jobKeywords = extractKeywords(`${job.title} ${job.description}`);
-  const fallbackBefore = computeAtsScore(resume);
-  const fallbackAfter = computeAtsScore(projectedResume({ acceptAll: true }));
-  return { before: fallbackBefore, after: Math.max(fallbackBefore, fallbackAfter) };
 }
 
 function resetDecisions() {
@@ -1135,11 +1111,11 @@ async function runTailor(level) {
   const resume = state.resumes.find(r => r._id === state.selectedResumeId);
   if (!resume) { showToast('Pick a resume first', 'error'); return null; }
   state.resume = resume;
+  if (!state.jobKeywords.length) state.jobKeywords = extractKeywords(`${job.title} ${job.description}`);
   const { tailored } = await api.post(`/api/resumes/${state.selectedResumeId}/tailor`, {
     jobTitle: job.title, jobDescription: job.description, tailoringLevel: level || 'high'
   });
   state.diff = tailored;
-  state.atsScore = resolveAtsScore(tailored, resume);
   return tailored;
 }
 
@@ -1210,22 +1186,18 @@ function renderReviewSheet(opts = {}) {
     });
   });
 
-  // "Before" / "after" come straight from the AI's ATS scoring pass for
-  // this tailoring level (see resolveAtsScore()) — real skills/title/domain/
-  // keyword alignment, not naive word matching.
-  // "Current" = the score at today's accept/reject mix, interpolated
-  // between before (0 changes accepted) and after (all changes accepted)
-  // by the fraction of suggestions actually accepted right now, so it moves
-  // live as bullets are toggled without needing another AI call per click.
-  const total = countChanges(diff);
-  const accepted = countAccepted(diff, decisions);
-  const baselineScore = state.atsScore.before;
-  const allAcceptedScore = state.atsScore.after;
-  const currentScore = total > 0
-    ? Math.round(baselineScore + (allAcceptedScore - baselineScore) * (accepted / total))
-    : baselineScore;
+  // "Current" = the score of the resume as it actually stands with today's
+  // accept/reject decisions applied (i.e. projectedResume() right now).
+  // "If you accept everything" = the score if every suggested change were accepted,
+  // computed independently of what's currently toggled.
+  const baselineScore = computeAtsScore(state.resume);
+  const currentScore = computeAtsScore(projectedResume());
+  const allAcceptedResume = projectedResume({ acceptAll: true });
+  const allAcceptedScore = computeAtsScore(allAcceptedResume);
   updateScoreBadge(currentScore, baselineScore, allAcceptedScore, !!opts.animateScore);
 
+  const total = countChanges(diff);
+  const accepted = countAccepted(diff, decisions);
   document.getElementById('tl-apply-all').textContent = `Apply all ${total} changes → ~${allAcceptedScore}`;
   document.getElementById('tl-changes-note').textContent = `${accepted} of ${total} changes accepted`;
 }
