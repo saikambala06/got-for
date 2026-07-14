@@ -192,13 +192,67 @@
     return SKILL_ALIASES[norm] || norm;
   }
 
-  // Exact (post-canonicalisation) match — replaces the old bidirectional
-  // .includes() check, which matched any skill that merely contained (or
-  // was contained by) another as a substring.
+  // ── Whole-word fallback matching ───────────────────────────────────────
+  //
+  // Exact canonical match (below) only catches a skill that's spelled
+  // identically (or is in the small hand-curated SKILL_ALIASES map) on
+  // both sides. In practice the job's skills come from one AI extraction
+  // pass and the resume's skills come from a separate one, so the same
+  // real-world skill often comes back phrased slightly differently on
+  // each side — "Azure" vs "Microsoft Azure", "API" vs "REST APIs",
+  // "CI/CD" vs "CI/CD pipelines". An exact-only check silently drops all
+  // of these as "not matched" even though they plainly are, which is why
+  // the panel could show 0 matches out of a dozen-plus detected skills.
+  //
+  // The fallback below matches when one skill's words appear as a
+  // contiguous, whole-word run inside the other's words — never a raw
+  // substring. That distinction is what keeps the earlier bug fixed:
+  // "Java" is one whole word and "JavaScript" is a different single word,
+  // so they still never match; "Azure" is a whole word inside the two
+  // words "Microsoft Azure", so that now correctly matches.
+  function singularizeToken(t) {
+    if (t.length > 4 && t.endsWith('ies')) return t.slice(0, -3) + 'y';
+    if (t.length > 4 && /(?:sh|ch|x|s|z)es$/.test(t)) return t.slice(0, -2);
+    if (t.length > 3 && t.endsWith('s') && !t.endsWith('ss')) return t.slice(0, -1);
+    return t;
+  }
+
+  function tokenize(s) {
+    return s
+      .split(/[^a-z0-9+#.]+/i)
+      .filter(Boolean)
+      .map((t) => singularizeToken(t.toLowerCase()));
+  }
+
+  // Single tokens short/common enough that a bare whole-word "contains"
+  // match is more likely a coincidence than a real skill match (e.g. the
+  // token "go" turning up inside an unrelated multi-word phrase). Exact
+  // and alias matches above are unaffected by this list — it only guards
+  // the fuzzy contains-fallback below.
+  const AMBIGUOUS_SOLO_TOKENS = new Set(['go', 'r', 'c', 'j', 'ai', 'ml', 'bi', 'io', 'os', 'ui', 'ux', 'qa', 'ir']);
+
+  function containsWholeWordRun(shortToks, longToks) {
+    if (!shortToks.length || shortToks.length > longToks.length) return false;
+    if (shortToks.length === 1 && AMBIGUOUS_SOLO_TOKENS.has(shortToks[0])) return false;
+    for (let i = 0; i <= longToks.length - shortToks.length; i++) {
+      if (shortToks.every((t, j) => longToks[i + j] === t)) return true;
+    }
+    return false;
+  }
+
   function skillsMatch(a, b) {
     const ca = canonicalSkill(a);
     const cb = canonicalSkill(b);
-    return !!ca && ca === cb;
+    if (!ca || !cb) return false;
+    if (ca === cb) return true;
+
+    const tokensA = tokenize(ca);
+    const tokensB = tokenize(cb);
+    if (!tokensA.length || !tokensB.length) return false;
+
+    return tokensA.length <= tokensB.length
+      ? containsWholeWordRun(tokensA, tokensB)
+      : containsWholeWordRun(tokensB, tokensA);
   }
 
   // Signals used to build the "Key Highlights" chips (benefits, sponsorship, work model).
