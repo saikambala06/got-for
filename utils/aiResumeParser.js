@@ -8,13 +8,17 @@ const { jsonrepair } = require('jsonrepair');
 
 // ─── Shared Gemini caller ────────────────────────────────────────────────────
 //
-// NOTE ON MODEL NAME: 'gemini-2.5-flash' is no longer available to new API
-// keys/projects (Google returns a 404 "no longer available to new users").
-// We now default to 'gemini-flash-latest', Google's auto-updated alias that
-// always points at their current-generation Flash model (as of this change,
-// Gemini 3.5 Flash), so we don't have to keep chasing renames/retirements.
-// The model can still be overridden via GEMINI_MODEL without a code change.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+// NOTE ON MODEL NAME: 'gemini-flash-latest' is an unpinned alias that Google
+// documents as pointing at an experimental build with tighter rate limits —
+// not recommended for production. We now pin to 'gemini-3.5-flash' directly:
+// it's Google's current generally-available Flash model (GA May 19 2026, no
+// shutdown date announced) and is documented as delivering "near-Pro
+// intelligence at Flash-tier cost and speed" — the best available balance of
+// fast responses and accurate extraction/tailoring for this app's workload.
+// gemini-2.0-flash and gemini-1.5-flash (used previously) were both shut
+// down by Google (June 1, 2026 and earlier, respectively) and now 404.
+// Override via GEMINI_MODEL without a code change if needed.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
 const { getKeyPool } = require('./geminiKeyPool');
 
