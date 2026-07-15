@@ -5,7 +5,7 @@ const User    = require('../models/User');
 const requireAuth = require('../middleware/auth');
 const { parseResumeWithAI, parseRawResumeTextWithAI, tailorResumeWithAI, tailorRawTextWithAI, generateCoverLetterWithAI } = require('../utils/aiResumeParser');
 const { normalizeDocxText } = require('../utils/resumeParser');
-const { getKeyPool } = require('../utils/geminiKeyPool');
+const { getKeyPool } = require('../utils/xaiKeyPool');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -104,7 +104,7 @@ router.post('/parse', (req, res) => {
 });
 
 // ─── Parse pasted resume text (web portal "Parse resume" tab) ────────────────
-// Uses the server's own GEMINI_API_KEY — the person never supplies one.
+// Uses the server's own XAI_API_KEY — the person never supplies one.
 
 router.post('/parse-text', async (req, res) => {
   try {
@@ -115,8 +115,8 @@ router.post('/parse-text', async (req, res) => {
     res.json({ parsed });
   } catch (err) {
     console.error('[/parse-text]', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
+    if (err.message.includes('XAI_API_KEY')) {
+      return res.status(503).json({ error: 'AI features are not enabled on this server (XAI_API_KEY is not configured).' });
     }
     res.status(502).json({ error: `Resume parsing failed: ${err.message}` });
   }
@@ -136,8 +136,8 @@ router.post('/tailor-text', async (req, res) => {
     res.json({ tailored });
   } catch (err) {
     console.error('[/tailor-text]', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
+    if (err.message.includes('XAI_API_KEY')) {
+      return res.status(503).json({ error: 'AI features are not enabled on this server (XAI_API_KEY is not configured).' });
     }
     res.status(502).json({ error: `AI tailoring failed: ${err.message}` });
   }
@@ -157,10 +157,10 @@ router.post('/:id/tailor', async (req, res) => {
     res.json({ tailored });
   } catch (err) {
     console.error('[/tailor]', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
+    if (err.message.includes('XAI_API_KEY')) {
+      return res.status(503).json({ error: 'AI features are not enabled on this server (XAI_API_KEY is not configured).' });
     }
-    // Surface the real reason (Gemini status code / message) instead of a
+    // Surface the real reason (xAI status code / message) instead of a
     // generic "please try again" — a masked error is impossible to
     // self-diagnose from the client side.
     res.status(502).json({ error: `AI tailoring failed: ${err.message}` });
@@ -181,8 +181,8 @@ router.post('/:id/cover-letter', async (req, res) => {
     res.json({ coverLetter });
   } catch (err) {
     console.error('[/cover-letter]', err.message);
-    if (err.message.includes('GEMINI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
+    if (err.message.includes('XAI_API_KEY')) {
+      return res.status(503).json({ error: 'AI features are not enabled on this server (XAI_API_KEY is not configured).' });
     }
     res.status(502).json({ error: `Cover letter generation failed: ${err.message}` });
   }

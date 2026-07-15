@@ -51,7 +51,7 @@ Clicking **Tailor resume**:
 - Sends the job title + full description, plus any skill chips you've explicitly
   confirmed you have (tap the gray "+" chips first), to
   `POST /api/resumes/:id/tailor`.
-- The backend's Gemini-powered tailoring rewrites the summary, reorders/refines the
+- The backend's Grok-powered tailoring rewrites the summary, reorders/refines the
   skills list (folding in anything you confirmed), and sharpens experience bullets
   — without inventing employers, dates, or achievements.
 - Review the result inline, then **Save to resume** persists it via
@@ -101,6 +101,6 @@ No existing endpoint's behavior changed for the web dashboard.
   skill the detector missed before tailoring.
 - The keyword-match percentage is `matched ÷ total skills found on this page`,
   the same metric shown in the reference design this was modeled on.
-- Cover letter and tailoring both require `GEMINI_API_KEY` to be configured on the
+- Cover letter and tailoring both require `XAI_API_KEY` to be configured on the
   backend (see the main project README); without it those two calls return a
   clear "AI features are not enabled" error instead of failing silently.

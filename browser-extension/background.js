@@ -99,10 +99,10 @@ const handlers = {
     return body.view;
   },
 
-  async 'job:analyze'({ jobTitle, company, jobDescription, rawText }) {
+  async 'job:analyze'({ jobTitle, company, jobDescription }) {
     const body = await apiFetch('/api/jobs/analyze', {
       method: 'POST',
-      body: JSON.stringify({ jobTitle, company, jobDescription, rawText })
+      body: JSON.stringify({ jobTitle, company, jobDescription })
     });
     return body.analysis;
   },

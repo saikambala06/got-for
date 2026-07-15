@@ -1,131 +1,103 @@
 /**
- * AI-powered resume parser using Google Gemini.
- * Falls back to the rule-based regex parser if GEMINI_API_KEY is missing or the call fails.
+ * AI-powered resume parser using xAI (Grok).
+ * Falls back to the rule-based regex parser if XAI_API_KEY is missing or the call fails.
  */
 const { parseResumeText } = require('./resumeParser');
 const { cleanSkill } = require('./skillUtils');
 const { jsonrepair } = require('jsonrepair');
 
-// ─── Shared Gemini caller ────────────────────────────────────────────────────
+// ─── Shared Grok caller ───────────────────────────────────────────────────
 //
-// NOTE ON MODEL NAME: 'gemini-flash-latest' is an unpinned alias that Google
-// documents as pointing at an experimental build with tighter rate limits —
-// not recommended for production. We now pin to 'gemini-3.5-flash' directly:
-// it's Google's current generally-available Flash model (GA May 19 2026, no
-// shutdown date announced) and is documented as delivering "near-Pro
-// intelligence at Flash-tier cost and speed" — the best available balance of
-// fast responses and accurate extraction/tailoring for this app's workload.
-// gemini-2.0-flash and gemini-1.5-flash (used previously) were both shut
-// down by Google (June 1, 2026 and earlier, respectively) and now 404.
-// Override via GEMINI_MODEL without a code change if needed.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+// Default model is xAI's 'grok-3'. Can be overridden via XAI_MODEL without a
+// code change; if the primary model 400s/404s (unavailable on this
+// account/region), we retry once on XAI_FALLBACK_MODEL ('grok-3-mini').
+const XAI_MODEL = process.env.XAI_MODEL || 'grok-3';
+const XAI_FALLBACK_MODEL = process.env.XAI_FALLBACK_MODEL || 'grok-3-mini';
 
-const { getKeyPool } = require('./geminiKeyPool');
+const { getKeyPool } = require('./xaiKeyPool');
 
 function parseRetryAfterSeconds(response, bodyText) {
   const header = response.headers.get?.('retry-after');
   if (header && !Number.isNaN(Number(header))) return Number(header);
-  // Gemini also sometimes embeds a RetryInfo with a "retryDelay": "37s" in the JSON error body.
-  const match = bodyText && bodyText.match(/"retryDelay"\s*:\s*"(\d+)s"/);
+  const match = bodyText && bodyText.match(/"retry(?:_|-)?after"\s*:\s*"?(\d+)/i);
   return match ? Number(match[1]) : null;
 }
 
-async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {}) {
+async function callGrok(messages, maxTokens = 8000, { jsonMode = false } = {}) {
   const pool = getKeyPool();
-  if (!pool.hasKeys()) throw new Error('GEMINI_API_KEY not configured');
+  if (!pool.hasKeys()) throw new Error('XAI_API_KEY not configured');
 
-  const systemText = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
-  const contents = messages
-    .filter(m => m.role !== 'system')
-    .map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
+  const buildBody = (model) => ({
+    model,
+    max_tokens: maxTokens,
+    temperature: 0,         // deterministic extraction
+    messages,
+    ...(jsonMode ? { response_format: { type: 'json_object' } } : {})
+  });
 
-  const requestBody = {
-    contents,
-    generationConfig: {
-      temperature: 0,        // deterministic extraction
-      maxOutputTokens: maxTokens,
-      // Flash models reason ("think") by default. A budget of 0 turns that
-      // off entirely — this is extraction/rewriting, not reasoning — so the
-      // whole token budget goes to visible output instead of being silently
-      // spent on hidden "thinking" tokens.
-      thinkingConfig: { thinkingBudget: 0 },
-      ...(jsonMode ? { responseMimeType: 'application/json' } : {})
-    }
-  };
-  if (systemText) {
-    requestBody.systemInstruction = { parts: [{ text: systemText }] };
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-  const doRequest = (apiKey) => fetch(url, {
+  const url = 'https://api.x.ai/v1/chat/completions';
+  const doRequest = (apiKey, model) => fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey
+      Authorization: `Bearer ${apiKey}`
     },
-    body: JSON.stringify(requestBody)
+    body: JSON.stringify(buildBody(model))
   });
 
   // Try every key in the pool (round-robin, skipping ones on cooldown) until
-  // one succeeds. A 429 (quota exhausted) or 403 (key disabled/blocked)
-  // rotates immediately to the next key with no delay to the user — that's
-  // the whole point of having a pool. A transient 5xx gets one same-key
-  // retry with backoff (Google's own recommendation) before moving on.
+  // one succeeds. A 429 (rate limited) or 403 (key disabled/blocked) rotates
+  // immediately to the next key with no delay to the user — that's the
+  // whole point of having a pool. A transient 5xx gets one same-key retry
+  // with backoff before moving on.
   const order = pool.availableOrder().length ? pool.availableOrder() : pool.allBySoonestAvailable();
   let lastError = null;
 
   for (const apiKey of order) {
     let response;
     try {
-      response = await doRequest(apiKey);
+      response = await doRequest(apiKey, XAI_MODEL);
     } catch (networkErr) {
       lastError = networkErr;
       continue; // network hiccup on this key — try the next one
     }
 
+    if (!response.ok && (response.status === 400 || response.status === 404)) {
+      // Primary model unavailable on this account/region — retry on the cheaper mini model.
+      response = await doRequest(apiKey, XAI_FALLBACK_MODEL);
+    }
+
     if (!response.ok && response.status >= 500) {
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      response = await doRequest(apiKey);
+      response = await doRequest(apiKey, XAI_MODEL);
     }
 
     if (response.status === 429 || response.status === 403) {
       const bodyText = await response.text().catch(() => '');
       const retryAfter = parseRetryAfterSeconds(response, bodyText);
       pool.markExhausted(apiKey, retryAfter);
-      lastError = new Error(`Gemini API ${response.status} on key ${pool.label(apiKey)}: ${bodyText.slice(0, 200)}`);
+      lastError = new Error(`xAI API ${response.status} on key ${pool.label(apiKey)}: ${bodyText.slice(0, 200)}`);
       continue; // rotate to the next key in the pool
     }
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
-      // Not a quota issue (bad request, bad model, etc.) — retrying with a
-      // different key won't help, so fail fast with the real reason.
-      throw new Error(`Gemini API ${response.status}: ${body.slice(0, 300)}`);
+      // Not a rate-limit issue (bad request, bad model, etc.) — retrying with
+      // a different key won't help, so fail fast with the real reason.
+      throw new Error(`xAI API ${response.status}: ${body.slice(0, 300)}`);
     }
 
     pool.markWorking(apiKey);
     const data = await response.json();
 
-    if (!data.candidates?.length) {
-      const blockReason = data.promptFeedback?.blockReason;
-      throw new Error(
-        blockReason
-          ? `Gemini blocked the request (${blockReason}) — try rephrasing the job description or resume.`
-          : 'Gemini returned no candidates'
-      );
-    }
-
-    const candidate = data.candidates[0];
-    const text = (candidate.content?.parts || []).map(p => p.text || '').join('').trim();
+    const choice = data.choices?.[0];
+    const text = (choice?.message?.content || '').trim();
 
     if (!text) {
       throw new Error(
-        candidate.finishReason === 'MAX_TOKENS'
-          ? 'Gemini response was cut off before it produced any output — try a shorter job description or resume.'
-          : `Gemini returned an empty response${candidate.finishReason ? ` (${candidate.finishReason})` : ''}`
+        choice?.finish_reason === 'length'
+          ? 'Grok response was cut off before it produced any output — try a shorter job description or resume.'
+          : `Grok returned an empty response${choice?.finish_reason ? ` (${choice.finish_reason})` : ''}`
       );
     }
 
@@ -133,7 +105,7 @@ async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {})
   }
 
   // Every key in the pool is either exhausted or errored.
-  throw lastError || new Error('All configured Gemini API keys are currently unavailable');
+  throw lastError || new Error('All configured xAI API keys are currently unavailable');
 }
 
 // ─── Resume text pre-processing ───────────────────────────────────────────────
@@ -555,12 +527,12 @@ function repairTruncatedJSON(s, errorPosition) {
 // ─── Main parse function ──────────────────────────────────────────────────────
 
 /**
- * Parse a raw resume text into structured fields using Google Gemini.
+ * Parse a raw resume text into structured fields using xAI (Grok).
  * Falls back to the regex parser if the API key is absent or the call fails.
  */
 async function parseResumeWithAI(rawText) {
   if (!getKeyPool().hasKeys()) {
-    console.warn('[aiResumeParser] No Gemini API key configured — using regex fallback');
+    console.warn('[aiResumeParser] No xAI API key configured — using regex fallback');
     return parseResumeText(rawText);
   }
 
@@ -569,7 +541,7 @@ async function parseResumeWithAI(rawText) {
     // Use up to 24000 chars — enough for a 3-page resume with all bullets
     const trimmed = cleaned.slice(0, 24000);
 
-    const rawJson = await callGemini(
+    const rawJson = await callGrok(
       [
         { role: 'system', content: PARSE_SYSTEM_PROMPT },
         {
@@ -627,12 +599,11 @@ const TAILOR_TEXT_SYSTEM_PROMPT = `You are a resume tailoring assistant. Compare
   "match_score": number (0-100),
   "matched_keywords": [string],
   "missing_keywords": [string],
-  "tailored_summary": string (2-3 sentences, based only on real experience already in the resume, written in a tone that matches the job description's own voice — formal for a formal posting, punchier for a casual/startup one),
+  "tailored_summary": string (2-3 sentences, based only on real experience already in the resume),
   "tailored_bullets": [string] (3-5 rewritten bullets reframing real existing experience using language from the job description),
-  "suggested_certifications": [string] (0-4 specific, real, industry-recognized certifications that would meaningfully close the gap between this candidate and this job; [] if none would meaningfully help),
   "advice": string (2-3 sentences of concrete, honest advice)
 }
-Do not fabricate skills or experience the candidate doesn't have. Never claim the candidate already holds a certification you're suggesting.`;
+Do not fabricate skills or experience the candidate doesn't have.`;
 
 function sanitizeTailorTextResult(r) {
   const arr = (v, max) => (Array.isArray(v) ? v : [])
@@ -646,20 +617,19 @@ function sanitizeTailorTextResult(r) {
     missing_keywords: arr(r?.missing_keywords, 30),
     tailored_summary: typeof r?.tailored_summary === 'string' ? r.tailored_summary.trim() : '',
     tailored_bullets: arr(r?.tailored_bullets, 6),
-    suggested_certifications: arr(r?.suggested_certifications, 4),
     advice: typeof r?.advice === 'string' ? r.advice.trim() : ''
   };
 }
 
 async function tailorRawTextWithAI(resumeText, jobDescription) {
   if (!getKeyPool().hasKeys()) {
-    throw new Error('GEMINI_API_KEY not configured');
+    throw new Error('XAI_API_KEY not configured');
   }
   if (!resumeText?.trim() || !jobDescription?.trim()) {
     throw new Error('Both resume text and job description are required');
   }
 
-  const json = await callGemini(
+  const json = await callGrok(
     [
       { role: 'system', content: TAILOR_TEXT_SYSTEM_PROMPT },
       {
@@ -678,11 +648,7 @@ async function tailorRawTextWithAI(resumeText, jobDescription) {
 
 const JOB_ANALYSIS_SYSTEM_PROMPT = `You are a precision job-posting analysis engine. Read the job posting text and output a single valid JSON object — nothing else. No markdown fences, no commentary.
 
-You may be given two inputs: a "BEST-GUESS DESCRIPTION" (already extracted by a simple heuristic, which is sometimes wrong — e.g. it may actually be page navigation, a related-jobs rail, a cookie banner, or an unrelated article instead of the real posting) and/or "FULL RAW PAGE TEXT" (the entire scraped page, noisy but complete).
-
 Your job is to extract, in the candidate's own resume-matching vocabulary:
-
-0. "description": The actual, complete job posting description — responsibilities, requirements, qualifications, benefits, everything belonging to the posting itself — reproduced verbatim from whichever input actually contains it. If FULL RAW PAGE TEXT is provided, use it to locate and extract the true posting content, discarding navigation links, cookie/privacy banners, "Apply now" buttons, related/similar-job listings, footer boilerplate, and any other page clutter. If the BEST-GUESS DESCRIPTION already correctly matches the real posting, you may return it unchanged. Preserve the original wording, section headings, and bullet structure — this is extraction, not summarization or rewriting. If neither input contains a real job posting, return "".
 
 1. "skills": EVERY concrete hard skill, tool, language, framework, platform, or technology explicitly required or preferred in the posting. Use short canonical names matching how they'd appear on a resume (e.g. "React", "AWS", "Python", "SQL", "Kubernetes", "Figma"). Do not include soft skills (e.g. "communication", "teamwork") in this list. Do not invent skills that aren't mentioned or clearly implied by the posting's requirements. Aim to be thorough — junior postings may have 3-5, senior/technical postings often have 15-25.
 
@@ -694,7 +660,6 @@ Your job is to extract, in the candidate's own resume-matching vocabulary:
 
 === JSON SCHEMA ===
 {
-  "description": "",
   "skills": [],
   "qualifications": [],
   "highlights": [],
@@ -710,7 +675,6 @@ function sanitizeJobAnalysis(a) {
       .slice(0, max);
   };
   return {
-    description: typeof a?.description === 'string' ? a.description.trim().slice(0, 20000) : '',
     skills: arrStr(a?.skills, 30),
     qualifications: arrStr(a?.qualifications, 4),
     highlights: arrStr(a?.highlights, 4),
@@ -722,31 +686,22 @@ function sanitizeJobAnalysis(a) {
 }
 
 /**
- * Analyze a job posting with Gemini to extract skills, qualifications,
- * highlights, and experience level. Throws if GEMINI_API_KEY isn't
+ * Analyze a job posting with Grok to extract skills, qualifications,
+ * highlights, and experience level. Throws if XAI_API_KEY isn't
  * configured or the call fails — callers should fall back to the
  * regex-based extraction already computed client-side.
  */
-async function analyzeJobWithAI(jobTitle, company, description, rawText = '') {
+async function analyzeJobWithAI(jobTitle, company, description) {
   if (!getKeyPool().hasKeys()) {
-    throw new Error('GEMINI_API_KEY not configured');
+    throw new Error('XAI_API_KEY not configured');
   }
 
-  const trimmedDescription = (description || '').slice(0, 12000);
-  const trimmedRaw = (rawText || '').slice(0, 16000);
-  if (!trimmedDescription.trim() && !trimmedRaw.trim()) {
+  const trimmed = (description || '').slice(0, 12000);
+  if (!trimmed.trim()) {
     throw new Error('No job description text to analyze');
   }
 
-  const textBlocks = [];
-  if (trimmedDescription.trim()) {
-    textBlocks.push('=== BEST-GUESS DESCRIPTION (may be wrong — could be nav/clutter instead of the real posting) ===', trimmedDescription, '=== END BEST-GUESS DESCRIPTION ===');
-  }
-  if (trimmedRaw.trim() && trimmedRaw.trim() !== trimmedDescription.trim()) {
-    textBlocks.push('', '=== FULL RAW PAGE TEXT (noisy but complete — use this to find/verify the real posting) ===', trimmedRaw, '=== END FULL RAW PAGE TEXT ===');
-  }
-
-  const json = await callGemini(
+  const json = await callGrok(
     [
       { role: 'system', content: JOB_ANALYSIS_SYSTEM_PROMPT },
       {
@@ -755,11 +710,13 @@ async function analyzeJobWithAI(jobTitle, company, description, rawText = '') {
           `Job Title: ${jobTitle || 'Not specified'}`,
           `Company: ${company || 'Not specified'}`,
           '',
-          ...textBlocks
+          '=== JOB POSTING TEXT START ===',
+          trimmed,
+          '=== JOB POSTING TEXT END ==='
         ].join('\n')
       }
     ],
-    8000,
+    3000,
     { jsonMode: true }
   );
 
@@ -777,14 +734,11 @@ const TAILOR_LEVEL_INSTRUCTIONS = {
 const TAILOR_SYSTEM_PROMPT = `You are an expert resume writer and career coach. Tailor the provided resume content to better match the job description. This is a bullet-level, reviewable tailoring pass: the candidate will see every change as an old to new diff and accept or reject each one individually, so preserve a clear one-to-one mapping between original and rewritten content.
 
 Rules:
-- Rewrite the professional summary to reflect the target role. Match the tone/register the job description itself uses (e.g. a formal enterprise posting → polished, formal summary; a scrappy startup posting → punchier, more direct summary) — never make it sound out of place next to the posting's own voice.
+- Rewrite the professional summary to reflect the target role
 - Reorder and refine the skills list to prioritise the most relevant ones first
 - Fold in any items listed under "Candidate-confirmed additional skills" into the skills list (the candidate has explicitly confirmed they have these)
 - For EVERY bullet in EVERY role, decide one of: "modify" (rewrite it), "keep" (return it unchanged, old equals new), or "remove" (suggest removal — only at HIGH tailoring level and only for bullets truly irrelevant to this job)
 - You may also "add" a small number of brand new bullets per role (only at MEDIUM/HIGH level, and only synthesized from facts already present elsewhere in the resume — never invented)
-- For EVERY project in the "projects" array (if any are given), apply the same modify/keep treatment to its description — rewrite it to foreground relevant tech/impact for this job, or leave unchanged if it's already a strong fit. Never invent a project.
-- Identify "missingSkills": concrete hard skills/tools/technologies the job description clearly requires or strongly prefers that do NOT appear anywhere in the candidate's resume (skills, experience, or projects). List only real gaps — do not include anything the candidate already has under a different name/synonym. These are for the candidate's awareness only; never add them to the tailored skills list or fabricate experience with them.
-- Suggest "suggestedCertifications": 0-4 specific, real, industry-recognized certifications that would meaningfully strengthen this candidate's fit for this specific job, based on the gap between their background and the posting. Only suggest ones genuinely relevant to the role/domain — return [] if none would meaningfully help. Never claim the candidate already holds one.
 - Never invent facts, employers, dates, or achievements — only rephrase, reorder, and incorporate what already exists or what the candidate has explicitly confirmed
 - Follow the requested tailoring level intensity exactly as instructed
 - Score the ATS/recruiter match twice — see ATS SCORING RUBRIC below — once for the resume exactly as it stands today ("before"), and once assuming every change you just proposed above is fully accepted ("after")
@@ -813,14 +767,6 @@ Return ONLY valid JSON, no markdown, no explanation:
       ]
     }
   ],
-  "projects": [
-    {
-      "index": 0,
-      "description": { "old": "original project description", "new": "rewritten project description", "action": "modify" }
-    }
-  ],
-  "missingSkills": ["skill the JD wants that the resume genuinely lacks"],
-  "suggestedCertifications": ["Specific real certification name"],
   "atsScore": { "before": 62, "after": 87 },
   "suggestions": "1–2 sentence explanation of the key changes made"
 }`;
@@ -905,30 +851,6 @@ function sanitizeTailorResult(result, resume) {
     return { index: i, role: role.role, company: role.company, bullets };
   });
 
-  const projectsByIndex = new Map((out.projects || []).map((p) => [p.index, p]));
-  out.projects = (resume.projects || []).map((proj, i) => {
-    const aiEntry = projectsByIndex.get(i);
-    const originalDescription = proj.description || '';
-    let description;
-    if (aiEntry && aiEntry.description && typeof aiEntry.description === 'object') {
-      description = {
-        old: typeof aiEntry.description.old === 'string' ? aiEntry.description.old : originalDescription,
-        new: typeof aiEntry.description.new === 'string' ? aiEntry.description.new : originalDescription,
-        action: ['modify', 'keep'].includes(aiEntry.description.action) ? aiEntry.description.action : 'modify'
-      };
-    } else {
-      description = { old: originalDescription, new: originalDescription, action: 'keep' };
-    }
-    return { index: i, name: proj.name, description };
-  });
-
-  const strList = (v, max) => (Array.isArray(v) ? v : [])
-    .map((s) => (typeof s === 'string' ? s.trim() : String(s || '').trim()))
-    .filter(Boolean)
-    .slice(0, max);
-  out.missingSkills = strList(result.missingSkills, 20);
-  out.suggestedCertifications = strList(result.suggestedCertifications, 4);
-
   out.suggestions = typeof out.suggestions === 'string' ? out.suggestions : '';
   out.atsScore = sanitizeAtsScore(result.atsScore);
   return out;
@@ -936,7 +858,7 @@ function sanitizeTailorResult(result, resume) {
 
 async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills = [], tailoringLevel = 'high') {
   if (!getKeyPool().hasKeys()) {
-    throw new Error('AI tailoring requires GEMINI_API_KEY to be configured');
+    throw new Error('AI tailoring requires XAI_API_KEY to be configured');
   }
 
   const level = TAILOR_LEVEL_INSTRUCTIONS[tailoringLevel] ? tailoringLevel : 'high';
@@ -950,11 +872,6 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
         role: e.role,
         company: e.company,
         description: e.description
-      })),
-      projects: (resume.projects || []).map((p, i) => ({
-        index: i,
-        name: p.name,
-        description: p.description
       }))
     },
     null,
@@ -968,7 +885,7 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
     ? `\n\nCandidate-confirmed additional skills (from the job posting's requirements, which the candidate has checked off as skills they genuinely have):\n${confirmedExtras.join(', ')}`
     : '';
 
-  const json = await callGemini(
+  const json = await callGrok(
     [
       { role: 'system', content: TAILOR_SYSTEM_PROMPT },
       {
@@ -980,9 +897,8 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
     // so a resume with several roles/many bullets needs a lot more headroom
     // than a plain rewrite would. Too tight a budget here truncates the
     // response mid-JSON, which is what caused "JSON parse failed: Expected
-    // ',' or ']'..." errors on longer resumes. Projects/missingSkills/
-    // suggestedCertifications add further headroom needs.
-    18000,
+    // ',' or ']'..." errors on longer resumes.
+    16000,
     { jsonMode: true }
   );
 
@@ -1004,7 +920,7 @@ Rules:
 
 async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescription) {
   if (!getKeyPool().hasKeys()) {
-    throw new Error('AI cover letter generation requires GEMINI_API_KEY to be configured');
+    throw new Error('AI cover letter generation requires XAI_API_KEY to be configured');
   }
 
   const snapshot = JSON.stringify(
@@ -1025,7 +941,7 @@ async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescripti
     2
   );
 
-  const text = await callGemini(
+  const text = await callGrok(
     [
       { role: 'system', content: COVER_LETTER_SYSTEM_PROMPT },
       {

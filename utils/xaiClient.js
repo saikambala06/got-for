@@ -1,19 +1,20 @@
 /**
- * Shared multi-provider AI chat client. Used by aiResumeParser.js and
+ * Shared xAI (Grok) chat client. Used by aiResumeParser.js and
  * aiJobExtractor.js so every AI-powered feature (resume parsing, tailoring,
- * cover letters, job extraction) goes through the same provider selection
- * and retry logic.
+ * cover letters, job extraction) goes through the same request/retry logic
+ * and key pool.
  *
- * Provider priority (first configured key wins, per call):
- *   1. XAI_API_KEY    — xAI / Grok (paid, usage-based)
- *   2. GEMINI_API_KEY — Google Gemini (has a genuinely free tier — see
- *                        https://ai.google.dev/pricing — good default if you
- *                        don't want to pay for API access)
- *
- * If neither key is set, or every configured provider's call fails, this
- * throws — callers are expected to catch that and degrade to their own
- * local, non-AI fallback rather than surface a raw error to the user.
+ * Configure one or more keys via XAI_API_KEY / XAI_API_KEYS / XAI_API_KEY_1..N
+ * (see xaiKeyPool.js). If no key is configured, or every configured key's
+ * call fails, this throws — callers are expected to catch that and degrade
+ * to their own local, non-AI fallback rather than surface a raw error to
+ * the user.
  */
+
+const { getKeyPool } = require('./xaiKeyPool');
+
+const XAI_MODEL = process.env.XAI_MODEL || 'grok-3';
+const XAI_FALLBACK_MODEL = process.env.XAI_FALLBACK_MODEL || 'grok-3-mini';
 
 const JSON_FENCE_RE = /^```(?:json)?\s*/i;
 const JSON_FENCE_END_RE = /\s*```\s*$/i;
@@ -22,118 +23,96 @@ function stripFences(text) {
   return text.replace(JSON_FENCE_RE, '').replace(JSON_FENCE_END_RE, '').trim();
 }
 
+function parseRetryAfterSeconds(response, bodyText) {
+  const header = response.headers.get?.('retry-after');
+  if (header && !Number.isNaN(Number(header))) return Number(header);
+  const match = bodyText && bodyText.match(/"retry(?:_|-)?after"\s*:\s*"?(\d+)/i);
+  return match ? Number(match[1]) : null;
+}
+
 // ─── xAI (Grok) ──────────────────────────────────────────────────────────
 
-async function callGrok(messages, maxTokens) {
-  const apiKey = process.env.XAI_API_KEY;
+/**
+ * Tries every configured xAI key (round-robin, skipping ones on cooldown)
+ * until one succeeds. A 429 (rate limited) or 403 (key disabled/blocked)
+ * rotates immediately to the next key with no delay to the user. A
+ * transient 5xx gets one same-key retry with backoff before moving on.
+ */
+async function callGrok(messages, maxTokens, { jsonMode = false } = {}) {
+  const pool = getKeyPool();
+  if (!pool.hasKeys()) throw new Error('XAI_API_KEY not configured');
 
-  const request = (model) =>
+  const buildBody = (model) => ({
+    model,
+    max_tokens: maxTokens,
+    temperature: 0,
+    messages,
+    ...(jsonMode ? { response_format: { type: 'json_object' } } : {})
+  });
+
+  const doRequest = (apiKey, model) =>
     fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, max_tokens: maxTokens, temperature: 0, messages })
+      body: JSON.stringify(buildBody(model))
     });
 
-  let response = await request('grok-3');
+  const order = pool.availableOrder().length ? pool.availableOrder() : pool.allBySoonestAvailable();
+  let lastError = null;
 
-  if (!response.ok && (response.status === 400 || response.status === 404)) {
-    // grok-3 unavailable on this account/region — retry on the cheaper mini model.
-    response = await request('grok-3-mini');
+  for (const apiKey of order) {
+    let response;
+    try {
+      response = await doRequest(apiKey, XAI_MODEL);
+    } catch (networkErr) {
+      lastError = networkErr;
+      continue; // network hiccup on this key — try the next one
+    }
+
+    // grok-3 unavailable on this account/region — retry once on the cheaper mini model.
+    if (!response.ok && (response.status === 400 || response.status === 404)) {
+      response = await doRequest(apiKey, XAI_FALLBACK_MODEL);
+    }
+
+    if (!response.ok && response.status >= 500) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      response = await doRequest(apiKey, XAI_MODEL);
+    }
+
+    if (response.status === 429 || response.status === 403) {
+      const bodyText = await response.text().catch(() => '');
+      const retryAfter = parseRetryAfterSeconds(response, bodyText);
+      pool.markExhausted(apiKey, retryAfter);
+      lastError = new Error(`xAI API ${response.status} on key ${pool.label(apiKey)}: ${bodyText.slice(0, 200)}`);
+      continue; // rotate to the next key in the pool
+    }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      // Not a rate-limit issue (bad request, bad model, etc.) — retrying
+      // with a different key won't help, so fail fast with the real reason.
+      throw new Error(`xAI API ${response.status}: ${body.slice(0, 300)}`);
+    }
+
+    pool.markWorking(apiKey);
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content || '';
+
+    if (!text) {
+      throw new Error('Grok returned an empty response');
+    }
+
+    return stripFences(text);
   }
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`xAI API ${response.status}: ${body.slice(0, 200)}`);
-  }
-
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content || '';
-  return stripFences(text);
-}
-
-// ─── Google Gemini (free tier) ───────────────────────────────────────────
-
-function toGeminiPayload(messages, maxTokens) {
-  const systemText = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
-  const contents = messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
-
-  return {
-    ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
-    contents,
-    generationConfig: { temperature: 0, maxOutputTokens: maxTokens }
-  };
-}
-
-async function callGemini(messages, maxTokens) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  const payload = toGeminiPayload(messages, maxTokens);
-
-  const request = (model) =>
-    fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-  // gemini-2.0-flash has the most generous free-tier quota; fall back to
-  // gemini-1.5-flash for accounts where 2.0 isn't yet enabled.
-  let response = await request('gemini-2.0-flash');
-
-  if (!response.ok && (response.status === 400 || response.status === 404)) {
-    response = await request('gemini-1.5-flash');
-  }
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Gemini API ${response.status}: ${body.slice(0, 200)}`);
-  }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
-  if (!text) {
-    const blockReason = data.promptFeedback?.blockReason;
-    throw new Error(blockReason ? `Gemini blocked the request: ${blockReason}` : 'Empty response from Gemini');
-  }
-  return stripFences(text);
+  throw lastError || new Error('All configured xAI API keys are currently unavailable');
 }
 
 // ─── Provider-agnostic entry point ───────────────────────────────────────
-
-/**
- * Tries every configured provider in priority order (xAI, then Gemini) and
- * returns the first successful response. Throws only if no provider is
- * configured, or every configured provider's call failed.
- */
-async function callAI(messages, maxTokens = 8000) {
-  const attempts = [];
-
-  if (process.env.XAI_API_KEY) {
-    try {
-      return await callGrok(messages, maxTokens);
-    } catch (err) {
-      console.error('[aiClient] xAI call failed, trying next provider:', err.message);
-      attempts.push(`xAI: ${err.message}`);
-    }
-  }
-
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      return await callGemini(messages, maxTokens);
-    } catch (err) {
-      console.error('[aiClient] Gemini call failed:', err.message);
-      attempts.push(`Gemini: ${err.message}`);
-    }
-  }
-
-  if (!attempts.length) {
-    throw new Error('No AI provider configured (set XAI_API_KEY or GEMINI_API_KEY)');
-  }
-  throw new Error(`All configured AI providers failed — ${attempts.join(' | ')}`);
+// Kept as callAI (rather than renaming every call site) so aiJobExtractor.js
+// and other callers don't need to change — Grok is now the only provider.
+async function callAI(messages, maxTokens = 8000, opts = {}) {
+  return callGrok(messages, maxTokens, opts);
 }
 
 function extractJSON(text) {
@@ -145,4 +124,4 @@ function extractJSON(text) {
   return JSON.parse(text.slice(start, end + 1));
 }
 
-module.exports = { callAI, callXAI: callAI, extractJSON };
+module.exports = { callAI, callGrok, extractJSON };

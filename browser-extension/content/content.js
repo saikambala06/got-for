@@ -137,26 +137,13 @@
       const analysis = await send('job:analyze', {
         jobTitle: jobForAnalysis.title,
         company: jobForAnalysis.company,
-        jobDescription: jobForAnalysis.description,
-        rawText: jobForAnalysis.rawPageText
+        jobDescription: jobForAnalysis.description
       });
       // A newer load may have replaced state.job while this request was in
       // flight. Only apply the result if it still belongs to the job that's
       // actually on screen right now.
       if (myToken !== loadToken || state.job !== jobForAnalysis) return;
       if (analysis) {
-        // The DOM "largest text block" heuristic in job-parser.js sometimes
-        // grabs the wrong element (a related-jobs rail, a cookie banner, an
-        // unrelated article) instead of the actual posting body. When that
-        // happens everything downstream — the tailor studio, cover letter,
-        // and the job description textarea on tailor.html — inherits the
-        // wrong text. The AI analysis pass re-derives the real description
-        // from the full raw page text, so swap it in here whenever the AI
-        // returned something that looks like a real posting (not empty,
-        // not just a sentence fragment).
-        if (analysis.description && analysis.description.trim().length > 200) {
-          state.job.description = analysis.description.trim();
-        }
         if (analysis.skills?.length) state.job.skillsFound = analysis.skills;
         if (analysis.qualifications?.length) state.job.qualificationPhrases = analysis.qualifications;
         if (analysis.highlights?.length) state.job.highlights = analysis.highlights;

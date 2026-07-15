@@ -102,14 +102,7 @@
     if (atMatch) company = atMatch[1].trim();
 
     // Description: the largest text block on the page (article/main/section),
-    // excluding nav/header/footer/aside. This heuristic is fast and works
-    // with no network call, but it's brittle — on pages with a wide related
-    // jobs rail, a long cookie/privacy panel, or an unusual layout, "largest
-    // block" can pick the wrong element entirely (e.g. a sidebar of related
-    // postings instead of the actual description). We keep this as the
-    // immediate best-guess shown while the panel loads, but also capture the
-    // full page text below so the server can use AI to recover the correct
-    // description text if this guess turns out to be wrong.
+    // excluding nav/header/footer/aside.
     const blocks = Array.from(document.querySelectorAll('article, main, section, div'))
       .filter((el) => !el.closest('nav, header, footer, aside'))
       .map((el) => ({ el, len: (el.innerText || '').length }))
@@ -117,13 +110,6 @@
     const description = blocks.length ? blocks[0].el.innerText.trim() : bodyText.trim();
 
     return { title, company, location, employmentType, salary, description, source: 'dom' };
-  }
-
-  // Full page text, capped, kept as fallback context for server-side AI
-  // description recovery — sent alongside (never instead of) the heuristic
-  // guess above, so a bad DOM guess can still be corrected downstream.
-  function capturePageText() {
-    return (document.body.innerText || '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, 20000);
   }
 
   // ── 3. Skill + qualification mining from the description text ──
@@ -182,11 +168,7 @@
       skillsFound,
       qualificationPhrases,
       highlights,
-      experience,
-      // Kept separately from `description` — this is the raw page text used
-      // only as extraction context if the AI needs to recover the correct
-      // description (e.g. the DOM heuristic above picked the wrong block).
-      rawPageText: capturePageText()
+      experience
     };
   }
 

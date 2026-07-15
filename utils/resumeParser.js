@@ -1,6 +1,6 @@
 /**
  * Rule-based resume parser.
- * Used when GEMINI_API_KEY is absent or the AI call fails.
+ * Used when XAI_API_KEY is absent or the AI call fails.
  * Handles most common resume layouts including ATS-formatted, modern, and dense formats.
  */
 const { cleanSkill } = require('./skillUtils');
