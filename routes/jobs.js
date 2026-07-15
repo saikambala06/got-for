@@ -191,7 +191,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // AI-powered analysis of a job posting's skills / qualifications / highlights.
-// Falls back to a 503 (not an error the client should retry) if no xAI
+// Falls back to a 503 (not an error the client should retry) if no Gemini
 // key is configured — the extension keeps its regex-based extraction as
 // its baseline and just skips the AI enhancement in that case.
 router.post('/analyze', async (req, res) => {
@@ -203,8 +203,8 @@ router.post('/analyze', async (req, res) => {
     res.json({ analysis });
   } catch (err) {
     console.error('[/jobs/analyze]', err.message);
-    if (err.message.includes('XAI_API_KEY')) {
-      return res.status(503).json({ error: 'AI features are not enabled on this server (XAI_API_KEY is not configured).' });
+    if (err.message.includes('GEMINI_API_KEY')) {
+      return res.status(503).json({ error: 'AI features are not enabled on this server (GEMINI_API_KEY is not configured).' });
     }
     res.status(502).json({ error: `AI job analysis failed: ${err.message}` });
   }

@@ -1,103 +1,127 @@
 /**
- * AI-powered resume parser using xAI (Grok).
- * Falls back to the rule-based regex parser if XAI_API_KEY is missing or the call fails.
+ * AI-powered resume parser using Google Gemini.
+ * Falls back to the rule-based regex parser if GEMINI_API_KEY is missing or the call fails.
  */
 const { parseResumeText } = require('./resumeParser');
 const { cleanSkill } = require('./skillUtils');
 const { jsonrepair } = require('jsonrepair');
 
-// ─── Shared Grok caller ───────────────────────────────────────────────────
+// ─── Shared Gemini caller ────────────────────────────────────────────────────
 //
-// Default model is xAI's 'grok-3'. Can be overridden via XAI_MODEL without a
-// code change; if the primary model 400s/404s (unavailable on this
-// account/region), we retry once on XAI_FALLBACK_MODEL ('grok-3-mini').
-const XAI_MODEL = process.env.XAI_MODEL || 'grok-3';
-const XAI_FALLBACK_MODEL = process.env.XAI_FALLBACK_MODEL || 'grok-3-mini';
+// NOTE ON MODEL NAME: 'gemini-2.5-flash' is no longer available to new API
+// keys/projects (Google returns a 404 "no longer available to new users").
+// We now default to 'gemini-flash-latest', Google's auto-updated alias that
+// always points at their current-generation Flash model (as of this change,
+// Gemini 3.5 Flash), so we don't have to keep chasing renames/retirements.
+// The model can still be overridden via GEMINI_MODEL without a code change.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
-const { getKeyPool } = require('./xaiKeyPool');
+const { getKeyPool } = require('./geminiKeyPool');
 
 function parseRetryAfterSeconds(response, bodyText) {
   const header = response.headers.get?.('retry-after');
   if (header && !Number.isNaN(Number(header))) return Number(header);
-  const match = bodyText && bodyText.match(/"retry(?:_|-)?after"\s*:\s*"?(\d+)/i);
+  // Gemini also sometimes embeds a RetryInfo with a "retryDelay": "37s" in the JSON error body.
+  const match = bodyText && bodyText.match(/"retryDelay"\s*:\s*"(\d+)s"/);
   return match ? Number(match[1]) : null;
 }
 
-async function callGrok(messages, maxTokens = 8000, { jsonMode = false } = {}) {
+async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {}) {
   const pool = getKeyPool();
-  if (!pool.hasKeys()) throw new Error('XAI_API_KEY not configured');
+  if (!pool.hasKeys()) throw new Error('GEMINI_API_KEY not configured');
 
-  const buildBody = (model) => ({
-    model,
-    max_tokens: maxTokens,
-    temperature: 0,         // deterministic extraction
-    messages,
-    ...(jsonMode ? { response_format: { type: 'json_object' } } : {})
-  });
+  const systemText = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
+  const contents = messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
 
-  const url = 'https://api.x.ai/v1/chat/completions';
-  const doRequest = (apiKey, model) => fetch(url, {
+  const requestBody = {
+    contents,
+    generationConfig: {
+      temperature: 0,        // deterministic extraction
+      maxOutputTokens: maxTokens,
+      // Flash models reason ("think") by default. A budget of 0 turns that
+      // off entirely — this is extraction/rewriting, not reasoning — so the
+      // whole token budget goes to visible output instead of being silently
+      // spent on hidden "thinking" tokens.
+      thinkingConfig: { thinkingBudget: 0 },
+      ...(jsonMode ? { responseMimeType: 'application/json' } : {})
+    }
+  };
+  if (systemText) {
+    requestBody.systemInstruction = { parts: [{ text: systemText }] };
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+  const doRequest = (apiKey) => fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
+      'x-goog-api-key': apiKey
     },
-    body: JSON.stringify(buildBody(model))
+    body: JSON.stringify(requestBody)
   });
 
   // Try every key in the pool (round-robin, skipping ones on cooldown) until
-  // one succeeds. A 429 (rate limited) or 403 (key disabled/blocked) rotates
-  // immediately to the next key with no delay to the user — that's the
-  // whole point of having a pool. A transient 5xx gets one same-key retry
-  // with backoff before moving on.
+  // one succeeds. A 429 (quota exhausted) or 403 (key disabled/blocked)
+  // rotates immediately to the next key with no delay to the user — that's
+  // the whole point of having a pool. A transient 5xx gets one same-key
+  // retry with backoff (Google's own recommendation) before moving on.
   const order = pool.availableOrder().length ? pool.availableOrder() : pool.allBySoonestAvailable();
   let lastError = null;
 
   for (const apiKey of order) {
     let response;
     try {
-      response = await doRequest(apiKey, XAI_MODEL);
+      response = await doRequest(apiKey);
     } catch (networkErr) {
       lastError = networkErr;
       continue; // network hiccup on this key — try the next one
     }
 
-    if (!response.ok && (response.status === 400 || response.status === 404)) {
-      // Primary model unavailable on this account/region — retry on the cheaper mini model.
-      response = await doRequest(apiKey, XAI_FALLBACK_MODEL);
-    }
-
     if (!response.ok && response.status >= 500) {
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      response = await doRequest(apiKey, XAI_MODEL);
+      response = await doRequest(apiKey);
     }
 
     if (response.status === 429 || response.status === 403) {
       const bodyText = await response.text().catch(() => '');
       const retryAfter = parseRetryAfterSeconds(response, bodyText);
       pool.markExhausted(apiKey, retryAfter);
-      lastError = new Error(`xAI API ${response.status} on key ${pool.label(apiKey)}: ${bodyText.slice(0, 200)}`);
+      lastError = new Error(`Gemini API ${response.status} on key ${pool.label(apiKey)}: ${bodyText.slice(0, 200)}`);
       continue; // rotate to the next key in the pool
     }
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
-      // Not a rate-limit issue (bad request, bad model, etc.) — retrying with
-      // a different key won't help, so fail fast with the real reason.
-      throw new Error(`xAI API ${response.status}: ${body.slice(0, 300)}`);
+      // Not a quota issue (bad request, bad model, etc.) — retrying with a
+      // different key won't help, so fail fast with the real reason.
+      throw new Error(`Gemini API ${response.status}: ${body.slice(0, 300)}`);
     }
 
     pool.markWorking(apiKey);
     const data = await response.json();
 
-    const choice = data.choices?.[0];
-    const text = (choice?.message?.content || '').trim();
+    if (!data.candidates?.length) {
+      const blockReason = data.promptFeedback?.blockReason;
+      throw new Error(
+        blockReason
+          ? `Gemini blocked the request (${blockReason}) — try rephrasing the job description or resume.`
+          : 'Gemini returned no candidates'
+      );
+    }
+
+    const candidate = data.candidates[0];
+    const text = (candidate.content?.parts || []).map(p => p.text || '').join('').trim();
 
     if (!text) {
       throw new Error(
-        choice?.finish_reason === 'length'
-          ? 'Grok response was cut off before it produced any output — try a shorter job description or resume.'
-          : `Grok returned an empty response${choice?.finish_reason ? ` (${choice.finish_reason})` : ''}`
+        candidate.finishReason === 'MAX_TOKENS'
+          ? 'Gemini response was cut off before it produced any output — try a shorter job description or resume.'
+          : `Gemini returned an empty response${candidate.finishReason ? ` (${candidate.finishReason})` : ''}`
       );
     }
 
@@ -105,7 +129,7 @@ async function callGrok(messages, maxTokens = 8000, { jsonMode = false } = {}) {
   }
 
   // Every key in the pool is either exhausted or errored.
-  throw lastError || new Error('All configured xAI API keys are currently unavailable');
+  throw lastError || new Error('All configured Gemini API keys are currently unavailable');
 }
 
 // ─── Resume text pre-processing ───────────────────────────────────────────────
@@ -527,12 +551,12 @@ function repairTruncatedJSON(s, errorPosition) {
 // ─── Main parse function ──────────────────────────────────────────────────────
 
 /**
- * Parse a raw resume text into structured fields using xAI (Grok).
+ * Parse a raw resume text into structured fields using Google Gemini.
  * Falls back to the regex parser if the API key is absent or the call fails.
  */
 async function parseResumeWithAI(rawText) {
   if (!getKeyPool().hasKeys()) {
-    console.warn('[aiResumeParser] No xAI API key configured — using regex fallback');
+    console.warn('[aiResumeParser] No Gemini API key configured — using regex fallback');
     return parseResumeText(rawText);
   }
 
@@ -541,7 +565,7 @@ async function parseResumeWithAI(rawText) {
     // Use up to 24000 chars — enough for a 3-page resume with all bullets
     const trimmed = cleaned.slice(0, 24000);
 
-    const rawJson = await callGrok(
+    const rawJson = await callGemini(
       [
         { role: 'system', content: PARSE_SYSTEM_PROMPT },
         {
@@ -623,13 +647,13 @@ function sanitizeTailorTextResult(r) {
 
 async function tailorRawTextWithAI(resumeText, jobDescription) {
   if (!getKeyPool().hasKeys()) {
-    throw new Error('XAI_API_KEY not configured');
+    throw new Error('GEMINI_API_KEY not configured');
   }
   if (!resumeText?.trim() || !jobDescription?.trim()) {
     throw new Error('Both resume text and job description are required');
   }
 
-  const json = await callGrok(
+  const json = await callGemini(
     [
       { role: 'system', content: TAILOR_TEXT_SYSTEM_PROMPT },
       {
@@ -686,14 +710,14 @@ function sanitizeJobAnalysis(a) {
 }
 
 /**
- * Analyze a job posting with Grok to extract skills, qualifications,
- * highlights, and experience level. Throws if XAI_API_KEY isn't
+ * Analyze a job posting with Gemini to extract skills, qualifications,
+ * highlights, and experience level. Throws if GEMINI_API_KEY isn't
  * configured or the call fails — callers should fall back to the
  * regex-based extraction already computed client-side.
  */
 async function analyzeJobWithAI(jobTitle, company, description) {
   if (!getKeyPool().hasKeys()) {
-    throw new Error('XAI_API_KEY not configured');
+    throw new Error('GEMINI_API_KEY not configured');
   }
 
   const trimmed = (description || '').slice(0, 12000);
@@ -701,7 +725,7 @@ async function analyzeJobWithAI(jobTitle, company, description) {
     throw new Error('No job description text to analyze');
   }
 
-  const json = await callGrok(
+  const json = await callGemini(
     [
       { role: 'system', content: JOB_ANALYSIS_SYSTEM_PROMPT },
       {
@@ -858,7 +882,7 @@ function sanitizeTailorResult(result, resume) {
 
 async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSkills = [], tailoringLevel = 'high') {
   if (!getKeyPool().hasKeys()) {
-    throw new Error('AI tailoring requires XAI_API_KEY to be configured');
+    throw new Error('AI tailoring requires GEMINI_API_KEY to be configured');
   }
 
   const level = TAILOR_LEVEL_INSTRUCTIONS[tailoringLevel] ? tailoringLevel : 'high';
@@ -885,7 +909,7 @@ async function tailorResumeWithAI(resume, jobTitle, jobDescription, emphasizeSki
     ? `\n\nCandidate-confirmed additional skills (from the job posting's requirements, which the candidate has checked off as skills they genuinely have):\n${confirmedExtras.join(', ')}`
     : '';
 
-  const json = await callGrok(
+  const json = await callGemini(
     [
       { role: 'system', content: TAILOR_SYSTEM_PROMPT },
       {
@@ -920,7 +944,7 @@ Rules:
 
 async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescription) {
   if (!getKeyPool().hasKeys()) {
-    throw new Error('AI cover letter generation requires XAI_API_KEY to be configured');
+    throw new Error('AI cover letter generation requires GEMINI_API_KEY to be configured');
   }
 
   const snapshot = JSON.stringify(
@@ -941,7 +965,7 @@ async function generateCoverLetterWithAI(resume, jobTitle, company, jobDescripti
     2
   );
 
-  const text = await callGrok(
+  const text = await callGemini(
     [
       { role: 'system', content: COVER_LETTER_SYSTEM_PROMPT },
       {
