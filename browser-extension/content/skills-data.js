@@ -37,11 +37,70 @@
 
     // Business / soft
     'Project management', 'Product management', 'Stakeholder management', 'Agile', 'Scrum',
-    'Cross-functional collaboration', 'Communication skills', 'Leadership', 'Consulting',
+    'Kanban', 'Cross-functional collaboration', 'Communication skills', 'Leadership', 'Consulting',
     'Enterprise software', 'Business intelligence', 'Risk management', 'Financial modeling',
+    'Vendor management', 'Change management', 'Strategic planning', 'Operations management',
+    'Supply chain management', 'Process improvement', 'Budgeting',
+
+    // Office / productivity / collaboration tools
+    'Microsoft Office', 'Microsoft Word', 'PowerPoint', 'Google Workspace', 'Google Sheets',
+    'Slack', 'Asana', 'Trello', 'Notion', 'Confluence', 'Monday.com', 'Airtable', 'Zoom',
+    'SharePoint', 'Outlook',
+
+    // Sales / CRM / marketing
+    'Salesforce', 'HubSpot', 'CRM', 'Lead generation', 'Cold calling', 'Account management',
+    'Business development', 'Negotiation', 'Sales forecasting', 'Pipeline management',
+    'Customer relationship management', 'SEO', 'SEM', 'Google Analytics', 'Google Ads',
+    'Facebook Ads', 'Content marketing', 'Email marketing', 'Social media marketing',
+    'Copywriting', 'Marketing automation', 'Marketo', 'Mailchimp', 'Brand management',
+    'Market research', 'Growth marketing', 'Public relations',
+
+    // Design / creative
+    'UX design', 'UI design', 'UX/UI design', 'Figma', 'Sketch', 'Adobe XD', 'InVision',
+    'Wireframing', 'Prototyping', 'User research', 'Usability testing', 'Adobe Creative Suite',
+    'Photoshop', 'Illustrator', 'InDesign', 'After Effects', 'Premiere Pro', 'Canva',
+    'Graphic design', 'Video editing', 'Typography',
+
+    // Customer support / service
+    'Customer service', 'Customer support', 'Technical support', 'Zendesk', 'Intercom',
+    'Help desk', 'Ticketing systems', 'Live chat support',
+
+    // HR / recruiting
+    'Recruiting', 'Talent acquisition', 'Onboarding', 'HRIS', 'Workday', 'Payroll',
+    'Employee relations', 'Performance management', 'Compensation and benefits',
+    'Applicant tracking systems', 'DEI',
+
+    // Finance / accounting
+    'QuickBooks', 'SAP', 'GAAP', 'Bookkeeping', 'Accounts payable', 'Accounts receivable',
+    'Financial analysis', 'Financial reporting', 'Forecasting', 'Auditing', 'Tax preparation',
+    'Bloomberg Terminal', 'Underwriting',
+
+    // Healthcare
+    'EHR', 'EMR', 'HIPAA', 'Patient care', 'Clinical research', 'ICD-10', 'CPT coding',
+    'Medical terminology', 'Nursing', 'Phlebotomy', 'BLS', 'CPR certification',
+
+    // Legal
+    'Contract review', 'Legal research', 'Litigation', 'Compliance', 'Regulatory compliance',
+    'Paralegal',
+
+    // Manufacturing / operations / logistics
+    'Lean manufacturing', 'Quality assurance', 'Quality control', 'Inventory management',
+    'Warehouse management', 'Forklift operation', 'OSHA', 'Logistics',
+
+    // Engineering (non-software)
+    'AutoCAD', 'SolidWorks', 'Mechanical engineering', 'Electrical engineering',
+    'Civil engineering',
+
+    // Education
+    'Curriculum development', 'Classroom management', 'Lesson planning', 'Tutoring',
+
+    // Additional common tech tools not already covered above
+    'HTML', 'CSS', 'REST API', 'GraphQL', 'Microservices', 'Linux', 'Selenium', 'Jenkins',
+    'Ansible', 'Elasticsearch', 'Firebase', 'Webpack', 'Unit testing',
 
     // Certifications / degrees (used for highlight detection too)
-    'PMP', 'CFA', 'Six Sigma', "Master's degree", 'PhD', 'CPA'
+    'PMP', 'CFA', 'Six Sigma', "Bachelor's degree", "Master's degree", 'MBA', 'PhD', 'CPA',
+    'SHRM'
   ];
 
   function toPattern(term) {
@@ -119,7 +178,13 @@
     'node': 'node.js', 'nodejs': 'node.js', 'node.js': 'node.js',
     'golang': 'go', 'go': 'go',
     'dotnet': '.net', '.net': '.net',
-    'ci/cd': 'ci/cd', 'cicd': 'ci/cd', 'ci cd': 'ci/cd'
+    'ci/cd': 'ci/cd', 'cicd': 'ci/cd', 'ci cd': 'ci/cd',
+    'ms office': 'microsoft office', 'microsoft office': 'microsoft office',
+    'gsuite': 'google workspace', 'google suite': 'google workspace', 'google workspace': 'google workspace',
+    'crm software': 'crm', 'crm': 'crm',
+    'ppt': 'powerpoint', 'powerpoint': 'powerpoint', 'microsoft powerpoint': 'powerpoint',
+    'ux': 'ux design', 'ux design': 'ux design', 'user experience design': 'ux design',
+    'ui': 'ui design', 'ui design': 'ui design', 'user interface design': 'ui design'
   };
 
   function canonicalSkill(raw) {
