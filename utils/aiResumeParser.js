@@ -26,6 +26,28 @@ function parseRetryAfterSeconds(response, bodyText) {
   return match ? Number(match[1]) : null;
 }
 
+// ─── Thinking-config compatibility shim ──────────────────────────────────────
+//
+// Gemini 2.5-and-earlier models take a numeric `thinkingBudget` (tokens),
+// and 0 fully disables thinking. Gemini 3.x models replaced that with a
+// semantic `thinkingLevel` enum ("minimal"/"low"/"medium"/"high") — Flash
+// and Flash-Lite in that generation *cannot* fully disable thinking, so
+// sending them `thinkingBudget: 0` is rejected outright with a bare
+// `400 INVALID_ARGUMENT` (no further detail in the body, which is why it
+// showed up as an opaque "Request contains an invalid argument" error).
+// 'gemini-flash-latest' (our default) and 'gemini-pro-latest' are Google's
+// auto-updated aliases and currently resolve to a Gemini 3.x model, so they
+// need the same treatment.
+function isGemini3Family(model) {
+  return /gemini-3|-latest$/i.test(model);
+}
+
+function buildThinkingConfig(model) {
+  return isGemini3Family(model)
+    ? { thinkingLevel: 'LOW' } // lowest level that's supported on every Gemini 3 Flash variant
+    : { thinkingBudget: 0 };
+}
+
 async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {}) {
   const pool = getKeyPool();
   if (!pool.hasKeys()) throw new Error('GEMINI_API_KEY not configured');
@@ -38,31 +60,36 @@ async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {})
       parts: [{ text: m.content }]
     }));
 
-  const requestBody = {
-    contents,
-    generationConfig: {
-      temperature: 0,        // deterministic extraction
-      maxOutputTokens: maxTokens,
-      // Flash models reason ("think") by default. A budget of 0 turns that
-      // off entirely — this is extraction/rewriting, not reasoning — so the
-      // whole token budget goes to visible output instead of being silently
-      // spent on hidden "thinking" tokens.
-      thinkingConfig: { thinkingBudget: 0 },
-      ...(jsonMode ? { responseMimeType: 'application/json' } : {})
+  function buildRequestBody(thinkingConfig) {
+    const body = {
+      contents,
+      generationConfig: {
+        temperature: 0,        // deterministic extraction
+        maxOutputTokens: maxTokens,
+        // Flash models reason ("think") by default. Disabling/minimising
+        // that is desirable here — this is extraction/rewriting, not
+        // reasoning — so the token budget goes to visible output instead
+        // of being silently spent on hidden "thinking" tokens.
+        ...(thinkingConfig ? { thinkingConfig } : {}),
+        ...(jsonMode ? { responseMimeType: 'application/json' } : {})
+      }
+    };
+    if (systemText) {
+      body.systemInstruction = { parts: [{ text: systemText }] };
     }
-  };
-  if (systemText) {
-    requestBody.systemInstruction = { parts: [{ text: systemText }] };
+    return body;
   }
 
+  const requestBody = buildRequestBody(buildThinkingConfig(GEMINI_MODEL));
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-  const doRequest = (apiKey) => fetch(url, {
+  const doRequest = (apiKey, body = requestBody) => fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-goog-api-key': apiKey
     },
-    body: JSON.stringify(requestBody)
+    body: JSON.stringify(body)
   });
 
   // Try every key in the pool (round-robin, skipping ones on cooldown) until
@@ -72,6 +99,7 @@ async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {})
   // retry with backoff (Google's own recommendation) before moving on.
   const order = pool.availableOrder().length ? pool.availableOrder() : pool.allBySoonestAvailable();
   let lastError = null;
+  let droppedThinkingConfig = false; // only strip+retry the thinkingConfig once, total, across the whole call
 
   for (const apiKey of order) {
     let response;
@@ -85,6 +113,20 @@ async function callGemini(messages, maxTokens = 8000, { jsonMode = false } = {})
     if (!response.ok && response.status >= 500) {
       await new Promise((resolve) => setTimeout(resolve, 1200));
       response = await doRequest(apiKey);
+    }
+
+    // A 400 here is most often our own generationConfig.thinkingConfig
+    // being rejected outright (e.g. Google renames/retires an accepted
+    // thinkingLevel value, or an alias like 'gemini-flash-latest' rolls
+    // onto a model generation with different rules). Since Gemini's 400
+    // body for this case is just a bare "Request contains an invalid
+    // argument" with no field-level detail, we can't know for certain —
+    // but stripping thinkingConfig entirely and retrying once, on the
+    // same key, self-heals that whole class of error instead of hard
+    // failing every request until the code is redeployed.
+    if (response.status === 400 && !droppedThinkingConfig && requestBody.generationConfig.thinkingConfig) {
+      droppedThinkingConfig = true;
+      response = await doRequest(apiKey, buildRequestBody(null));
     }
 
     if (response.status === 429 || response.status === 403) {
