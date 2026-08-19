@@ -1,0 +1,115 @@
+Ravi Teja Kondapalli
+Sr. DevOps / Cloud Engineer
+Email: ravi.kondapalli9@gmail.com | Phone: (972) 431-8807
+linkedin.com/in/ravitejakondapalli
+Plano, TX 75024 | Open to Relocation
+
+PROFESSIONAL SUMMARY
+• Around 11+ years of IT experience in Build & Release Management, Configuration Management, CI/CD Automation, Cloud Infrastructure and DevOps methodologies on Linux and Windows environments.
+• Extensive experience in AWS (EC2, S3, VPC, IAM, Route53, CloudFormation, EKS, Lambda) and Microsoft Azure (VMs, AKS, Blob Storage, Azure DevOps, ARM Templates).
+• Hands on experience writing Infrastructure as Code using Terraform modules, Ansible playbooks and Chef cookbooks.
+• Experienced in containerization using Docker and orchestration using Kubernetes, Helm charts and OpenShift.
+• Good working knowledge on scripting languages such as Python, Shell, Bash, Groovy and PowerShell.
+• Involved in 24/7 production support, root cause analysis and worked closely with onsite/offshore model.
+• Excellent communication skills, self-motivated and a good team player with ability to work independently.
+
+TECHNICAL SKILLS
+Cloud Platforms: AWS, Microsoft Azure, GCP (basic), OpenStack
+AWS Services: EC2, S3, ELB, ALB, VPC, IAM, Route53, RDS, CloudWatch, CloudTrail, CloudFormation, Lambda, EKS, ECS, SNS, SQS, Auto Scaling
+Configuration Management: Ansible, Chef, Puppet, SaltStack
+Infrastructure as Code: Terraform, CloudFormation, ARM Templates
+CI/CD Tools: Jenkins, Bamboo, TeamCity, Azure DevOps, GitLab CI, ArgoCD, Spinnaker
+Containers: Docker, Kubernetes, Helm, OpenShift, Docker Swarm
+Version Control: Git, GitHub, Bitbucket, SVN, GitLab
+Build Tools: Maven, Ant, Gradle, MSBuild, NPM
+Monitoring Tools: Nagios, Splunk, ELK Stack, Prometheus, Grafana, Datadog, AppDynamics, New Relic
+Scripting Languages: Python, Shell Scripting, Bash, Groovy, PowerShell, Ruby, YAML, JSON
+Databases: MySQL, Oracle 11g/12c, MongoDB, PostgreSQL, DynamoDB, Cassandra
+Web/App Servers: Apache Tomcat, JBoss, WebLogic, WebSphere, Nginx, IIS
+Operating Systems: RHEL 6/7/8, CentOS, Ubuntu, SUSE, Solaris, Windows Server 2008/2012/2016
+Ticketing/Other: JIRA, ServiceNow, Confluence, Remedy, Rally, Agile/Scrum, SAFe
+
+PROFESSIONAL EXPERIENCE
+
+Infosys Limited
+Sr. DevOps Engineer
+Charlotte, NC	Mar 2022 – Present
+Client: Bank of America
+• Designed and implemented multi-account AWS landing zone using Terraform modules and AWS Control Tower for approximately 40 application teams.
+• Migrated legacy Jenkins freestyle jobs to declarative Jenkinsfile pipelines stored in Bitbucket, reducing build failures by around 30%.
+• Built and maintained EKS clusters, wrote Helm charts for microservices deployment and integrated ArgoCD for GitOps based delivery.
+• Automated AMI baking process using Packer and Ansible, which brought down server provisioning time from 2 days to under 1 hour.
+• Worked on setting up Prometheus and Grafana dashboards for cluster level monitoring along with alertmanager integration to PagerDuty.
+• Implemented HashiCorp Vault for secrets management and removed hardcoded credentials from more than 200 pipeline configurations.
+• Participated in daily scrum calls, sprint planning and coordinated with offshore team in Bangalore for 24/7 coverage.
+Environment: AWS (EC2, S3, IAM, EKS, Lambda, CloudFormation), Terraform, Jenkins, Docker, Kubernetes, Helm, ArgoCD, Ansible, Packer, Vault, Python, Shell, Bitbucket, Prometheus, Grafana, JIRA, RHEL 8.
+
+Cognizant Technology Solutions
+DevOps Engineer
+Franklin Lakes, NJ	Aug 2019 – Feb 2022
+Client: Cigna Healthcare
+• Administered Azure DevOps organization including build pipelines, release pipelines, artifact feeds and self hosted agent pools.
+• Created ARM templates and later converted them to Terraform for provisioning AKS clusters, storage accounts and virtual networks.
+• Containerized around 25 .NET and Java applications using Docker and deployed onto AKS with Helm.
+• Configured ELK stack for centralized logging and created Kibana dashboards used by application support teams.
+• Wrote PowerShell and Python scripts for automating certificate renewals and patch compliance reporting.
+• Involved in blue/green deployment strategy implementation which reduced production downtime windows significantly.
+Environment: Microsoft Azure, AKS, Azure DevOps, ARM Templates, Terraform, Docker, Kubernetes, Helm, ELK, PowerShell, Python, Git, JIRA, Windows Server 2016, RHEL 7.
+
+Tata Consultancy Services
+Build and Release Engineer
+Dallas, TX	Jan 2018 – Jul 2019
+Client: AT&T Communications
+• Managed end to end build and release process for 12 Java based applications using Maven, Jenkins and Nexus.
+• Maintained Git branching strategy (GitFlow), performed merges, resolved conflicts and created release branches for every sprint.
+• Deployed WAR/EAR artifacts to WebLogic and Tomcat servers across DEV, QA, UAT and PROD environments.
+• Automated repetitive deployment tasks using Shell scripts and Ansible playbooks.
+• Coordinated CAB approvals through ServiceNow and participated in weekend production release calls.
+Environment: Jenkins, Maven, Nexus, Git, Ansible, Shell Scripting, WebLogic, Tomcat, Oracle 12c, ServiceNow, RHEL 6/7.
+
+Wipro Technologies
+DevOps / Build Engineer
+Phoenix, AZ	Apr 2016 – Dec 2017
+Client: American Express
+• Set up Chef server, wrote cookbooks and recipes to configure application servers and standardize OS hardening across 300+ nodes.
+• Built continuous integration pipelines in Jenkins integrated with SonarQube for static code analysis and quality gates.
+• Provisioned EC2 instances, configured ELB, Auto Scaling groups and S3 lifecycle policies in AWS.
+• Wrote Python utilities to parse CloudWatch metrics and generate weekly capacity reports for management.
+Environment: AWS, Chef, Jenkins, SonarQube, Maven, Git, Python, Shell, Nagios, CentOS 6, Apache Tomcat.
+
+HCL Technologies
+Linux Systems Administrator
+Sunnyvale, CA	Jun 2014 – Mar 2016
+Client: Juniper Networks
+• Administered 250+ RHEL and CentOS servers including user administration, LVM, NFS, patching and kernel upgrades.
+• Performed OS installations using Kickstart and automated post build configuration through Bash scripts.
+• Configured Nagios monitoring, set up custom plugins and handled P1/P2 incidents within defined SLA.
+• Supported VMware ESXi virtual infrastructure and performed VM provisioning as per capacity requests.
+Environment: RHEL 5/6, CentOS, VMware ESXi, Nagios, Bash, Kickstart, NFS, LDAP, Apache, Remedy.
+
+Syntel Inc.
+Systems Engineer
+Troy, MI	Sep 2012 – May 2014
+Client: FedEx Services
+• Provided L2 support for Linux and Windows servers in a hybrid data center environment.
+• Wrote shell scripts for log rotation, disk space monitoring and automated backup verification.
+• Assisted senior engineers in the migration of physical servers to VMware virtual machines.
+• Documented standard operating procedures and knowledge base articles in Confluence.
+Environment: RHEL 5, Windows Server 2008, VMware, Shell Scripting, Apache, MySQL, Remedy, Confluence.
+
+Polaris Software Lab
+Associate Software Engineer
+Hyderabad, India	Jul 2011 – Aug 2012
+• Worked as part of the application support team for a core banking product deployed on WebSphere.
+• Executed SQL queries against Oracle 11g for data validation and defect analysis.
+• Assisted in nightly batch job monitoring and escalated failures to the development team.
+Environment: Java, WebSphere, Oracle 11g, UNIX Shell, Autosys.
+
+EDUCATION
+Master of Science in Information Technology from University of Houston – Clear Lake, Houston, TX
+Bachelor of Technology in Computer Science, Jawaharlal Nehru Technological University, Hyderabad, India
+
+CERTIFICATIONS
+• AWS Certified Solutions Architect – Associate
+• Certified Kubernetes Administrator (CKA)
+• Microsoft Certified: Azure Administrator Associate

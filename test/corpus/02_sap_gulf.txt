@@ -1,0 +1,80 @@
+FATHIMA NOORJAHAN ABDUL RAHMAN
+SAP ABAP / HANA Technical Consultant
+_________________________________________________________________________________
+Contact No: +971 55 812 4470 (UAE) / +91 90350 77219 (India)
+E-Mail ID: noorjahan.ar@outlook.com
+Location: Dubai, United Arab Emirates | Visa: Employment Visa (Transferable), NOC available
+Notice Period: 30 Days
+
+CAREER OBJECTIVE
+_________________________________________________________________________________
+Seeking a challenging position as SAP Technical Consultant in a reputed organization where I can utilize my 9 years of SAP ABAP experience across implementation, rollout and support projects and contribute to the growth of the organisation.
+
+KEY SKILLS MATRIX
+_________________________________________________________________________________
+Skill Set	Experience	Proficiency
+SAP ABAP	9 Years	Expert
+SAP HANA / CDS Views	4 Years	Advanced
+OData / SAP Gateway	4 Years	Advanced
+SAP Fiori / UI5	3 Years	Intermediate
+ALV Reports	9 Years	Expert
+SAP Script / Smartforms	7 Years	Advanced
+Adobe Forms	3 Years	Intermediate
+BAPI / BADI / User Exits	8 Years	Expert
+IDoc / ALE / EDI	6 Years	Advanced
+LSMW / BDC	8 Years	Expert
+Workflow	2 Years	Beginner
+S/4HANA Migration	3 Years	Intermediate
+
+EMPLOYMENT CHRONICLE
+_________________________________________________________________________________
+
+Organisation: Al Futtaim Group Technologies LLC, Dubai
+Designation: Senior SAP ABAP Consultant
+Duration: October 2022 to Present
+Project: S/4HANA Brownfield Conversion & Retail Rollout (Client - Al Futtaim Retail / IKEA UAE)
+=> Performed custom code remediation for S/4HANA conversion, analysed 1200+ objects using ATC and SCMON and fixed the errors.
+=> Developed CDS views with associations and annotations for consumption in Fiori Elements applications.
+=> Created OData services using SEGW and RAP model, implemented CRUD operations and deep entity handling.
+=> Enhanced standard MM and SD transactions using BADI and implicit enhancement spots as per business requirement.
+=> Handled offshore-onsite coordination, prepared TS documents based on FS given by functional consultants.
+Tools Used: SAP S/4HANA 2021, ABAP on HANA, CDS, AMDP, OData, SEGW, Fiori Elements, Eclipse ADT, Solution Manager, ChaRM, Jira.
+
+Organisation: Larsen & Toubro Infotech (LTIMindtree), Mumbai
+Designation: SAP ABAP Consultant
+Duration: July 2019 to September 2022
+Project: Global Template Support (Client - Unilever, and later Saudi Aramco from Jan 2021)
+=> Worked in a 24x7 AMS support environment handling P1/P2 incidents within defined SLA in Remedy tool.
+=> Developed interfaces using IDocs, created custom IDoc types, segments and process codes for vendor master data.
+=> Written BDC programs and LSMW for mass upload of material master and pricing conditions.
+=> Modified Smartforms and SAP Scripts for invoice, delivery note and purchase order layouts as per country specific legal requirements.
+=> Involved in unit testing, preparing UTP documents and moving transports across the landscape.
+Tools Used: SAP ECC 6.0 EHP7, ABAP Workbench, IDoc, ALE, BDC, LSMW, Smartforms, SAP Script, ALV, Remedy, HP ALM.
+
+Organisation: Wipro Technologies, Bangalore
+Designation: Software Engineer - SAP ABAP
+Duration: August 2016 to June 2019
+Project: SAP Implementation and Post Go-Live Support (Client - Tata Steel Limited)
+=> Developed classical and interactive ALV reports for FICO and PP modules using ALV Grid and OOPS ALV.
+=> Created module pool programs with screen validations, table controls and tab strips.
+=> Implemented user exits and customer exits for sales order and billing document processing.
+=> Debugging of standard SAP programs to identify root cause of production issues.
+Tools Used: SAP ECC 6.0, ABAP/4, ALV, Module Pool, SAP Script, User Exits, SE80, SE38, SM37, ST05, SAT.
+
+ACADEMIC CREDENTIALS
+_________________________________________________________________________________
+Master of Computer Applications (MCA) from Anna University, Chennai
+Bachelor of Science (B.Sc) in Computer Science from University of Calicut, Kerala
+
+TRAININGS & CERTIFICATIONS
+_________________________________________________________________________________
+=> SAP Certified Development Associate - ABAP with SAP NetWeaver 7.50
+=> SAP Certified Development Specialist - ABAP for SAP HANA 2.0
+
+PERSONAL DOSSIER
+_________________________________________________________________________________
+Date of Birth	:	14th March 1993
+Nationality	:	Indian
+Marital Status	:	Married
+Languages Known	:	English, Malayalam, Hindi, Tamil, Arabic (Basic)
+Passport No	:	P4821936 (Valid till 2031)

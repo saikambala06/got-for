@@ -1,0 +1,78 @@
+Mathilde GRANGIER
+14, rue des Capucins - 69001 Lyon (France)
+06 74 21 08 55 - mathilde.grangier@protonmail.com
+linkedin.com/in/mathilde-grangier - github.com/mgrangier
+Née le 7 novembre 2002 à Annecy (74) - Nationalité française - Permis B
+
+P R O J E T   P R O F E S S I O N N E L   /   O B J E C T I V E
+Recherche d'un contrat doctoral (rentrée 2026) en apprentissage automatique : explicabilité des modèles profonds, apprentissage multimodal.
+
+F O R M A T I O N   /   E D U C A T I O N
+
+2017 - 2020
+Lycée Berthollet, Annecy (74)
+Baccalauréat général, série S, spécialité Mathématiques - mention Très Bien
+
+09/2020 - 06/2023
+Université Claude Bernard Lyon 1, Villeurbanne
+Licence Informatique - mention Assez Bien
+→ Semestre d'échange Erasmus+ à la KU Leuven (Belgique), 02/2022 - 06/2022
+
+09/2023 - 09/2026 (en cours)
+Université Claude Bernard Lyon 1, Villeurbanne
+Master Informatique, parcours Intelligence Artificielle (M1 et M2)
+→ M1 validé avec la mention Bien (14,6/20) ; diplôme attendu en septembre 2026
+→ Cursus interrompu par une année de césure (09/2024 - 08/2025)
+
+E X P E R I E N C E S   :   S T A G E S   E T   E M P L O I S   E T U D I A N T S
+
+07/2021 - 08/2021 (2 mois)
+Centre de loisirs Les Marquisats, Annecy-le-Vieux
+Animatrice BAFA (emploi saisonnier)
+→ Encadrement quotidien d'un groupe de 14 enfants de 8 à 10 ans
+
+05/2022 - 07/2022 (10 semaines)
+Sopra Steria, Limonest (69)
+Stagiaire développement logiciel
+→ Développement d'un module de reporting interne en Python (Django, PostgreSQL)
+→ Rédaction des tests unitaires (pytest) et revues de code sous Git
+
+09/2022 - 06/2023
+Université Claude Bernard Lyon 1, Villeurbanne
+Tutrice pédagogique (contrat étudiant, 6 h/semaine)
+→ Séances de soutien en algorithmique et en programmation Python pour 25 étudiants de L1
+
+04/2024 - 08/2024 (5 mois)
+LIRIS - CNRS UMR 5205, Villeurbanne
+Stagiaire recherche (stage de M1), équipe SyCoSMA
+→ Étude comparative de méthodes d'explication post-hoc pour les réseaux de neurones sur graphes
+→ Travaux ayant donné lieu à la publication [1]
+
+10/2024 - 04/2025 (6 mois - année de césure)
+Zalando SE, Berlin (Allemagne)
+Machine Learning Intern, Fashion Discovery Team
+→ Industrialisation d'un pipeline d'entraînement PyTorch sur cluster GPU (Slurm), 40 M d'images
+
+03/2026 - en cours
+Inria Grenoble Rhône-Alpes, équipe Thoth, Montbonnot-Saint-Martin
+Stagiaire R&D (stage de fin d'études, 6 mois)
+→ Augmentation contrefactuelle pour la recherche vidéo-texte ; encadrement : J. Verbeek
+
+P U B L I C A T I O N S   E T   C O M M U N I C A T I O N S
+[1] GRANGIER M., OULD-AMARA S., KOWALCZYK T. Explications par prototypes pour les réseaux de neurones sur graphes. Actes de la conférence PFIA/CNIA 2025, Dijon, juin 2025, p. 112-121.
+[2] GRANGIER M., KOWALCZYK T. Vers une évaluation robuste des explications contrefactuelles. Poster, atelier XAI@EGC 2025, Strasbourg, janvier 2025.
+[3] GRANGIER M., FERRAND L., VERBEEK J. Sample-efficient counterfactual augmentation for video-text retrieval. Soumis à ECCV 2026 (en cours d'évaluation).
+
+C O M P E T E N C E S   I N F O R M A T I Q U E S   /   T E C H N I C A L   S K I L L S
+Langages	Python, C++, SQL, R, Bash
+Bibliothèques	PyTorch, scikit-learn, Hugging Face Transformers, NumPy, pandas
+Outils	Git, Docker, LaTeX, Slurm, Linux (Debian)
+
+L A N G U E S   /   L A N G U A G E S
+Français	langue maternelle
+Anglais	C1 - TOEIC 945 (2024)
+Allemand	B2 - Goethe-Zertifikat B2 (2023)
+Néerlandais	A2 - notions acquises pendant le semestre Erasmus+
+
+D I V E R S
+Bénévole à l'association Les Petits Débrouillards (médiation scientifique en collège), depuis 2023. Badminton en club (UCBL). Permis B, véhicule personnel.

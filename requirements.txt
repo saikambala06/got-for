@@ -1,0 +1,47 @@
+# Python resume-parsing pipeline (api/parser/*.py).
+#
+# Resolved and tested against Python 3.12 with uv, which is what Vercel uses.
+#
+# IMPORTANT — do not add a pdfminer.six pin here.
+# pdfplumber depends on an *exact* pdfminer.six version (0.11.7 requires
+# ==20250506), so any explicit pin of our own conflicts and the build fails
+# with "No solution found when resolving dependencies". pdfminer.six is
+# installed transitively, and extractor.py imports it as a fallback engine.
+#
+# Everything below is available as a wheel and fits comfortably inside
+# Vercel's 250 MB unzipped function limit.
+
+# --- PDF extraction -------------------------------------------------------
+# pdfplumber: primary extractor — word boxes with font name and size.
+# It also pulls in pdfminer.six (layout-analysis fallback) and pypdfium2
+# (the rasteriser the OCR stage prefers).
+pdfplumber==0.11.7
+
+# pypdf: structural validation (encryption, page count, integrity) and a
+# last-resort plain-text extractor.
+pypdf==5.1.0
+
+# --- DOCX extraction ------------------------------------------------------
+# python-docx: paragraph styles, numbering levels and run formatting, so
+# list nesting and emphasis survive instead of being guessed at.
+python-docx==1.1.2
+
+# --- Imaging --------------------------------------------------------------
+# Used by pdfplumber, and by the OCR stage for deskew/binarisation.
+Pillow>=10.4.0,<12
+
+# --- Auth -----------------------------------------------------------------
+# Verifies the same session token the Node API issues.
+PyJWT==2.9.0
+
+# --- OCR for scanned resumes ---------------------------------------------
+# Deliberately NOT enabled here. pytesseract shells out to the `tesseract`
+# binary, and Vercel's Python runtime does not ship one — installing the
+# Python package alone would not make OCR work. The pipeline detects this at
+# runtime and returns a clear "upload a text PDF or DOCX" message.
+#
+# The page rasteriser (pypdfium2) IS present, via pdfplumber, so enabling OCR
+# elsewhere is only a matter of having tesseract installed.
+#
+# To run OCR, use the included Dockerfile (which installs tesseract) with
+# requirements-ocr.txt, and host it anywhere that runs containers.

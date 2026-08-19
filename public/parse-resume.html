@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Parse a resume — SK VK</title>
+<link rel="stylesheet" href="/css/theme.css" />
+<link rel="stylesheet" href="/css/app.css" />
+<link rel="stylesheet" href="/css/parser.css" />
+</head>
+<body>
+<div class="app">
+  <div id="sidebar-root" data-active="resumes"></div>
+
+  <main class="main">
+    <!-- Hero ------------------------------------------------------------ -->
+    <header class="parser-hero" data-reveal>
+      <div class="hero-copy">
+        <span class="badge badge-accent badge-dot" data-reveal="pop" style="--delay:80ms">Real PDF &amp; DOCX parsing</span>
+        <h1 class="hero-title">Turn any resume into <em>structured data</em>.</h1>
+        <p class="hero-sub">
+          Drop in a PDF or Word file. Every field — contact details, each role and its bullets,
+          degrees, skills, projects, certifications and more — is read straight out of the
+          document layout and laid out for you to review before saving.
+        </p>
+        <div class="hero-stats" data-stagger="1">
+          <div class="hero-stat"><b>2</b><span>formats</span></div>
+          <div class="hero-stat"><b>11</b><span>field groups</span></div>
+          <div class="hero-stat"><b id="heroEngine">—</b><span>engine</span></div>
+        </div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="art-ring art-ring-1"></div>
+        <div class="art-ring art-ring-2"></div>
+        <div class="art-doc">
+          <span class="art-line w70"></span><span class="art-line w45"></span>
+          <span class="art-rule"></span>
+          <span class="art-line w90"></span><span class="art-line w80"></span><span class="art-line w60"></span>
+          <span class="art-rule"></span>
+          <span class="art-line w85"></span><span class="art-line w50"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Input ----------------------------------------------------------- -->
+    <section class="parser-grid">
+      <div class="card section-card" data-reveal style="--delay:60ms">
+        <div class="mode-switch" role="tablist" aria-label="Input method">
+          <div class="tabs" id="modeTabs">
+            <span class="tab-pill"></span>
+            <button class="tab active" data-mode="file" role="tab" aria-selected="true">Upload a file</button>
+            <button class="tab" data-mode="text" role="tab" aria-selected="false">Paste text</button>
+          </div>
+        </div>
+
+        <!-- File mode -->
+        <div id="fileMode">
+          <label class="dropzone" id="dropzone">
+            <input type="file" id="fileInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+            <div class="dz-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 5 17 10" />
+                <line x1="12" y1="5" x2="12" y2="16" />
+              </svg>
+            </div>
+            <div class="dz-title">Drop your resume here</div>
+            <div class="dz-sub">or click to browse — we read the real document, not a screenshot of it</div>
+            <div class="dz-formats">
+              <span class="chip chip-plain">PDF</span>
+              <span class="chip chip-plain">DOCX</span>
+              <span class="chip chip-plain">up to 15 MB</span>
+            </div>
+          </label>
+
+          <div id="fileCardSlot"></div>
+        </div>
+
+        <!-- Text mode -->
+        <div id="textMode" hidden>
+          <label class="label" for="pasteBox">Paste the full text of your resume</label>
+          <textarea id="pasteBox" class="field paste-box" placeholder="Paste everything — name, contact line, each job with its bullets, education, skills…"></textarea>
+          <div class="paste-foot">
+            <span class="hint" id="pasteCount">0 characters</span>
+            <button class="btn btn-primary" id="parseTextBtn" disabled>Parse this text</button>
+          </div>
+        </div>
+
+        <div class="alert" id="alertBox" hidden></div>
+      </div>
+
+      <!-- Pipeline -->
+      <aside class="card section-card" data-reveal="right" style="--delay:120ms">
+        <div class="side-head">
+          <h3>What happens next</h3>
+          <p>Each stage runs on the server against the real file.</p>
+        </div>
+        <div class="pipeline" id="pipeline"></div>
+        <div class="ai-note" id="aiNote" hidden></div>
+      </aside>
+    </section>
+
+    <!-- Results --------------------------------------------------------- -->
+    <section id="results" hidden>
+      <div class="card section-card summary-card" data-reveal>
+        <div class="summary-main">
+          <div class="summary-id">
+            <div class="avatar-lg" id="outInitials">?</div>
+            <div class="summary-who">
+              <h2 id="outName">—</h2>
+              <div class="summary-headline" id="outHeadline"></div>
+              <div class="contact-chips" id="outChips"></div>
+            </div>
+          </div>
+          <div class="summary-actions">
+            <input type="text" id="titleInput" class="field title-input" placeholder="Resume name" />
+            <button class="btn btn-primary" id="saveBtn">Save to My Resumes</button>
+            <button class="btn btn-ghost" id="jsonBtn">Download JSON</button>
+            <button class="btn btn-ghost" id="resetBtn">Parse another</button>
+          </div>
+        </div>
+
+        <div class="summary-score">
+          <div class="ring-wrap">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <defs>
+                <linearGradient id="skRingGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#6557f5" />
+                  <stop offset="100%" stop-color="#8c7dff" />
+                </linearGradient>
+              </defs>
+              <circle class="ring-track" cx="60" cy="60" r="52" />
+              <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="52" />
+            </svg>
+            <div class="ring-center">
+              <span class="ring-num" id="ringNum">0</span>
+              <span class="ring-cap">complete</span>
+            </div>
+          </div>
+          <div class="score-meters" id="scoreMeters"></div>
+        </div>
+      </div>
+
+      <div class="stat-strip" id="statStrip" data-stagger="1"></div>
+
+      <div class="card section-card" data-reveal style="--delay:80ms">
+        <div class="tabs" id="resultTabs" role="tablist">
+          <span class="tab-pill"></span>
+        </div>
+        <div class="tabpanels" id="tabPanels"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="/js/motion.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/parser-ui.js"></script>
+</body>
+</html>

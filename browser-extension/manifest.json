@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "SKVK Assistant",
+  "version": "1.0.0",
+  "description": "Parse a PDF or DOCX resume into structured fields, score the job posting you are viewing against it, and tailor your resume or draft a cover letter in one click.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "SKVK Assistant \u2014 parse a resume or open the panel on a job posting"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://got-for.vercel.app/*",
+    "https://*.vercel.app/*",
+    "http://localhost:4000/*",
+    "http://127.0.0.1:4000/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/tailor-loader.gif",
+        "icons/icon128.png"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# Keep the deployment lean. Anything here is never uploaded to Vercel.
+
+node_modules
+.git
+
+# Test suite and its ~1.5 MB of resume fixtures are not needed at runtime.
+test
+shots
+
+# Python build artefacts.
+__pycache__
+*.pyc
+*.pyo
+
+# OCR container assets — Vercel cannot run tesseract, so these are unused
+# there. They matter only when deploying the parser to a container host.
+Dockerfile
+requirements-ocr.txt
+
+# Local tooling.
+sync-shared.sh
+.env

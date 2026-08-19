@@ -1,0 +1,72 @@
+VENKATA SAI KIRAN POLAVARAPU
+Sr. Java/J2EE Full Stack Developer
+Mobile: +91 98490 33127 | Email: venkatasai.polavarapu9@gmail.com
+LinkedIn: linkedin.com/in/vskiranpolavarapu
+Visa Status: H1B (Transferable) | Willing to relocate anywhere in USA
+
+PROFESSIONAL SUMMARY
+1. Around 11+ years of extensive IT experience in Analysis, Design, Development, Testing and Implementation of Web based and Client-Server applications using Java/J2EE technologies.
+2. Strong experience in developing applications using Core Java, Multithreading, Collections, Exception Handling, Generics.
+3. Extensive experience in Spring Boot, Spring MVC, Spring Batch, Spring Security, Spring Cloud (Eureka, Zuul, Hystrix).
+4. Hands on experience in Micro Services architecture and RESTful web services using JAX-RS, Jersey and Spring REST.
+5. Good working knowledge on Hibernate, JPA, iBatis ORM frameworks and writing HQL/Criteria queries.
+6. Experience in front end technologies HTML5, CSS3, JavaScript, jQuery, AngularJS, Angular 8/10, ReactJS, Redux, Bootstrap.
+7. Worked extensively on Oracle 11g/12c, MySQL, PostgreSQL and NoSQL databases like MongoDB and Cassandra.
+8. Expertise in deploying applications on WebLogic, WebSphere, JBoss and Apache Tomcat application servers.
+9. Experience in AWS cloud services such as EC2, S3, RDS, Lambda, SNS, SQS, IAM, Cloud Watch and EKS.
+10. Good exposure to CI/CD tools Jenkins, Maven, Gradle, Docker, Kubernetes, Ansible and version control GIT, SVN, Bitbucket.
+11. Experienced in Agile/Scrum and Waterfall methodologies, participated in daily stand ups, sprint planning and retrospective meetings.
+12. Excellent communication, interpersonal skills and a good team player with ability to work independently under minimal supervision.
+
+TECHNICAL SKILLS
+Languages	:	Java 8/11, J2EE, SQL, PL/SQL, Python, Shell Scripting
+Java/J2EE Technologies	:	Servlets, JSP, JDBC, JMS, JNDI, EJB, Struts 2.0
+Frameworks	:	Spring Boot, Spring MVC, Spring Batch, Hibernate, Struts
+Web Technologies	:	HTML5, CSS3, JavaScript, jQuery, AJAX, XML, JSON
+UI Frameworks	:	AngularJS, Angular 10, ReactJS, Bootstrap, Node JS
+Web Services	:	SOAP, RESTful, WSDL, JAX-WS, JAX-RS, Apache CXF
+Databases	:	Oracle 12c, MySQL, PostgreSQL, MongoDB, Cassandra
+Cloud	:	AWS (EC2, S3, Lambda, RDS), PCF, Azure
+Tools	:	Maven, Gradle, Jenkins, Docker, Kubernetes, JIRA, SonarQube
+App/Web Servers	:	WebLogic 12c, WebSphere, JBoss, Apache Tomcat
+IDEs	:	Eclipse, IntelliJ IDEA, STS, VS Code
+Testing	:	JUnit, Mockito, Cucumber, Selenium, SoapUI, Postman
+
+PROFESSIONAL EXPERIENCE
+
+Tech Mahindra Ltd, Hyderabad, India	Aug 2021 - Till Date
+Client: Emirates NBD Bank, Dubai, UAE
+Role: Technical Lead / Sr. Java Developer
+· Involved in complete SDLC of the Digital Onboarding platform starting from requirement gathering with business users till production deployment and warranty support.
+· Developed Micro Services using Spring Boot and deployed on Kubernetes cluster (EKS) with Docker containers.
+· Implemented OAuth2 and JWT based token authentication for securing the REST endpoints.
+· Used Kafka for asynchronous communication between the KYC service and the core banking adapter.
+· Written Junit test cases using Mockito framework and maintained code coverage above 80% using SonarQube.
+· Coordinated with offshore team of 8 members, prepared low level design documents and conducted code reviews.
+Environment: Java 11, Spring Boot 2.5, Spring Cloud, Micro Services, Kafka, Angular 10, Oracle 12c, MongoDB, Docker, Kubernetes, AWS EKS, Jenkins, GIT, JIRA, Agile.
+
+HCL Technologies, Chennai, India	Mar 2018 - Jul 2021
+Client: Aetna Inc (CVS Health)
+Role: Sr. Software Engineer
+· Worked on migration of legacy Struts based Claims application into Spring Boot micro services.
+· Designed and developed RESTful web services and consumed third party services using RestTemplate.
+· Used Hibernate as persistence layer and written complex HQL and native SQL queries for reporting module.
+· Involved in performance tuning of Oracle queries by adding proper indexes and analyzing explain plans.
+· Deployed the application on WebLogic server and configured data sources, JMS queues.
+Environment: Java 8, Spring MVC, Spring Boot, Hibernate 4.x, Struts 2.0, JSP, jQuery, Oracle 11g, WebLogic 12c, Maven, Jenkins, SVN, Eclipse.
+
+Infosys Limited, Bangalore, India	Jun 2014 - Feb 2018
+Client: Bank of America Merrill Lynch
+Role: Software Engineer
+· Developed the presentation layer using JSP, HTML, CSS, JavaScript and Struts tag libraries.
+· Created stored procedures, functions and triggers in Oracle using PL/SQL.
+· Involved in bug fixing, defect tracking using HP Quality Center and provided production support on rotation basis.
+· Prepared unit test cases and performed integration testing along with QA team.
+Environment: Java 7, Struts, Spring, Hibernate, JSP, Servlets, JavaScript, Oracle 11g, Apache Tomcat, SVN, Eclipse, Windows.
+
+EDUCATION
+B.Tech in Electronics and Communication Engineering from JNTU Hyderabad, India - 2014
+
+CERTIFICATIONS
+· Oracle Certified Professional, Java SE 8 Programmer
+· AWS Certified Solutions Architect - Associate

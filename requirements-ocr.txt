@@ -1,0 +1,8 @@
+# Full requirement set including OCR, for container deployments.
+#
+# Used by the Dockerfile, which installs the tesseract binary that pytesseract
+# needs. Not used by Vercel — see the note in requirements.txt.
+
+-r requirements.txt
+
+pytesseract==0.3.13

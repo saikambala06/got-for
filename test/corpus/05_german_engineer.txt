@@ -1,0 +1,68 @@
+Tobias Reinhardt, Dipl.-Ing.
+Lindwurmstraße 42 · 81371 München · Deutschland
+Mobil: +49 172 5540912 · E-Mail: t.reinhardt@gmx.de
+LinkedIn: linkedin.com/in/tobias-reinhardt-mechanik
+
+PERSÖNLICHE DATEN / PERSONAL DETAILS
+Geburtsdatum:	14.03.1979 in München
+Staatsangehörigkeit:	deutsch
+Familienstand:	verheiratet, 2 Kinder
+Führerschein:	Klasse B
+
+BERUFSERFAHRUNG / PROFESSIONAL EXPERIENCE
+
+seit 04/2021	Robert Bosch GmbH, Stuttgart-Feuerbach
+	Senior Systems Engineer - Geschäftsbereich Powertrain Solutions
+	- Technische Gesamtverantwortung für die Systemauslegung von 48-V-Antriebsmodulen (Serienanlauf 2024)
+	- Fachliche Führung von 6 Ingenieuren in einer Matrixorganisation
+	- Abstimmung mit Kunden in Frankreich und Schweden (Verhandlungssprache Englisch)
+
+10/2018 - 03/2021	Siemens Mobility GmbH, München
+	Projektingenieur / Project Engineer, Rolling Stock
+	- Verantwortlich für das Fahrwerks-Interface im Projekt Mireo (Auftragsvolumen 180 Mio. EUR)
+	- Erstellung von Lastenheften und Nachweisdokumentation nach EN 13749
+	- Reduzierung der Nacharbeitsquote in der Endmontage um 23 %
+
+08/2013 - 09/2018	MAN Truck & Bus SE, München
+	Berechnungsingenieur (CAE Engineer), Abteilung Fahrzeugstruktur
+	- FEM-Berechnungen (statisch, Betriebsfestigkeit) für Fahrerhausstrukturen
+	- Aufbau einer Vorlagenbibliothek für Crash-Simulationen; ca. 30 % kürzere Modellaufbauzeit
+
+05/2011 - 07/2013	Voith Turbo GmbH & Co. KG, Heidenheim a. d. Brenz
+	Konstrukteur / Design Engineer, Getriebeentwicklung
+	- Konstruktion von Bauteilen für Schienenfahrzeug-Getriebe (CATIA V5)
+	- Betreuung von zwei Diplomanden
+
+AUSBILDUNG / EDUCATION
+
+10/1999 - 06/2005	Technische Universität München (TUM)
+	Diplom-Ingenieur (Dipl.-Ing.), Studiengang Maschinenwesen
+	Vertiefungsrichtung: Fahrzeug- und Antriebstechnik
+	Diplomarbeit: Simulationsgestützte Auslegung von Doppelkupplungsgetrieben (Note 1,3)
+	Gesamtnote: 1,8 - gut
+09/2001	Vordiplom Maschinenwesen, TU München (Note 2,0)
+09/1989 - 06/1998	Wilhelm-Hausenstein-Gymnasium, München
+	Abitur (Note 2,1), Leistungskurse Mathematik und Physik
+
+WEITERBILDUNG / CONTINUING EDUCATION
+2019	Six Sigma Green Belt, TÜV SÜD Akademie, Garching
+2016	Projektmanagement-Fachmann (GPM/IPMA Level D)
+2014	VDI-Seminar Betriebsfestigkeit geschweißter Konstruktionen
+
+FACHKENNTNISSE / TECHNICAL SKILLS
+CAD:	CATIA V5, Siemens NX, AutoCAD
+Simulation:	ANSYS Mechanical, LS-DYNA, MATLAB/Simulink
+Programmierung:	Python, VBA, Git
+PLM und Projekt:	SAP PLM, MS Project, JIRA
+Methoden:	FMEA, Design of Experiments (DoE), Six Sigma, GD&T
+
+SPRACHEN / LANGUAGES
+Deutsch	Muttersprache / native speaker
+Englisch	verhandlungssicher - C1 (TOEIC 910, 2017)
+Französisch	Grundkenntnisse - B1
+Italienisch	Grundkenntnisse - A2
+
+SONSTIGES / ADDITIONAL
+Ehrenamt:	Freiwillige Feuerwehr München-Sendling, seit 2012
+Mitgliedschaften:	VDI (Verein Deutscher Ingenieure), DGM
+Hobbys:	Rennrad, Restaurierung klassischer Motorräder

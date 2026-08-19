@@ -1,0 +1,199 @@
+/* ==========================================================================
+   Extension full-page views — app shell.
+
+   Deliberately mirrors the dashboard's public/css/app.css so the extension and
+   the web portal are visually the same product. All colour, motion and
+   component styling comes from theme.css; this file only lays out the shell.
+   ========================================================================== */
+
+/* Aliases kept so the existing extension views (tailor.html,
+   quick-download.html) pick up the unified palette without each one having to
+   be rewritten around new token names. */
+:root {
+  --text-dim: var(--muted);
+  --text-faint: var(--faint);
+  --accent-dark: var(--accent-3);
+}
+
+.app,
+.app-shell {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────────── */
+
+.sidebar {
+  position: sticky; top: 0;
+  height: 100vh;
+  padding: 22px 16px;
+  display: flex; flex-direction: column;
+  background: var(--sidebar);
+  color: var(--sidebar-text);
+  border-right: 1px solid rgba(255, 255, 255, .05);
+  overflow: auto;
+}
+
+.brand {
+  display: flex; align-items: center; gap: 11px;
+  padding: 4px 10px 22px;
+  font-weight: 800; letter-spacing: -.03em;
+}
+.mark {
+  width: 39px; height: 39px; border-radius: 12px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, #7c6cff, #4e42de);
+  box-shadow: 0 8px 20px rgba(101, 87, 245, .32);
+  color: #fff; font-weight: 800;
+  transition: transform var(--dur-2) var(--ease-spring), box-shadow var(--dur-2) var(--ease);
+}
+.brand:hover .mark { transform: rotate(-6deg) scale(1.06); box-shadow: 0 12px 26px rgba(101, 87, 245, .42); }
+.brand .name { font-size: 18px; }
+.brand .name span { font-weight: 500; color: #b9bfd0; }
+
+.nav { display: flex; flex-direction: column; gap: 6px; }
+.nav-item {
+  position: relative;
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  color: var(--sidebar-muted);
+  font-size: 13.5px; font-weight: 600;
+  transition: transform var(--dur-2) var(--ease), background var(--dur-2) var(--ease),
+              color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
+}
+.nav-item svg { width: 18px; height: 18px; flex: 0 0 auto; transition: transform var(--dur-2) var(--ease-spring); }
+.nav-item:hover { transform: translateX(3px); background: rgba(255, 255, 255, .06); color: #fff; }
+.nav-item:hover svg { transform: scale(1.12); }
+.nav-item.active {
+  background: rgba(124, 108, 255, .16);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(124, 108, 255, .16);
+}
+.nav-item.active::before {
+  content: ''; position: absolute; left: 0;
+  width: 3px; height: 22px; border-radius: 999px; background: var(--accent-2);
+  animation: sk-fade-in var(--dur-2) var(--ease) both;
+}
+
+.sidebar-footer { margin-top: auto; display: grid; gap: 12px; padding-top: 20px; }
+.plan-card {
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .035);
+  transition: background var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease);
+}
+.plan-card:hover { background: rgba(255, 255, 255, .06); border-color: rgba(124, 108, 255, .28); }
+.plan-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #82899a; }
+.plan-name { font-weight: 700; margin: 4px 0 10px; }
+.plan-row { display: flex; justify-content: space-between; gap: 8px; color: var(--sidebar-muted); font-size: 12px; margin-top: 5px; }
+.plan-row span:last-child { color: #dfe3ec; font-weight: 600; }
+
+.user-chip { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 14px; background: rgba(255, 255, 255, .04); }
+.avatar {
+  width: 34px; height: 34px; flex: 0 0 auto;
+  border-radius: 11px;
+  display: grid; place-items: center;
+  color: #fff; font-weight: 700; font-size: 12px;
+}
+.uname { font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.uemail { font-size: 11px; color: #82899a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Main ──────────────────────────────────────────────────────────────── */
+
+.main {
+  min-width: 0;
+  padding: 34px clamp(18px, 3vw, 42px) 48px;
+  background: var(--bg-tint), var(--bg);
+}
+
+.ext-boot, .ext-signin {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 60vh; text-align: center;
+  animation: sk-fade-up var(--dur-3) var(--ease-out) both;
+}
+
+/* ── Legacy view chrome (tailor.html, quick-download.html) ─────────────── */
+
+.sidebar-nav { display: flex; flex-direction: column; gap: 6px; }
+.sidebar-spacer { flex: 1; }
+.sidebar-plan {
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .035);
+  font-size: 12px; color: var(--sidebar-muted);
+}
+.sidebar-plan .plan-label { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #82899a; margin-bottom: 4px; }
+.sidebar-plan .plan-name { font-size: 14px; font-weight: 800; color: #fff; margin-bottom: 10px; }
+.sidebar-plan .plan-bar { height: 5px; border-radius: 4px; background: rgba(255, 255, 255, .1); overflow: hidden; margin-bottom: 12px; }
+.sidebar-plan .plan-bar > div {
+  height: 100%; background: var(--accent-grad);
+  transform-origin: left;
+  animation: sk-bar .9s var(--ease-out) both;
+}
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  animation: sk-fade-down var(--dur-3) var(--ease-out) both;
+}
+.topbar .title { font-size: 15px; font-weight: 750; letter-spacing: -.01em; }
+.need-help {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent-grad); color: #fff; border: none;
+  border-radius: var(--radius-pill);
+  padding: 8px 16px; font-size: 12.5px; font-weight: 700;
+  box-shadow: var(--shadow-accent);
+  transition: transform var(--dur-1) var(--ease), box-shadow var(--dur-2) var(--ease);
+}
+.need-help:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(101, 87, 245, .32); }
+
+.app-shell .main { display: flex; flex-direction: column; padding: 0; }
+.main-body {
+  flex: 1;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 40px clamp(16px, 3vw, 28px);
+  overflow-y: auto;
+  animation: sk-fade-up var(--dur-3) var(--ease-out) both;
+}
+
+.page-loading { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 50vh; }
+.page-loading-logo {
+  width: 92px; height: 92px; object-fit: contain;
+  display: block; margin: 0 auto 18px;
+  animation: sk-breathe 1.6s var(--ease) infinite;
+  filter: drop-shadow(0 10px 24px rgba(101, 87, 245, .28));
+}
+.page-loading-text { text-align: center; font-size: 13.5px; color: var(--muted); font-weight: 500; }
+.page-loading-text::after { content: ''; animation: sk-dots 1.4s steps(1) infinite; }
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+
+@media (max-width: 1000px) {
+  .app, .app-shell { grid-template-columns: 88px minmax(0, 1fr); }
+  .sidebar { padding: 18px 10px; }
+  .brand .name, .nav-item span, .sidebar-footer { display: none; }
+  .brand { justify-content: center; padding-bottom: 18px; }
+  .nav-item { justify-content: center; padding: 12px; }
+  .nav-item.active::before { left: 2px; }
+}
+
+@media (max-width: 720px) {
+  .app, .app-shell { display: block; }
+  .sidebar {
+    position: sticky; top: 0; z-index: 50; height: auto;
+    flex-direction: row; align-items: center;
+    padding: 10px 12px;
+    border-right: 0; border-bottom: 1px solid rgba(255, 255, 255, .08);
+  }
+  .brand { padding: 0; margin-right: 8px; }
+  .nav { flex-direction: row; overflow: auto; flex: 1; }
+  .nav-item { flex: 0 0 auto; justify-content: center; }
+  .nav-item.active::before { left: 50%; bottom: 2px; top: auto; width: 24px; height: 2px; transform: translateX(-50%); }
+  .main { padding: 22px 14px 36px; }
+}
